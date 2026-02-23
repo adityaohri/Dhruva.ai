@@ -1,7 +1,5 @@
 "use server";
 
-export const runtime = "nodejs";
-
 import { extractText } from "unpdf";
 import OpenAI from "openai";
 import { createClient } from "@/lib/supabase/server";

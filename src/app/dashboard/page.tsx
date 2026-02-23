@@ -4,6 +4,8 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { CvUploadSection } from "./cv-upload-section";
 
+export const runtime = "nodejs";
+
 /** Allow CV analysis (PDF + OpenAI) to run up to 60s so the server action does not time out. */
 export const maxDuration = 60;
 
