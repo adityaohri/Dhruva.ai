@@ -278,7 +278,7 @@ export function CvUploadSection() {
               </div>
             </div>
             <div className="space-y-2">
-              <Label>Internships</Label>
+              <Label>Work Experience</Label>
               <div className="rounded-md border bg-muted/50 px-3 py-2 text-sm">
                 {parsed.internships.length
                   ? parsed.internships.join(" · ")

@@ -324,12 +324,23 @@ export async function saveProfileToSupabase(profile: ParsedCV): Promise<{
     updated_at: new Date().toISOString(),
   };
 
-  const { error } = await supabase.from("user_profiles").upsert(row, {
-    onConflict: "user_id",
-  });
+  const { data: existing } = await supabase
+    .from("user_profiles")
+    .select("user_id")
+    .eq("user_id", user.id)
+    .maybeSingle();
 
-  if (error) {
-    return { success: false, error: error.message };
+  if (existing) {
+    const { error: updateError } = await supabase
+      .from("user_profiles")
+      .update(row)
+      .eq("user_id", user.id);
+    if (updateError) return { success: false, error: updateError.message };
+  } else {
+    const { error: insertError } = await supabase
+      .from("user_profiles")
+      .insert(row);
+    if (insertError) return { success: false, error: insertError.message };
   }
   return { success: true };
 }
