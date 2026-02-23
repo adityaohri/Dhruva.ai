@@ -70,6 +70,11 @@ export function CvUploadSection() {
 
   const handleParse = async () => {
     if (!file) return;
+    const maxSizeBytes = 5 * 1024 * 1024;
+    if (file.size > maxSizeBytes) {
+      setError("PDF is too large (max 5 MB). Use a smaller file to avoid timeouts.");
+      return;
+    }
     setParsing(true);
     setError(null);
     setParsed(null);
@@ -85,9 +90,19 @@ export function CvUploadSection() {
         setParsed(null);
       }
     } catch (err) {
-      const message =
+      const rawMessage =
         err instanceof Error ? err.message : "Something went wrong. Please try again.";
-      setError(message);
+      const isNetworkFailure =
+        rawMessage === "Load failed" ||
+        rawMessage.toLowerCase().includes("network") ||
+        rawMessage.toLowerCase().includes("connection was lost") ||
+        rawMessage.toLowerCase().includes("failed to fetch") ||
+        rawMessage.toLowerCase().includes("network connection was lost");
+      setError(
+        isNetworkFailure
+          ? "The request was interrupted or timed out. Try a smaller PDF, check your connection, or try again in a moment. If it persists, check Vercel function logs for timeouts."
+          : rawMessage
+      );
       setParsed(null);
     } finally {
       setParsing(false);
@@ -260,6 +275,32 @@ export function CvUploadSection() {
                 {parsed.skills.length
                   ? parsed.skills.join(", ")
                   : "—"}
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Internships</Label>
+              <div className="rounded-md border bg-muted/50 px-3 py-2 text-sm">
+                {parsed.internships.length
+                  ? parsed.internships.join(" · ")
+                  : "—"}
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Leadership positions</Label>
+              <div className="rounded-md border bg-muted/50 px-3 py-2 text-sm whitespace-pre-wrap">
+                {parsed.leadership_positions ?? "—"}
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Projects</Label>
+              <div className="rounded-md border bg-muted/50 px-3 py-2 text-sm whitespace-pre-wrap">
+                {parsed.projects ?? "—"}
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Others</Label>
+              <div className="rounded-md border bg-muted/50 px-3 py-2 text-sm whitespace-pre-wrap">
+                {parsed.others ?? "—"}
               </div>
             </div>
             <div className="grid gap-4 sm:grid-cols-2">

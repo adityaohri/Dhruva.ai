@@ -1,5 +1,7 @@
 "use server";
 
+export const runtime = "nodejs";
+
 import { extractText } from "unpdf";
 import OpenAI from "openai";
 import { createClient } from "@/lib/supabase/server";
@@ -15,124 +17,221 @@ export interface ParsedCV {
   university: string;
   gpa: string;
   skills: string[];
+  internships: string[];
+  leadership_positions: string | null;
+  projects: string | null;
+  others: string | null;
   entrepreneurial_leadership: boolean | string;
   personal_impact: boolean | string;
 }
 
-const MCKINSEY_PROMPT = `You are an elite McKinsey recruiter. Analyze this CV text. Extract the Name, University, GPA, and a list of Skills. Also, identify if they demonstrate "Entrepreneurial Leadership" or "Personal Impact." Format everything as a clean JSON object with these exact keys: name (string), university (string), gpa (string), skills (array of strings), entrepreneurial_leadership (boolean or short string describing evidence), personal_impact (boolean or short string describing evidence). Return only valid JSON, no markdown or extra text.`;
+const MCKINSEY_PROMPT = `You are an elite McKinsey recruiter. Analyze this CV text and extract structured data according to the rules below.
+
+**Synonym mapping for experience / internships**
+Treat any of these section headings as valid sources for the internships field: "Work Experience", "Professional History", "Employment", "Internships", "Experience", or similar. Content from these sections must be captured in the internships array.
+
+**Internship data format**
+Format each internship (or job) entry as a single string in this exact form: "Company Name - Role Title". Example: "McKinsey & Co. - Business Analyst Intern". The internships field must be an array of such strings (e.g. ["Company A - Role One", "Company B - Role Two"]).
+
+**Catch-all for other sections**
+If you encounter any section that does not clearly fit into Education, Internships, Leadership, or Projects (e.g. Certifications, Languages, Volunteer Work, Awards, Hobbies, Publications), summarize its content into the others field. Do not discard any information from the CV—anything that does not belong in the other fields goes into others.
+
+**Safety**
+If a section is missing from the CV, return null for that field (or an empty array [] for skills and internships). Do not invent or guess data. Only extract what is explicitly present.
+
+**Required JSON structure**
+Return a single JSON object with exactly these keys (no extra keys):
+- full_name (string)
+- university (string)
+- gpa (string)
+- skills (array of strings)
+- internships (array of strings, each entry "Company Name - Role Title")
+- leadership_positions (string, or null if missing)
+- projects (string, or null if missing)
+- others (string, or null if missing)
+- entrepreneurial_leadership (boolean or short string describing evidence)
+- personal_impact (boolean or short string describing evidence)
+
+Return only valid JSON, no markdown, no code fences, no extra text.`;
 
 export async function parsePdfWithAI(formData: FormData): Promise<{
   success: true;
   data: ParsedCV;
 } | { success: false; error: string }> {
-  const hasOpenAIKey = Boolean(
-    process.env.OPENAI_API_KEY?.trim?.() ?? process.env.OPENAI_API_KEY
-  );
-  console.log("[parsePdfWithAI] START – FormData received, OPENAI_API_KEY set:", hasOpenAIKey);
-
-  const file = formData.get("pdf") as File | Blob | null;
-  if (!file || typeof (file as Blob).arrayBuffer !== "function") {
-    console.log("[parsePdfWithAI] END – invalid or missing PDF file");
-    return { success: false, error: "Please upload a valid PDF file." };
-  }
-
-  let text: string;
   try {
-    console.log("[parsePdfWithAI] Extracting text from PDF…");
-    const arrayBuffer = await (file as Blob).arrayBuffer();
-    if (!arrayBuffer || arrayBuffer.byteLength === 0) {
-      console.log("[parsePdfWithAI] END – file is empty");
-      return { success: false, error: "The uploaded file is empty." };
+    const hasOpenAIKey = Boolean(
+      process.env.OPENAI_API_KEY?.trim?.() ?? process.env.OPENAI_API_KEY
+    );
+    console.log(
+      "[parsePdfWithAI] START – FormData received, OPENAI_API_KEY set:",
+      hasOpenAIKey
+    );
+
+    const file = formData.get("pdf") as File | Blob | null;
+    if (!file || typeof (file as Blob).arrayBuffer !== "function") {
+      console.log("[parsePdfWithAI] END – invalid or missing PDF file");
+      return { success: false, error: "Please upload a valid PDF file." };
     }
-    const data = new Uint8Array(arrayBuffer);
-    const { text: extracted } = await extractText(data, { mergePages: true });
-    text = extracted ?? "";
-    console.log("[parsePdfWithAI] PDF text length:", text?.length ?? 0);
-  } catch (e) {
-    console.error("[parsePdfWithAI] PDF parse error:", e);
-    return {
-      success: false,
-      error:
-        "PDF could not be read. The file may be corrupted or not a valid PDF. Try a different file or ensure it is a text-based PDF.",
-    };
-  }
 
-  if (!text?.trim()) {
-    console.log("[parsePdfWithAI] END – no text in PDF");
-    return { success: false, error: "No text could be extracted from the PDF." };
-  }
-
-  const apiKey = process.env.OPENAI_API_KEY?.trim?.() || process.env.OPENAI_API_KEY;
-  if (!apiKey) {
-    console.log("[parsePdfWithAI] END – OPENAI_API_KEY missing or empty");
-    return {
-      success: false,
-      error:
-        "OpenAI API key is not configured. Add OPENAI_API_KEY to .env.local and restart the dev server (npm run dev).",
-    };
-  }
-
-  const openai = new OpenAI({ apiKey });
-  const callOpenAI = async () =>
-    openai.chat.completions.create({
-      model: "gpt-4o",
-      messages: [
-        { role: "system", content: MCKINSEY_PROMPT },
-        { role: "user", content: `CV text:\n\n${text.slice(0, 12000)}` },
-      ],
-      response_format: { type: "json_object" },
-    });
-
-  const isRateLimit = (err: unknown) => {
-    const msg = err instanceof Error ? err.message : String(err);
-    return msg.includes("429") || msg.toLowerCase().includes("rate limit");
-  };
-
-  try {
-    console.log("[parsePdfWithAI] Calling OpenAI gpt-4o…");
-    let completion: Awaited<ReturnType<typeof callOpenAI>>;
+    let text: string;
     try {
-      completion = await callOpenAI();
-    } catch (firstErr) {
-      if (isRateLimit(firstErr)) {
-        console.log("[parsePdfWithAI] Rate limited, retrying after 3s…");
-        await new Promise((r) => setTimeout(r, 3000));
-        completion = await callOpenAI();
-      } else {
-        throw firstErr;
+      console.log("[parsePdfWithAI] Extracting text from PDF…");
+      const arrayBuffer = await (file as Blob).arrayBuffer();
+      if (!arrayBuffer || arrayBuffer.byteLength === 0) {
+        console.log("[parsePdfWithAI] END – file is empty");
+        return { success: false, error: "The uploaded file is empty." };
       }
-    }
-
-    const raw = completion.choices[0]?.message?.content;
-    if (!raw) {
-      console.log("[parsePdfWithAI] END – empty AI response");
-      return { success: false, error: "No response from AI." };
-    }
-
-    const data = JSON.parse(raw) as ParsedCV;
-    const parsed: ParsedCV = {
-      name: typeof data.name === "string" ? data.name : "",
-      university: typeof data.university === "string" ? data.university : "",
-      gpa: typeof data.gpa === "string" ? data.gpa : String(data.gpa ?? ""),
-      skills: Array.isArray(data.skills) ? data.skills.map(String) : [],
-      entrepreneurial_leadership: data.entrepreneurial_leadership ?? false,
-      personal_impact: data.personal_impact ?? false,
-    };
-    console.log("[parsePdfWithAI] END – success", { name: parsed.name });
-    return { success: true, data: parsed };
-  } catch (e) {
-    console.error("[parsePdfWithAI] OpenAI error:", e);
-    const message = e instanceof Error ? e.message : "AI analysis failed.";
-    if (message.includes("401") || message.toLowerCase().includes("invalid") || message.toLowerCase().includes("incorrect api key")) {
-      return { success: false, error: "Invalid API key. Check OPENAI_API_KEY in .env.local." };
-    }
-    if (isRateLimit(e)) {
+      const data = new Uint8Array(arrayBuffer);
+      const { text: extracted } = await extractText(data, { mergePages: true });
+      text = extracted ?? "";
+      console.log("[parsePdfWithAI] PDF text length:", text?.length ?? 0);
+    } catch (e) {
+      console.error("[parsePdfWithAI] PDF parse error:", e);
       return {
         success: false,
         error:
-          "OpenAI rate limit reached. Wait 1–2 minutes and try again, or check usage at platform.openai.com.",
+          "PDF could not be read. The file may be corrupted or not a valid PDF. Try a different file or ensure it is a text-based PDF.",
       };
     }
+
+    if (!text?.trim()) {
+      console.log("[parsePdfWithAI] END – no text in PDF");
+      return { success: false, error: "No text could be extracted from the PDF." };
+    }
+
+    const rawKey = process.env.OPENAI_API_KEY ?? "";
+    const apiKey = rawKey.trim().split(/\r?\n/)[0].trim();
+    if (!apiKey) {
+      console.log("[parsePdfWithAI] END – OPENAI_API_KEY missing or empty");
+      return {
+        success: false,
+        error:
+          "OpenAI API key is not configured. Add OPENAI_API_KEY to .env.local and restart the dev server (npm run dev).",
+      };
+    }
+
+    const openai = new OpenAI({ apiKey });
+    const callOpenAI = async () =>
+      openai.chat.completions.create({
+        model: "gpt-4o",
+        messages: [
+          { role: "system", content: MCKINSEY_PROMPT },
+          { role: "user", content: `CV text:\n\n${text.slice(0, 12000)}` },
+        ],
+        response_format: { type: "json_object" },
+      });
+
+    const isRateLimit = (err: unknown) => {
+      const msg = err instanceof Error ? err.message : String(err);
+      return msg.includes("429") || msg.toLowerCase().includes("rate limit");
+    };
+
+    try {
+      console.log("[parsePdfWithAI] Calling OpenAI gpt-4o…");
+      let completion: Awaited<ReturnType<typeof callOpenAI>>;
+      try {
+        completion = await callOpenAI();
+      } catch (firstErr) {
+        if (isRateLimit(firstErr)) {
+          console.log("[parsePdfWithAI] Rate limited, retrying after 3s…");
+          await new Promise((r) => setTimeout(r, 3000));
+          completion = await callOpenAI();
+        } else {
+          throw firstErr;
+        }
+      }
+
+      if (!completion.choices || completion.choices.length === 0) {
+        console.log("[parsePdfWithAI] END – AI returned no choices");
+        return { success: false, error: "AI returned no choices." };
+      }
+
+      const raw = completion.choices[0].message?.content;
+      if (typeof raw !== "string" || !raw.trim()) {
+        console.log("[parsePdfWithAI] END – empty AI response content");
+        return { success: false, error: "AI returned an empty response." };
+      }
+
+      type AIMessage = {
+        full_name?: string | null;
+        name?: string | null;
+        university?: string | null;
+        gpa?: string | null;
+        skills?: unknown;
+        internships?: unknown;
+        leadership_positions?: string | null;
+        projects?: string | null;
+        others?: string | null;
+        entrepreneurial_leadership?: boolean | string | null;
+        personal_impact?: boolean | string | null;
+      };
+
+      let data: AIMessage;
+      try {
+        data = JSON.parse(raw) as AIMessage;
+      } catch (err) {
+        console.error("[parsePdfWithAI] JSON parse error:", err, raw);
+        return {
+          success: false,
+          error: "AI returned invalid JSON. Please try again with a different CV.",
+        };
+      }
+
+      const parsed: ParsedCV = {
+        name:
+          typeof data.full_name === "string"
+            ? data.full_name
+            : typeof data.name === "string"
+              ? data.name
+              : "",
+        university: typeof data.university === "string" ? data.university : "",
+        gpa: typeof data.gpa === "string" ? data.gpa : String(data.gpa ?? ""),
+        skills: Array.isArray(data.skills) ? data.skills.map(String) : [],
+        internships: Array.isArray(data.internships)
+          ? data.internships.map((e) => (typeof e === "string" ? e : String(e)))
+          : [],
+        leadership_positions:
+          data.leadership_positions != null && typeof data.leadership_positions === "string"
+            ? data.leadership_positions
+            : null,
+        projects:
+          data.projects != null && typeof data.projects === "string"
+            ? data.projects
+            : null,
+        others:
+          data.others != null && typeof data.others === "string"
+            ? data.others
+            : null,
+        entrepreneurial_leadership: data.entrepreneurial_leadership ?? false,
+        personal_impact: data.personal_impact ?? false,
+      };
+      console.log("[parsePdfWithAI] END – success", { name: parsed.name });
+      return { success: true, data: parsed };
+    } catch (e) {
+      console.error("[parsePdfWithAI] OpenAI error:", e);
+      const message = e instanceof Error ? e.message : "AI analysis failed.";
+      if (
+        message.includes("401") ||
+        message.toLowerCase().includes("invalid") ||
+        message.toLowerCase().includes("incorrect api key")
+      ) {
+        return {
+          success: false,
+          error: "Invalid API key. Check OPENAI_API_KEY in .env.local.",
+        };
+      }
+      if (isRateLimit(e)) {
+        return {
+          success: false,
+          error:
+            "OpenAI rate limit reached. Wait 1–2 minutes and try again, or check usage at platform.openai.com.",
+        };
+      }
+      return { success: false, error: message };
+    }
+  } catch (e) {
+    console.error("[parsePdfWithAI] UNHANDLED error:", e);
+    const message = e instanceof Error ? e.message : "Unexpected server error.";
     return { success: false, error: message };
   }
 }
@@ -154,6 +253,10 @@ export async function saveProfileToSupabase(profile: ParsedCV): Promise<{
     university: profile.university,
     gpa: profile.gpa,
     skills: profile.skills,
+    internships: profile.internships,
+    leadership_positions: profile.leadership_positions,
+    projects: profile.projects,
+    others: profile.others,
     entrepreneurial_leadership:
       typeof profile.entrepreneurial_leadership === "string"
         ? profile.entrepreneurial_leadership
