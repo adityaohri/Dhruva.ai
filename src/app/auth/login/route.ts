@@ -17,10 +17,11 @@ export async function POST(request: Request) {
 
   // Magic link (passwordless) - user receives email to sign in
   if (!password) {
+    const origin = new URL(request.url).origin;
     const { error } = await supabase.auth.signInWithOtp({
       email,
       options: {
-        emailRedirectTo: `${request.nextUrl.origin}/auth/callback`,
+        emailRedirectTo: `${origin}/auth/callback`,
       },
     });
     if (error) {
