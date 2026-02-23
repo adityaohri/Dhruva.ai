@@ -1,4 +1,5 @@
 import { createServerClient } from "@supabase/ssr";
+import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 
 function readEnv(value: string | undefined): string {
@@ -21,10 +22,12 @@ export async function GET(request: Request) {
     return NextResponse.redirect(errorRedirect);
   }
 
+  const cookieStore = await cookies();
+
   const supabase = createServerClient(url, key, {
     cookies: {
       getAll() {
-        return request.cookies.getAll();
+        return cookieStore.getAll();
       },
       setAll(cookiesToSet) {
         cookiesToSet.forEach(({ name, value, options }) =>
