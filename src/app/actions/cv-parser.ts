@@ -178,6 +178,45 @@ export async function parsePdfWithAI(formData: FormData): Promise<{
         };
       }
 
+      const normalizedSkills = (() => {
+        if (Array.isArray(data.skills)) {
+          return data.skills.map(String).map((s) => s.trim()).filter(Boolean);
+        }
+        if (typeof data.skills === "string" && data.skills.trim()) {
+          return data.skills
+            .split(/[,;\n]/)
+            .map((s) => s.trim())
+            .filter(Boolean);
+        }
+        return [] as string[];
+      })();
+
+      const normalizedInternships = (() => {
+        const result: string[] = [];
+        if (Array.isArray(data.internships)) {
+          for (const entry of data.internships) {
+            if (!entry) continue;
+            if (typeof entry === "string") {
+              const trimmed = entry.trim();
+              if (trimmed) result.push(trimmed);
+            } else if (typeof entry === "object") {
+              const anyEntry = entry as Record<string, unknown>;
+              const company = typeof anyEntry.company === "string" ? anyEntry.company.trim() : "";
+              const role = typeof anyEntry.role === "string" ? anyEntry.role.trim() : "";
+              if (company && role) {
+                result.push(`${company} - ${role}`);
+              }
+            }
+          }
+        } else if (typeof data.internships === "string" && data.internships.trim()) {
+          for (const line of data.internships.split(/\n|;/)) {
+            const trimmed = line.trim();
+            if (trimmed) result.push(trimmed);
+          }
+        }
+        return result;
+      })();
+
       const parsed: ParsedCV = {
         name:
           typeof data.full_name === "string"
@@ -187,10 +226,8 @@ export async function parsePdfWithAI(formData: FormData): Promise<{
               : "",
         university: typeof data.university === "string" ? data.university : "",
         gpa: typeof data.gpa === "string" ? data.gpa : String(data.gpa ?? ""),
-        skills: Array.isArray(data.skills) ? data.skills.map(String) : [],
-        internships: Array.isArray(data.internships)
-          ? data.internships.map((e) => (typeof e === "string" ? e : String(e)))
-          : [],
+        skills: normalizedSkills,
+        internships: normalizedInternships,
         leadership_positions:
           data.leadership_positions != null && typeof data.leadership_positions === "string"
             ? data.leadership_positions
