@@ -26,13 +26,13 @@ export interface ParsedCV {
 const MCKINSEY_PROMPT = `You are an elite McKinsey recruiter. Analyze this CV text and extract structured data according to the rules below.
 
 **Synonym mapping for experience / internships**
-Any section whose heading contains "Internship", "Internships", "Work Experience", "Professional Experience", "Employment", "Experience", or combinations like "Internships & Work Experience" MUST be treated as the source for the internships field. Do not skip these sections. Extract every role (internship or job) listed under such headings into the internships array.
+Any section whose heading contains "Internship", "Internships", "Work Experience", "Professional Experience", "Employment", "Experience", or combinations like "Internships & Work Experience" MUST be treated as the source for the internships field. Do not skip these sections. Extract every role (internship or job) listed under such headings into the internships array. In addition, if a role (internship or job) is clearly described anywhere else in the CV (for example in a leadership, projects, or unlabeled section with a company name and role title), you must also include it in the internships array.
 
 **Skills extraction**
-Treat any section whose heading contains "Skills", "Technical Skills", "Skills & Tools", "Technical Proficiencies", "Core Competencies", or similar as the source for the skills field. Split comma-separated or bullet-listed items into individual skills and return them as an array of short strings (e.g. ["Python", "SQL", "Excel", "Power BI"]). Use only skills, tools, and technologies that are explicitly listed in the CV.
+Scan the entire CV for skills, tools, technologies, programming languages, frameworks, and similar capabilities. This includes dedicated skills sections (e.g. "Skills", "Technical Skills", "Skills & Tools", "Core Competencies") and skills mentioned inside bullets under other sections (e.g. work experience, projects). Split comma-separated or bullet-listed items into individual skills and return them as an array of short strings (e.g. ["Python", "SQL", "Excel", "Power BI"]). Use only skills, tools, and technologies that are explicitly mentioned in the CV text.
 
 **Internship data format**
-Format each entry as a single string: "Company Name - Role Title" (e.g. "McKinsey & Co. - Business Analyst Intern"). Use only company names and role titles that appear explicitly in the CV—you may combine them into "Company - Role" when they are clearly stated in the same bullet or block; do not invent company or role names. The internships field must be an array of such strings.
+The CV may show role and company in any order (e.g. "Role, Company" or "Company – Role"). You must always output each entry as "Company Name - Role Title" (e.g. "McKinsey & Co. - Business Analyst Intern"). Use only company names and role titles that appear explicitly in the CV—reorder or combine them as needed to match "Company - Role"; do not invent company or role names. The internships field must be an array of such strings.
 
 **Catch-all for other sections**
 If you encounter any section that does not clearly fit into Education, Internships, Leadership, or Projects (e.g. Certifications, Languages, Volunteer Work, Awards, Hobbies, Publications), summarize its content into the others field. Do not discard any information from the CV—anything that does not belong in the other fields goes into others.
@@ -191,14 +191,28 @@ export async function parsePdfWithAI(formData: FormData): Promise<{
         return [] as string[];
       })();
 
+      /** Normalize to "Company - Role". If string is "Role, Company" (one comma, no " - "), reorder to "Company - Role". Otherwise leave as-is. */
+      const toCompanyRole = (s: string): string => {
+        const t = s.trim();
+        if (!t) return t;
+        if (t.includes(" - ")) return t;
+        const commaIdx = t.indexOf(",");
+        if (commaIdx > 0 && commaIdx < t.length - 1) {
+          const before = t.slice(0, commaIdx).trim();
+          const after = t.slice(commaIdx + 1).trim();
+          if (before && after) return `${after} - ${before}`;
+        }
+        return t;
+      };
+
       const normalizedInternships = (() => {
         const result: string[] = [];
         if (Array.isArray(data.internships)) {
           for (const entry of data.internships) {
             if (!entry) continue;
             if (typeof entry === "string") {
-              const trimmed = entry.trim();
-              if (trimmed) result.push(trimmed);
+              const normalized = toCompanyRole(entry.trim());
+              if (normalized) result.push(normalized);
             } else if (typeof entry === "object") {
               const anyEntry = entry as Record<string, unknown>;
               const company = typeof anyEntry.company === "string" ? anyEntry.company.trim() : "";
@@ -210,8 +224,8 @@ export async function parsePdfWithAI(formData: FormData): Promise<{
           }
         } else if (typeof data.internships === "string" && data.internships.trim()) {
           for (const line of data.internships.split(/\n|;/)) {
-            const trimmed = line.trim();
-            if (trimmed) result.push(trimmed);
+            const normalized = toCompanyRole(line.trim());
+            if (normalized) result.push(normalized);
           }
         }
         return result;
