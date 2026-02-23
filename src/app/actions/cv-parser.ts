@@ -28,6 +28,9 @@ const MCKINSEY_PROMPT = `You are an elite McKinsey recruiter. Analyze this CV te
 **Synonym mapping for experience / internships**
 Any section whose heading contains "Internship", "Internships", "Work Experience", "Professional Experience", "Employment", "Experience", or combinations like "Internships & Work Experience" MUST be treated as the source for the internships field. Do not skip these sections. Extract every role (internship or job) listed under such headings into the internships array.
 
+**Skills extraction**
+Treat any section whose heading contains "Skills", "Technical Skills", "Skills & Tools", "Technical Proficiencies", "Core Competencies", or similar as the source for the skills field. Split comma-separated or bullet-listed items into individual skills and return them as an array of short strings (e.g. ["Python", "SQL", "Excel", "Power BI"]). Use only skills, tools, and technologies that are explicitly listed in the CV.
+
 **Internship data format**
 Format each entry as a single string: "Company Name - Role Title" (e.g. "McKinsey & Co. - Business Analyst Intern"). Use only company names and role titles that appear explicitly in the CV—you may combine them into "Company - Role" when they are clearly stated in the same bullet or block; do not invent company or role names. The internships field must be an array of such strings.
 
