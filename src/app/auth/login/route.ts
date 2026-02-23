@@ -17,9 +17,12 @@ export async function POST(request: Request) {
 
   // Magic link (passwordless) - user receives email to sign in
   if (!password) {
-    const origin =
-      process.env.VERCEL_URL != null
-        ? `https://${process.env.VERCEL_URL}`
+    const appUrl = (process.env.NEXT_PUBLIC_APP_URL ?? "").trim();
+    const vercelUrl = (process.env.VERCEL_URL ?? "").trim();
+    const origin = appUrl
+      ? appUrl.replace(/\/$/, "")
+      : vercelUrl
+        ? `https://${vercelUrl}`
         : new URL(request.url).origin;
     const { error } = await supabase.auth.signInWithOtp({
       email,
