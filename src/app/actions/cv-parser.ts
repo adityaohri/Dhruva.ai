@@ -1,5 +1,6 @@
 "use server";
 
+import { randomUUID } from "crypto";
 import { extractText } from "unpdf";
 import OpenAI from "openai";
 import { createClient } from "@/lib/supabase/server";
@@ -339,7 +340,7 @@ export async function saveProfileToSupabase(profile: ParsedCV): Promise<{
   } else {
     const { error: insertError } = await supabase
       .from("user_profiles")
-      .insert(row);
+      .insert({ ...row, id: randomUUID() });
     if (insertError) return { success: false, error: insertError.message };
   }
   return { success: true };
