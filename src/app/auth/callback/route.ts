@@ -11,10 +11,9 @@ export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get("code");
   const next = searchParams.get("next") ?? "/dashboard";
-  const redirectTo = `${origin}${next}`;
+  const successNext = `/auth/success?next=${encodeURIComponent(next)}`;
+  const redirectTo = `${origin}${successNext}`;
   const errorRedirect = `${origin}/?error=auth`;
-
-  const response = NextResponse.redirect(code ? redirectTo : errorRedirect);
 
   const url = readEnv(process.env.NEXT_PUBLIC_SUPABASE_URL);
   const key = readEnv(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
@@ -24,6 +23,9 @@ export async function GET(request: Request) {
 
   const cookieStore = await cookies();
 
+  const isSecure = origin.startsWith("https://");
+  const response = NextResponse.redirect(code ? redirectTo : errorRedirect);
+
   const supabase = createServerClient(url, key, {
     cookies: {
       getAll() {
@@ -31,7 +33,12 @@ export async function GET(request: Request) {
       },
       setAll(cookiesToSet) {
         cookiesToSet.forEach(({ name, value, options }) =>
-          response.cookies.set(name, value, options)
+          response.cookies.set(name, value, {
+            ...options,
+            path: "/",
+            secure: isSecure,
+            sameSite: "lax",
+          })
         );
       },
     },
