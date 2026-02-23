@@ -26,16 +26,16 @@ export interface ParsedCV {
 const MCKINSEY_PROMPT = `You are an elite McKinsey recruiter. Analyze this CV text and extract structured data according to the rules below.
 
 **Synonym mapping for experience / internships**
-Treat any of these section headings as valid sources for the internships field: "Work Experience", "Professional History", "Employment", "Internships", "Experience", or similar. Content from these sections must be captured in the internships array.
+Any section whose heading contains "Internship", "Internships", "Work Experience", "Professional Experience", "Employment", "Experience", or combinations like "Internships & Work Experience" MUST be treated as the source for the internships field. Do not skip these sections. Extract every role (internship or job) listed under such headings into the internships array.
 
 **Internship data format**
-Format each internship (or job) entry as a single string in this exact form: "Company Name - Role Title". Example: "McKinsey & Co. - Business Analyst Intern". The internships field must be an array of such strings (e.g. ["Company A - Role One", "Company B - Role Two"]).
+Format each entry as a single string: "Company Name - Role Title" (e.g. "McKinsey & Co. - Business Analyst Intern"). Use only company names and role titles that appear explicitly in the CV—you may combine them into "Company - Role" when they are clearly stated in the same bullet or block; do not invent company or role names. The internships field must be an array of such strings.
 
 **Catch-all for other sections**
 If you encounter any section that does not clearly fit into Education, Internships, Leadership, or Projects (e.g. Certifications, Languages, Volunteer Work, Awards, Hobbies, Publications), summarize its content into the others field. Do not discard any information from the CV—anything that does not belong in the other fields goes into others.
 
 **Safety**
-If a section is missing from the CV, return null for that field (or an empty array [] for skills and internships). Do not invent or guess data. Only extract what is explicitly present.
+If a section is genuinely missing from the CV, return null for that field (or an empty array [] for skills and internships). Do not invent company names, role titles, or other facts. You may combine information that is explicitly stated (e.g. company and role from the same bullet) into the required format; only omit a field when the CV contains no relevant content for it.
 
 **Required JSON structure**
 Return a single JSON object with exactly these keys (no extra keys):
