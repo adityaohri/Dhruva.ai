@@ -20,7 +20,11 @@ import {
 } from "@/app/actions/cv-parser";
 import { cn } from "@/lib/utils";
 
-export function CvUploadSection() {
+interface CvUploadSectionProps {
+  onParsedChange?: (parsed: ParsedCV | null) => void;
+}
+
+export function CvUploadSection({ onParsedChange }: CvUploadSectionProps) {
   const [file, setFile] = useState<File | null>(null);
   const [dragActive, setDragActive] = useState(false);
   const [parsing, setParsing] = useState(false);
@@ -50,6 +54,7 @@ export function CvUploadSection() {
       if (f?.type === "application/pdf") {
         setFile(f);
         setParsed(null);
+        onParsedChange?.(null);
       } else if (f) {
         setError("Please drop a PDF file.");
       }
@@ -63,6 +68,7 @@ export function CvUploadSection() {
     if (f?.type === "application/pdf") {
       setFile(f);
       setParsed(null);
+      onParsedChange?.(null);
     } else if (f) {
       setError("Please select a PDF file.");
     }
@@ -78,16 +84,19 @@ export function CvUploadSection() {
     setParsing(true);
     setError(null);
     setParsed(null);
+    onParsedChange?.(null);
     try {
       const formData = new FormData();
       formData.append("pdf", file, file.name);
       const result = await parsePdfWithAI(formData);
       if (result.success) {
         setParsed(result.data);
+        onParsedChange?.(result.data);
         setError(null);
       } else {
         setError(result.error ?? "Analysis failed.");
         setParsed(null);
+        onParsedChange?.(null);
       }
     } catch (err) {
       const rawMessage =
@@ -126,6 +135,7 @@ export function CvUploadSection() {
   const handleReset = () => {
     setFile(null);
     setParsed(null);
+    onParsedChange?.(null);
     setError(null);
     setSaveSuccess(false);
   };

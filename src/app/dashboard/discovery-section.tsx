@@ -4,9 +4,8 @@ import { useState } from "react";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
+import { type ParsedCV } from "@/app/actions/cv-parser";
 
 type SuccessPattern = {
   common_previous_roles: string[];
@@ -102,17 +101,36 @@ function analyzeGap(cv: string, pattern: SuccessPattern): GapResult {
   };
 }
 
-export function DiscoverySection() {
+interface DiscoverySectionProps {
+  parsed: ParsedCV | null;
+}
+
+export function DiscoverySection({ parsed }: DiscoverySectionProps) {
   const [targetRole, setTargetRole] = useState("Business Analyst");
   const [targetCompany, setTargetCompany] = useState("McKinsey & Company");
-  const [cvText, setCvText] = useState("");
   const [gap, setGap] = useState<GapResult | null>(null);
   const [running, setRunning] = useState(false);
 
   const handleRun = () => {
-    if (!cvText.trim()) return;
+    if (!parsed) return;
+
+    const syntheticCvText = [
+      parsed.name,
+      parsed.university,
+      parsed.gpa,
+      parsed.skills.join(" "),
+      parsed.internships.join(" "),
+      parsed.leadership_positions ?? "",
+      parsed.projects ?? "",
+      parsed.others ?? "",
+      String(parsed.entrepreneurial_leadership ?? ""),
+      String(parsed.personal_impact ?? ""),
+    ]
+      .filter(Boolean)
+      .join(" \n ");
+
     setRunning(true);
-    const result = analyzeGap(cvText, MOCK_PATTERN);
+    const result = analyzeGap(syntheticCvText, MOCK_PATTERN);
     setGap(result);
     setRunning(false);
   };
@@ -150,21 +168,15 @@ export function DiscoverySection() {
           </div>
         </div>
 
-        <div className="space-y-2">
-          <Label htmlFor="cv-text">Your CV (paste plain text)</Label>
-          <Textarea
-            id="cv-text"
-            rows={8}
-            value={cvText}
-            onChange={(e) => setCvText(e.target.value)}
-            placeholder="Paste your CV text here..."
-            className={cn("resize-y")}
-          />
-        </div>
-
-        <Button onClick={handleRun} disabled={running || !cvText.trim()}>
-          {running ? "Analyzing…" : "Run Discovery (Mock)"}
+        <Button onClick={handleRun} disabled={running || !parsed}>
+          {running ? "Analyzing…" : "Run Discovery (Mock from extracted CV)"}
         </Button>
+
+        {!parsed && (
+          <p className="text-sm text-muted-foreground">
+            Upload and analyze a CV above to enable discovery.
+          </p>
+        )}
 
         {gap && (
           <div className="mt-6 grid gap-4 md:grid-cols-2">

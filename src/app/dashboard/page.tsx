@@ -2,8 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { CvUploadSection } from "./cv-upload-section";
-import { DiscoverySection } from "./discovery-section";
+import { CvAndDiscoverySection } from "./cv-and-discovery";
 
 export const runtime = "nodejs";
 
@@ -47,9 +46,8 @@ export default async function DashboardPage() {
             <Link href="/">Back to home</Link>
           </Button>
         </div>
-        <CvUploadSection />
 
-        <DiscoverySection />
+        <CvAndDiscoverySection />
       </main>
     </div>
   );
