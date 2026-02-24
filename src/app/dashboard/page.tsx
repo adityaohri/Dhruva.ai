@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { CvUploadSection } from "./cv-upload-section";
+import { DiscoverySection } from "./discovery-section";
 
 export const runtime = "nodejs";
 
@@ -47,6 +48,8 @@ export default async function DashboardPage() {
           </Button>
         </div>
         <CvUploadSection />
+
+        <DiscoverySection />
       </main>
     </div>
   );
