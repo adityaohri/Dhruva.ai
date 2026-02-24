@@ -1,0 +1,119 @@
+[
+  {
+    "full_name": "Alex Mehta",
+    "current_occupation": "Business Analyst at McKinsey & Company",
+    "experience_history": [
+      {
+        "title": "Business Analyst",
+        "company": "McKinsey & Company",
+        "start_date": "2023-09-01",
+        "end_date": null,
+        "description": "Led workstreams on growth strategy, pricing optimization, and digital transformation projects. Built financial models and presented insights to C-level stakeholders."
+      },
+      {
+        "title": "Investment Banking Analyst",
+        "company": "Global Capital Partners",
+        "start_date": "2021-07-01",
+        "end_date": "2023-08-31",
+        "description": "Supported M&A and capital markets transactions with detailed valuation models, pitch materials, and due diligence analyses."
+      },
+      {
+        "title": "Finance Intern",
+        "company": "Horizon Equity",
+        "start_date": "2020-05-01",
+        "end_date": "2020-08-31",
+        "description": "Assisted in market research, portfolio company benchmarking, and investment memo preparation."
+      }
+    ],
+    "skills": [
+      "Financial modeling",
+      "Excel",
+      "PowerPoint",
+      "SQL",
+      "Market research",
+      "Presentation skills",
+      "Client communication"
+    ],
+    "education": [
+      "B.Sc. Economics, London School of Economics"
+    ]
+  },
+  {
+    "full_name": "Jordan Lee",
+    "current_occupation": "Associate at Boston Consulting Group",
+    "experience_history": [
+      {
+        "title": "Associate",
+        "company": "Boston Consulting Group",
+        "start_date": "2022-09-01",
+        "end_date": null,
+        "description": "Worked on cost-reduction, organization design, and go-to-market strategy projects across technology and consumer sectors."
+      },
+      {
+        "title": "Strategy Analyst",
+        "company": "Nova Tech",
+        "start_date": "2020-08-01",
+        "end_date": "2022-08-31",
+        "description": "Analyzed product performance, built dashboards, and partnered with product managers on roadmap decisions."
+      },
+      {
+        "title": "Data Analyst Intern",
+        "company": "Insight Analytics",
+        "start_date": "2019-06-01",
+        "end_date": "2019-08-31",
+        "description": "Created SQL queries and visualizations for internal KPI reporting."
+      }
+    ],
+    "skills": [
+      "Data analysis",
+      "SQL",
+      "Tableau",
+      "Python",
+      "Storytelling",
+      "Stakeholder management"
+    ],
+    "education": [
+      "B.A. Statistics, University of California"
+    ]
+  },
+  {
+    "full_name": "Riya Patel",
+    "current_occupation": "Consultant at Bain & Company",
+    "experience_history": [
+      {
+        "title": "Consultant",
+        "company": "Bain & Company",
+        "start_date": "2021-09-01",
+        "end_date": null,
+        "description": "Led modules on customer segmentation, pricing, and growth strategy for clients in retail and healthcare."
+      },
+      {
+        "title": "Senior Business Analyst",
+        "company": "Vertex Analytics",
+        "start_date": "2019-07-01",
+        "end_date": "2021-08-31",
+        "description": "Built analytical frameworks, dashboards, and presentations for executive leadership."
+      },
+      {
+        "title": "Summer Analyst",
+        "company": "Summit Advisory",
+        "start_date": "2018-06-01",
+        "end_date": "2018-08-31",
+        "description": "Conducted industry research and supported due diligence workstreams."
+      }
+    ],
+    "skills": [
+      "Customer analytics",
+      "Excel",
+      "PowerPoint",
+      "Project management",
+      "Team leadership",
+      "Financial analysis"
+    ],
+    "education": [
+      "MBA, INSEAD",
+      "B.Com., University of Mumbai"
+    ]
+  }
+]
+
