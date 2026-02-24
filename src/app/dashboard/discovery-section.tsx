@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { type ParsedCV } from "@/app/actions/cv-parser";
+import type { SuccessPattern } from "@/app/api/discovery/route";
 
 type SuccessPattern = {
   common_previous_roles: string[];
@@ -108,10 +109,15 @@ interface DiscoverySectionProps {
 export function DiscoverySection({ parsed }: DiscoverySectionProps) {
   const [targetRole, setTargetRole] = useState("Business Analyst");
   const [targetCompany, setTargetCompany] = useState("McKinsey & Company");
+  const [pattern, setPattern] = useState<SuccessPattern | null>(null);
+  const [topProfiles, setTopProfiles] = useState<
+    { full_name: string; current_occupation: string; golden_step?: string }[]
+  >([]);
   const [gap, setGap] = useState<GapResult | null>(null);
   const [running, setRunning] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const handleRun = () => {
+  const handleRun = async () => {
     if (!parsed) return;
 
     const syntheticCvText = [
@@ -130,9 +136,51 @@ export function DiscoverySection({ parsed }: DiscoverySectionProps) {
       .join(" \n ");
 
     setRunning(true);
-    const result = analyzeGap(syntheticCvText, MOCK_PATTERN);
-    setGap(result);
-    setRunning(false);
+    setError(null);
+    setGap(null);
+
+    try {
+      const resp = await fetch("/api/discovery", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          targetRole,
+          targetCompany,
+        }),
+      });
+
+      if (!resp.ok) {
+        const body = await resp.json().catch(() => ({}));
+        throw new Error(body.error || `Discovery API failed with ${resp.status}`);
+      }
+
+      const data = (await resp.json()) as {
+        profiles: {
+          full_name: string;
+          current_occupation: string;
+          experience_history: { title: string; company: string }[];
+        }[];
+        pattern: SuccessPattern;
+      };
+
+      setPattern(data.pattern);
+      setTopProfiles(
+        data.profiles.slice(0, 5).map((p) => ({
+          full_name: p.full_name,
+          current_occupation: p.current_occupation,
+          golden_step: p.experience_history?.[1]
+            ? `${p.experience_history[1].company} – ${p.experience_history[1].title}`
+            : undefined,
+        }))
+      );
+
+      const result = analyzeGap(syntheticCvText, data.pattern);
+      setGap(result);
+    } catch (e: any) {
+      setError(e?.message || "Discovery failed");
+    } finally {
+      setRunning(false);
+    }
   };
 
   return (
@@ -177,59 +225,90 @@ export function DiscoverySection({ parsed }: DiscoverySectionProps) {
           </p>
         )}
 
-        {gap && (
+        {error && (
+          <p className="text-sm text-destructive">
+            {error}
+          </p>
+        )}
+
+        {(pattern || gap) && (
           <div className="mt-6 grid gap-4 md:grid-cols-2">
-            <div className="space-y-2 rounded-lg border bg-card p-4">
+            <div className="space-y-3 rounded-lg border bg-card p-4">
               <h3 className="font-semibold text-sm uppercase tracking-wide text-muted-foreground">
                 Success pattern snapshot
               </h3>
-              <p className="text-sm">
-                <span className="font-medium">Common previous roles: </span>
-                {MOCK_PATTERN.common_previous_roles.join(", ")}
-              </p>
-              <p className="text-sm">
-                <span className="font-medium">Avg tenure in previous step: </span>
-                {MOCK_PATTERN.avg_tenure_in_previous_step.toFixed(1)} years
-              </p>
-              <p className="text-sm">
-                <span className="font-medium">Impact keyword density: </span>
-                {(MOCK_PATTERN.impact_keyword_density * 100).toFixed(1)}%
-              </p>
-              <p className="text-sm">
-                <span className="font-medium">Top pattern skills: </span>
-                {MOCK_PATTERN.top_skills_delta.join(", ")}
-              </p>
+              {pattern && (
+                <>
+                  <p className="text-sm">
+                    <span className="font-medium">Common previous roles: </span>
+                    {pattern.common_previous_roles.join(", ") || "Not enough data"}
+                  </p>
+                  <p className="text-sm">
+                    <span className="font-medium">Avg tenure in previous step: </span>
+                    {pattern.avg_tenure_in_previous_step.toFixed(1)} years
+                  </p>
+                  <p className="text-sm">
+                    <span className="font-medium">Impact keyword density: </span>
+                    {(pattern.impact_keyword_density * 100).toFixed(1)}%
+                  </p>
+                  <p className="text-sm">
+                    <span className="font-medium">Top pattern skills: </span>
+                    {pattern.top_skills_delta.join(", ") || "Not enough data"}
+                  </p>
+                </>
+              )}
+              {topProfiles.length > 0 && (
+                <div className="space-y-1">
+                  <p className="font-medium text-sm mt-2">Sample top profiles</p>
+                  <ul className="text-sm list-disc list-inside space-y-1">
+                    {topProfiles.map((p) => (
+                      <li key={p.full_name}>
+                        <span className="font-medium">{p.full_name}</span>{" "}
+                        — {p.current_occupation}
+                        {p.golden_step && (
+                          <span className="text-muted-foreground">
+                            {" "}
+                            (previous: {p.golden_step})
+                          </span>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
             </div>
 
-            <div className="space-y-2 rounded-lg border bg-card p-4">
-              <h3 className="font-semibold text-sm uppercase tracking-wide text-muted-foreground">
-                Your gap analysis
-              </h3>
-              <p className="text-sm">
-                <span className="font-medium">Missing “golden step” roles: </span>
-                {gap.missing_golden_step_roles.length
-                  ? gap.missing_golden_step_roles.join(", ")
-                  : "None explicitly missing."}
-              </p>
-              <p className="text-sm">
-                <span className="font-medium">Impact intensity vs pattern: </span>
-                {gap.impact_gap_ratio >= 1
-                  ? "On par or stronger."
-                  : `${(gap.impact_gap_ratio * 100).toFixed(0)}% of target profiles' density.`}
-              </p>
-              <p className="text-sm">
-                <span className="font-medium">Technical skill gaps: </span>
-                {gap.skill_gap.technical.length
-                  ? gap.skill_gap.technical.join(", ")
-                  : "None detected."}
-              </p>
-              <p className="text-sm">
-                <span className="font-medium">Soft skill gaps: </span>
-                {gap.skill_gap.soft.length
-                  ? gap.skill_gap.soft.join(", ")
-                  : "None detected."}
-              </p>
-            </div>
+            {gap && (
+              <div className="space-y-2 rounded-lg border bg-card p-4">
+                <h3 className="font-semibold text-sm uppercase tracking-wide text-muted-foreground">
+                  Your gap analysis
+                </h3>
+                <p className="text-sm">
+                  <span className="font-medium">Missing “golden step” roles: </span>
+                  {gap.missing_golden_step_roles.length
+                    ? gap.missing_golden_step_roles.join(", ")
+                    : "None explicitly missing."}
+                </p>
+                <p className="text-sm">
+                  <span className="font-medium">Impact intensity vs pattern: </span>
+                  {gap.impact_gap_ratio >= 1
+                    ? "On par or stronger."
+                    : `${(gap.impact_gap_ratio * 100).toFixed(0)}% of target profiles' density.`}
+                </p>
+                <p className="text-sm">
+                  <span className="font-medium">Technical skill gaps: </span>
+                  {gap.skill_gap.technical.length
+                    ? gap.skill_gap.technical.join(", ")
+                    : "None detected."}
+                </p>
+                <p className="text-sm">
+                  <span className="font-medium">Soft skill gaps: </span>
+                  {gap.skill_gap.soft.length
+                    ? gap.skill_gap.soft.join(", ")
+                    : "None detected."}
+                </p>
+              </div>
+            )}
           </div>
         )}
       </CardContent>
