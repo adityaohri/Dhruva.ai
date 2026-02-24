@@ -143,7 +143,6 @@ export function DiscoverySection({ parsed }: DiscoverySectionProps) {
         </CardTitle>
         <CardDescription>
           Explore success patterns for a target role and see how your CV compares.
-          (Currently using mock McKinsey/BCG-style patterns.)
         </CardDescription>
       </CardHeader>
       <CardContent className="pt-6 space-y-4">
@@ -169,7 +168,7 @@ export function DiscoverySection({ parsed }: DiscoverySectionProps) {
         </div>
 
         <Button onClick={handleRun} disabled={running || !parsed}>
-          {running ? "Analyzing…" : "Run Discovery (Mock from extracted CV)"}
+          {running ? "Analyzing…" : "Run Discovery from extracted CV"}
         </Button>
 
         {!parsed && (
