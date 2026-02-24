@@ -1,12 +1,17 @@
 "use client";
 
 import { useState } from "react";
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+  CardContent,
+} from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { type ParsedCV } from "@/app/actions/cv-parser";
-import type { SuccessPattern } from "@/app/api/discovery/route";
 
 type SuccessPattern = {
   common_previous_roles: string[];
