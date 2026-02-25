@@ -37,11 +37,11 @@ export default function RootLayout({
           <header className="sticky top-0 z-40 px-4 pt-4">
             <nav className="mx-auto flex h-14 max-w-6xl items-center justify-between rounded-2xl bg-white px-5 shadow-sm sm:h-16 sm:px-6">
               <Link href="/" className="flex items-center gap-2">
-                <div className="dhruva-logo-wrap flex h-8 w-8 shrink-0 items-center justify-center rounded-full">
+                <div className="dhruva-logo-wrap flex h-10 w-10 shrink-0 items-center justify-center rounded-full">
                   <img
                     src="/dhruva-star.png"
                     alt="dhruva.ai logo"
-                    className="h-7 w-7 object-contain"
+                    className="h-9 w-9 object-contain"
                   />
                 </div>
                 <span className="font-serif text-lg font-semibold tracking-tight text-[#3C2A6A]">
@@ -86,11 +86,11 @@ export default function RootLayout({
             <div className="mx-auto flex max-w-6xl flex-col gap-8 px-4 py-8 sm:flex-row sm:items-start sm:justify-between sm:py-10">
               <div className="flex flex-col gap-3 max-w-sm">
                 <div className="flex items-center gap-2">
-                  <div className="dhruva-logo-wrap flex h-8 w-8 shrink-0 items-center justify-center rounded-full">
+                  <div className="dhruva-logo-wrap flex h-10 w-10 shrink-0 items-center justify-center rounded-full">
                     <img
                       src="/dhruva-star.png"
                       alt="dhruva.ai logo"
-                      className="h-7 w-7 object-contain"
+                      className="h-9 w-9 object-contain"
                     />
                   </div>
                   <span className="font-serif text-lg font-semibold tracking-tight text-[#3C2A6A]">
