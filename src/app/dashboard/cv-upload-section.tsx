@@ -141,14 +141,15 @@ export function CvUploadSection({ onParsedChange }: CvUploadSectionProps) {
   };
 
   return (
-    <Card className="overflow-hidden">
-      <CardHeader className="border-b bg-muted/30">
-        <CardTitle className="flex items-center gap-2">
-          <FileText className="size-5" />
+    <Card className="overflow-hidden border-none bg-transparent shadow-none">
+      <CardHeader className="bg-transparent pb-4">
+        <CardTitle className="flex items-center gap-2 font-serif text-xl font-semibold text-[#3C2A6A]">
+          <FileText className="size-5 text-[#3C2A6A]" />
           CV Intelligence
         </CardTitle>
-        <CardDescription>
-          Upload a resume PDF for AI-powered extraction (McKinsey-style analysis).
+        <CardDescription className="text-sm text-slate-700">
+          Upload your CV once. We extract a structured profile that fuels the Discovery
+          Engine below.
         </CardDescription>
         {openAIConfigured !== null && (
           <p
@@ -173,9 +174,9 @@ export function CvUploadSection({ onParsedChange }: CvUploadSectionProps) {
           onDragOver={handleDrag}
           onDrop={handleDrop}
           className={cn(
-            "relative flex min-h-[180px] flex-col items-center justify-center rounded-xl border-2 border-dashed p-8 transition-colors",
-            dragActive && "border-primary bg-primary/5",
-            !dragActive && "border-muted-foreground/25 bg-muted/20 hover:bg-muted/30"
+            "relative flex min-h-[190px] flex-col items-center justify-center rounded-3xl border border-white/60 bg-white/40 p-8 shadow-[0_18px_60px_rgba(20,10,60,0.12)] backdrop-blur-md transition",
+            dragActive && "border-[#3C2A6A]/60 bg-white/60",
+            !dragActive && "hover:border-[#3C2A6A]/40 hover:bg-white/60"
           )}
         >
           <input
@@ -190,18 +191,18 @@ export function CvUploadSection({ onParsedChange }: CvUploadSectionProps) {
           />
           {file ? (
             <div className="relative z-10 flex flex-col items-center gap-2 text-center">
-              <FileText className="size-10 text-muted-foreground" />
-              <p className="font-medium text-foreground">{file.name}</p>
-              <p className="text-sm text-muted-foreground">
+              <FileText className="size-10 text-[#3C2A6A]" />
+              <p className="font-medium text-slate-900">{file.name}</p>
+              <p className="text-xs text-slate-600">
                 {(file.size / 1024).toFixed(1)} KB
               </p>
               <div className="flex gap-2">
                 <Button
                   type="button"
                   size="sm"
-                  variant="outline"
                   onClick={handleReset}
                   disabled={parsing}
+                  className="rounded-full border border-[#3C2A6A]/15 bg-transparent px-4 text-xs font-medium text-[#3C2A6A] hover:bg-[#3C2A6A]/5"
                 >
                   Remove
                 </Button>
@@ -211,6 +212,7 @@ export function CvUploadSection({ onParsedChange }: CvUploadSectionProps) {
                   onClick={handleParse}
                   disabled={parsing}
                   aria-busy={parsing}
+                  className="rounded-full bg-[#3C2A6A] px-4 text-xs font-medium text-[#FDFBF1] shadow-sm transition-transform hover:-translate-y-0.5 hover:bg-[#4a347f]"
                 >
                   {parsing ? (
                     <>
@@ -231,11 +233,11 @@ export function CvUploadSection({ onParsedChange }: CvUploadSectionProps) {
               htmlFor="cv-upload"
               className="flex cursor-pointer flex-col items-center gap-2 text-center"
             >
-              <Upload className="size-10 text-muted-foreground" />
-              <span className="font-medium text-foreground">
+              <Upload className="size-10 text-[#3C2A6A]" />
+              <span className="font-medium text-slate-900">
                 Drop your resume here or click to browse
               </span>
-              <span className="text-sm text-muted-foreground">
+              <span className="text-xs text-slate-600">
                 PDF only
               </span>
             </label>
@@ -244,7 +246,7 @@ export function CvUploadSection({ onParsedChange }: CvUploadSectionProps) {
 
         {error && (
           <div
-            className="mt-3 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm font-medium text-destructive"
+            className="mt-4 rounded-2xl border border-red-200 bg-red-50/80 px-4 py-3 text-xs font-medium text-red-700"
             role="alert"
           >
             {error}
@@ -252,83 +254,120 @@ export function CvUploadSection({ onParsedChange }: CvUploadSectionProps) {
         )}
 
         {saveSuccess && (
-          <p className="mt-3 rounded-md bg-primary/10 px-3 py-2 text-sm text-primary">
+          <p className="mt-3 rounded-full bg-emerald-50 px-4 py-2 text-xs font-medium text-emerald-700">
             Profile saved successfully.
           </p>
         )}
 
         {/* Parsed data form */}
         {parsed && (
-          <div className="mt-6 space-y-4 rounded-lg border bg-card p-4">
-            <h3 className="font-semibold">Extracted profile</h3>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-2">
-                <Label>Name</Label>
-                <Input value={parsed.name} readOnly className="bg-muted/50" />
-              </div>
-              <div className="space-y-2">
-                <Label>University</Label>
+          <div className="mt-8 space-y-5 rounded-3xl border border-[#3C2A6A]/10 bg-white/90 p-6 shadow-[0_12px_40px_rgba(20,10,60,0.06)] backdrop-blur-sm animate-in fade-in-50 slide-in-from-bottom-2">
+            <h3 className="font-serif text-lg font-semibold text-[#3C2A6A]">
+              Extracted profile
+            </h3>
+            <div className="grid gap-6 md:grid-cols-2">
+              <div className="space-y-3">
+                <Label className="text-xs uppercase tracking-wide text-slate-600">
+                  Name
+                </Label>
+                <Input
+                  value={parsed.name}
+                  readOnly
+                  className="h-9 rounded-full border border-[#3C2A6A]/15 bg-[#FDFBF1] text-sm focus-visible:ring-[#3C2A6A]"
+                />
+                <Label className="text-xs uppercase tracking-wide text-slate-600">
+                  University
+                </Label>
                 <Input
                   value={parsed.university}
                   readOnly
-                  className="bg-muted/50"
+                  className="h-9 rounded-full border border-[#3C2A6A]/15 bg-[#FDFBF1] text-sm focus-visible:ring-[#3C2A6A]"
+                />
+                <Label className="text-xs uppercase tracking-wide text-slate-600">
+                  GPA
+                </Label>
+                <Input
+                  value={parsed.gpa}
+                  readOnly
+                  className="h-9 rounded-full border border-[#3C2A6A]/15 bg-[#FDFBF1] text-sm focus-visible:ring-[#3C2A6A]"
                 />
               </div>
+              <div className="space-y-3">
+                <Label className="text-xs uppercase tracking-wide text-slate-600">
+                  Skills
+                </Label>
+                <div className="flex flex-wrap gap-2 rounded-2xl border border-[#3C2A6A]/10 bg-[#FDFBF1] px-3 py-2 text-xs">
+                  {parsed.skills.length
+                    ? parsed.skills.map((s) => (
+                        <span
+                          key={s}
+                          className="rounded-full bg-[#3C2A6A]/5 px-3 py-1 text-[11px] font-medium text-[#3C2A6A]"
+                        >
+                          {s}
+                        </span>
+                      ))
+                    : "—"}
+                </div>
+                <Label className="text-xs uppercase tracking-wide text-slate-600">
+                  Work Experience
+                </Label>
+                <div className="rounded-2xl border border-[#3C2A6A]/10 bg-[#FDFBF1] px-3 py-2 text-xs leading-relaxed">
+                  {parsed.internships.length
+                    ? parsed.internships.join(" · ")
+                    : "—"}
+                </div>
+              </div>
+            </div>
+            <div className="grid gap-4 md:grid-cols-3">
               <div className="space-y-2">
-                <Label>GPA</Label>
-                <Input value={parsed.gpa} readOnly className="bg-muted/50" />
+                <Label className="text-xs uppercase tracking-wide text-slate-600">
+                  Leadership positions
+                </Label>
+                <div className="rounded-2xl border border-[#3C2A6A]/10 bg-[#FDFBF1] px-3 py-2 text-xs whitespace-pre-wrap">
+                  {parsed.leadership_positions ?? "—"}
+                </div>
               </div>
-            </div>
-            <div className="space-y-2">
-              <Label>Skills</Label>
-              <div className="rounded-md border bg-muted/50 px-3 py-2 text-sm">
-                {parsed.skills.length
-                  ? parsed.skills.join(", ")
-                  : "—"}
-              </div>
-            </div>
-            <div className="space-y-2">
-              <Label>Work Experience</Label>
-              <div className="rounded-md border bg-muted/50 px-3 py-2 text-sm">
-                {parsed.internships.length
-                  ? parsed.internships.join(" · ")
-                  : "—"}
-              </div>
-            </div>
-            <div className="space-y-2">
-              <Label>Leadership positions</Label>
-              <div className="rounded-md border bg-muted/50 px-3 py-2 text-sm whitespace-pre-wrap">
-                {parsed.leadership_positions ?? "—"}
-              </div>
-            </div>
-            <div className="space-y-2">
-              <Label>Projects</Label>
-              <div className="rounded-md border bg-muted/50 px-3 py-2 text-sm whitespace-pre-wrap">
-                {parsed.projects ?? "—"}
-              </div>
-            </div>
-            <div className="space-y-2">
-              <Label>Others</Label>
-              <div className="rounded-md border bg-muted/50 px-3 py-2 text-sm whitespace-pre-wrap">
-                {parsed.others ?? "—"}
-              </div>
-            </div>
-            <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
-                <Label>Entrepreneurial Leadership</Label>
-                <div className="rounded-md border bg-muted/50 px-3 py-2 text-sm">
+                <Label className="text-xs uppercase tracking-wide text-slate-600">
+                  Projects
+                </Label>
+                <div className="rounded-2xl border border-[#3C2A6A]/10 bg-[#FDFBF1] px-3 py-2 text-xs whitespace-pre-wrap">
+                  {parsed.projects ?? "—"}
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label className="text-xs uppercase tracking-wide text-slate-600">
+                  Others
+                </Label>
+                <div className="rounded-2xl border border-[#3C2A6A]/10 bg-[#FDFBF1] px-3 py-2 text-xs whitespace-pre-wrap">
+                  {parsed.others ?? "—"}
+                </div>
+              </div>
+            </div>
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label className="text-xs uppercase tracking-wide text-slate-600">
+                  Entrepreneurial Leadership
+                </Label>
+                <div className="rounded-2xl border border-[#3C2A6A]/10 bg-[#FDFBF1] px-3 py-2 text-xs">
                   {String(parsed.entrepreneurial_leadership)}
                 </div>
               </div>
               <div className="space-y-2">
-                <Label>Personal Impact</Label>
-                <div className="rounded-md border bg-muted/50 px-3 py-2 text-sm">
+                <Label className="text-xs uppercase tracking-wide text-slate-600">
+                  Personal Impact
+                </Label>
+                <div className="rounded-2xl border border-[#3C2A6A]/10 bg-[#FDFBF1] px-3 py-2 text-xs">
                   {String(parsed.personal_impact)}
                 </div>
               </div>
             </div>
-            <div className="flex flex-wrap gap-2 pt-2">
-              <Button onClick={handleSave} disabled={saving}>
+            <div className="flex flex-wrap gap-3 pt-2">
+              <Button
+                onClick={handleSave}
+                disabled={saving}
+                className="rounded-full bg-[#3C2A6A] px-5 py-2 text-xs font-medium text-[#FDFBF1] shadow-sm transition-transform hover:-translate-y-0.5 hover:bg-[#4a347f]"
+              >
                 {saving ? (
                   <>
                     <Loader2 className="mr-2 size-4 animate-spin" />
@@ -338,7 +377,12 @@ export function CvUploadSection({ onParsedChange }: CvUploadSectionProps) {
                   "Save to Profile"
                 )}
               </Button>
-              <Button type="button" variant="outline" onClick={handleReset}>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleReset}
+                className="rounded-full border border-[#3C2A6A]/20 bg-transparent px-5 py-2 text-xs font-medium text-[#3C2A6A] hover:bg-[#3C2A6A]/5"
+              >
                 Upload another
               </Button>
             </div>

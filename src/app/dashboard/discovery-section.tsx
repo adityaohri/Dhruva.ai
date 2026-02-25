@@ -189,38 +189,55 @@ export function DiscoverySection({ parsed }: DiscoverySectionProps) {
   };
 
   return (
-    <Card className="overflow-hidden">
-      <CardHeader className="border-b bg-muted/30">
-        <CardTitle className="flex items-center gap-2">
+    <Card className="overflow-hidden border-none bg-transparent shadow-none">
+      <CardHeader className="bg-transparent pb-4">
+        <CardTitle className="flex items-center gap-2 font-serif text-xl font-semibold text-[#3C2A6A]">
           Discovery Engine
         </CardTitle>
-        <CardDescription>
-          Explore success patterns for a target role and see how your CV compares.
+        <CardDescription className="text-sm text-slate-700">
+          Run a pattern scan on real profiles for your target path, then compare it to
+          your extracted CV.
         </CardDescription>
       </CardHeader>
       <CardContent className="pt-6 space-y-4">
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-2">
-            <Label htmlFor="target-role">Target role</Label>
+            <Label
+              htmlFor="target-role"
+              className="text-xs uppercase tracking-wide text-slate-600"
+            >
+              Target role
+            </Label>
             <Input
               id="target-role"
               value={targetRole}
               onChange={(e) => setTargetRole(e.target.value)}
               placeholder="e.g. Business Analyst"
+              className="h-9 rounded-full border border-[#3C2A6A]/15 bg-[#FDFBF1] text-sm focus-visible:ring-[#3C2A6A]"
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="target-company">Target company</Label>
+            <Label
+              htmlFor="target-company"
+              className="text-xs uppercase tracking-wide text-slate-600"
+            >
+              Target company
+            </Label>
             <Input
               id="target-company"
               value={targetCompany}
               onChange={(e) => setTargetCompany(e.target.value)}
               placeholder="e.g. McKinsey & Company"
+              className="h-9 rounded-full border border-[#3C2A6A]/15 bg-[#FDFBF1] text-sm focus-visible:ring-[#3C2A6A]"
             />
           </div>
         </div>
 
-        <Button onClick={handleRun} disabled={running || !parsed}>
+        <Button
+          onClick={handleRun}
+          disabled={running || !parsed}
+          className="mt-1 rounded-full bg-[#3C2A6A] px-5 py-2 text-xs font-medium text-[#FDFBF1] shadow-sm transition-transform hover:-translate-y-0.5 hover:bg-[#4a347f] disabled:opacity-60"
+        >
           {running ? "Analyzing…" : "Run Discovery from extracted CV"}
         </Button>
 
@@ -231,41 +248,98 @@ export function DiscoverySection({ parsed }: DiscoverySectionProps) {
         )}
 
         {error && (
-          <p className="text-sm text-destructive">
+          <p className="text-xs text-red-700">
             {error}
           </p>
         )}
 
         {(pattern || gap) && (
-          <div className="mt-6 grid gap-4 md:grid-cols-2">
-            <div className="space-y-3 rounded-lg border bg-card p-4">
-              <h3 className="font-semibold text-sm uppercase tracking-wide text-muted-foreground">
+          <div className="mt-8 grid gap-5 md:grid-cols-2 animate-in fade-in-50 slide-in-from-bottom-2">
+            <div className="space-y-3 rounded-3xl border border-[#3C2A6A]/12 bg-white/90 p-5 shadow-[0_12px_40px_rgba(20,10,60,0.06)]">
+              <h3 className="font-serif text-sm font-semibold uppercase tracking-[0.18em] text-[#3C2A6A]">
                 Success pattern snapshot
               </h3>
               {pattern && (
                 <>
-                  <p className="text-sm">
-                    <span className="font-medium">Common previous roles: </span>
-                    {pattern.common_previous_roles.join(", ") || "Not enough data"}
-                  </p>
-                  <p className="text-sm">
-                    <span className="font-medium">Avg tenure in previous step: </span>
-                    {pattern.avg_tenure_in_previous_step.toFixed(1)} years
-                  </p>
-                  <p className="text-sm">
-                    <span className="font-medium">Impact keyword density: </span>
-                    {(pattern.impact_keyword_density * 100).toFixed(1)}%
-                  </p>
-                  <p className="text-sm">
-                    <span className="font-medium">Top pattern skills: </span>
-                    {pattern.top_skills_delta.join(", ") || "Not enough data"}
-                  </p>
+                  <div className="mt-2 grid grid-cols-3 gap-3 text-xs">
+                    <div className="space-y-1">
+                      <p className="text-[10px] uppercase tracking-wide text-slate-500">
+                        Avg time in prior step
+                      </p>
+                      <p className="font-medium text-[#3C2A6A]">
+                        {pattern.avg_tenure_in_previous_step.toFixed(1)} yrs
+                      </p>
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-[10px] uppercase tracking-wide text-slate-500">
+                        Impact density
+                      </p>
+                      <p className="font-medium text-[#3C2A6A]">
+                        {(pattern.impact_keyword_density * 100).toFixed(1)}%
+                      </p>
+                      <div className="h-1.5 w-full rounded-full bg-[#3C2A6A]/10">
+                        <div
+                          className="h-1.5 rounded-full bg-[#3C2A6A]"
+                          style={{
+                            width: `${Math.min(
+                              100,
+                              pattern.impact_keyword_density * 160
+                            ).toFixed(0)}%`,
+                          }}
+                        />
+                      </div>
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-[10px] uppercase tracking-wide text-slate-500">
+                        Sample size
+                      </p>
+                      <p className="font-medium text-[#3C2A6A]">
+                        {topProfiles.length || "~"}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 space-y-2">
+                    <p className="text-[11px] font-medium text-slate-600">
+                      Common previous roles
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {pattern.common_previous_roles.length
+                        ? pattern.common_previous_roles.map((role) => (
+                            <span
+                              key={role}
+                              className="rounded-full bg-[#3C2A6A]/5 px-3 py-1 text-[11px] font-medium text-[#3C2A6A]"
+                            >
+                              {role}
+                            </span>
+                          ))
+                        : "Not enough data"}
+                    </div>
+                  </div>
+
+                  <div className="mt-4 space-y-2">
+                    <p className="text-[11px] font-medium text-slate-600">
+                      Pattern skills
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {pattern.top_skills_delta.slice(0, 10).map((skill) => (
+                        <span
+                          key={skill}
+                          className="rounded-full border border-[#3C2A6A]/15 bg-[#3C2A6A]/3 px-3 py-1 text-[11px] text-[#3C2A6A]"
+                        >
+                          {skill}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
                 </>
               )}
               {topProfiles.length > 0 && (
                 <div className="space-y-1">
-                  <p className="font-medium text-sm mt-2">Sample top profiles</p>
-                  <ul className="text-sm list-disc list-inside space-y-1">
+                  <p className="mt-3 text-[11px] font-medium text-slate-600">
+                    Sample top profiles
+                  </p>
+                  <ul className="list-disc list-inside space-y-1 text-xs text-slate-800">
                     {topProfiles.map((p) => (
                       <li key={p.full_name}>
                         <span className="font-medium">{p.full_name}</span>{" "}
@@ -284,34 +358,60 @@ export function DiscoverySection({ parsed }: DiscoverySectionProps) {
             </div>
 
             {gap && (
-              <div className="space-y-2 rounded-lg border bg-card p-4">
-                <h3 className="font-semibold text-sm uppercase tracking-wide text-muted-foreground">
+              <div className="space-y-3 rounded-3xl border border-[#3C2A6A]/12 bg-white/90 p-5 shadow-[0_12px_40px_rgba(20,10,60,0.06)]">
+                <h3 className="font-serif text-sm font-semibold uppercase tracking-[0.18em] text-[#3C2A6A]">
                   Your gap analysis
                 </h3>
-                <p className="text-sm">
-                  <span className="font-medium">Missing “golden step” roles: </span>
+                <p className="text-xs">
+                  <span className="font-medium text-slate-700">
+                    Missing “golden step” roles:
+                  </span>{" "}
                   {gap.missing_golden_step_roles.length
                     ? gap.missing_golden_step_roles.join(", ")
                     : "None explicitly missing."}
                 </p>
-                <p className="text-sm">
-                  <span className="font-medium">Impact intensity vs pattern: </span>
+                <p className="text-xs">
+                  <span className="font-medium text-slate-700">
+                    Impact intensity vs pattern:
+                  </span>{" "}
                   {gap.impact_gap_ratio >= 1
                     ? "On par or stronger."
                     : `${(gap.impact_gap_ratio * 100).toFixed(0)}% of target profiles' density.`}
                 </p>
-                <p className="text-sm">
-                  <span className="font-medium">Technical skill gaps: </span>
+                <div className="space-y-2 pt-1">
+                  <p className="text-[11px] font-medium text-slate-600">
+                    Technical skill gaps
+                  </p>
+                  <div className="flex flex-wrap gap-2 text-xs">
                   {gap.skill_gap.technical.length
-                    ? gap.skill_gap.technical.join(", ")
-                    : "None detected."}
-                </p>
-                <p className="text-sm">
-                  <span className="font-medium">Soft skill gaps: </span>
+                      ? gap.skill_gap.technical.map((s) => (
+                          <span
+                            key={s}
+                            className="rounded-full border border-[#3C2A6A]/20 bg-transparent px-3 py-1 text-[11px] text-[#3C2A6A]"
+                          >
+                            {s}
+                          </span>
+                        ))
+                      : "None detected."}
+                  </div>
+                </div>
+                <div className="space-y-2 pt-1">
+                  <p className="text-[11px] font-medium text-slate-600">
+                    Soft skill gaps
+                  </p>
+                  <div className="flex flex-wrap gap-2 text-xs">
                   {gap.skill_gap.soft.length
-                    ? gap.skill_gap.soft.join(", ")
-                    : "None detected."}
-                </p>
+                      ? gap.skill_gap.soft.map((s) => (
+                          <span
+                            key={s}
+                            className="rounded-full border border-[#3C2A6A]/20 bg-[#3C2A6A]/5 px-3 py-1 text-[11px] text-[#3C2A6A]"
+                          >
+                            {s}
+                          </span>
+                        ))
+                      : "None detected."}
+                  </div>
+                </div>
               </div>
             )}
           </div>
