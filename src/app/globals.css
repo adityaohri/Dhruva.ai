@@ -143,7 +143,18 @@
 
 .marquee-track {
   display: inline-flex;
-  gap: 3rem;
+  gap: 4.5rem;
   animation: marquee-horizontal 28s linear infinite;
   will-change: transform;
+}
+
+.partner-logo {
+  height: 3.5rem; /* ~h-14 */
+  width: auto;
+  opacity: 0.9;
+}
+
+.partner-logo-bain {
+  @apply partner-logo;
+  mix-blend-mode: screen;
 }

@@ -54,33 +54,33 @@ export default async function Home() {
               {[1, 2].map((loop) => (
                 <div
                   key={loop}
-                  className="flex items-center gap-10 px-4"
+                  className="flex items-center gap-16 px-8"
                   aria-hidden={loop === 2}
                 >
                   <img
                     src="/partners/mckinsey.png"
                     alt="McKinsey & Company"
-                    className="h-6 w-auto opacity-90"
+                    className="partner-logo"
                   />
                   <img
                     src="/partners/bain.png"
                     alt="Bain & Company"
-                    className="h-6 w-auto opacity-90"
+                    className="partner-logo-bain"
                   />
                   <img
                     src="/partners/srcc.png"
                     alt="SRCC"
-                    className="h-8 w-auto opacity-90"
+                    className="partner-logo"
                   />
                   <img
                     src="/partners/sig.png"
                     alt="SIG"
-                    className="h-6 w-auto opacity-90"
+                    className="partner-logo"
                   />
                   <img
                     src="/partners/ycp-auctus.png"
                     alt="YCP Auctus"
-                    className="h-6 w-auto opacity-90"
+                    className="partner-logo"
                   />
                 </div>
               ))}
