@@ -554,6 +554,13 @@ STRICT RULES:
   but still focus most of the analysis on what IS present.
 - Avoid generic career advice that could apply to anyone; ground each point in a concrete observation.
 
+For CONCRETE ACTIONS:
+- Give 4–6 bullet points.
+- Each point must include at least ONE attainable example:
+  - either a specific type of company (eg. mid-market SaaS startup, Big 4 firm, boutique consulting firm, Tier-2 bank),
+  - or a concrete course/provider (eg. "Google Data Analytics on Coursera", "Wharton Business Foundations on Coursera").
+- Focus on options that are realistically reachable for an early-career candidate (not only FAANG / MBB).
+
 Return ONLY a JSON object in the following shape:
 
 {

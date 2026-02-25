@@ -381,7 +381,10 @@ export function DiscoverySection({ parsed }: DiscoverySectionProps) {
                   {gapAnalysis.skillGaps && (
                     <section className="space-y-2">
                       <p className="font-medium text-slate-700">
-                        Skill gaps
+                        Skill gaps{" "}
+                        <span className="text-[10px] font-normal text-slate-500">
+                          (technical pills open suggested resources)
+                        </span>
                       </p>
                       <div className="flex flex-wrap gap-2">
                         {Array.isArray(
