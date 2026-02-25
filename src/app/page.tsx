@@ -13,7 +13,7 @@ export default async function Home() {
 
   const logos = [
     { src: "/partners/mckinsey.png", alt: "McKinsey & Company" },
-    { src: "/partners/srcc.png", alt: "SRCC" },
+    { src: "/partners/bain.png", alt: "Bain & Company" },
     { src: "/partners/sig.png", alt: "SIG" },
   ];
 
