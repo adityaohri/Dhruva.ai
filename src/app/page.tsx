@@ -11,6 +11,14 @@ export default async function Home() {
 
   const isAuthed = !!user;
 
+  const logos = [
+    { src: "/partners/mckinsey.png", alt: "McKinsey & Company" },
+    { src: "/partners/srcc.png", alt: "SRCC" },
+    { src: "/partners/susquehanna.png", alt: "Susquehanna Asia Venture Capital" },
+    { src: "/partners/bain.png", alt: "Bain & Company" },
+    { src: "/partners/ycp-auctus.png", alt: "YCP Auctus" },
+  ];
+
   return (
     <div className="flex min-h-[70vh] flex-col items-center justify-center">
       <main className="mx-auto flex w-full max-w-4xl flex-col items-center gap-10 text-center">
@@ -45,43 +53,19 @@ export default async function Home() {
           <p className="text-[10px] font-medium uppercase tracking-[0.22em] text-slate-500">
             Built by a team from
           </p>
-          <div className="marquee-container mx-auto w-full max-w-4xl">
+          <div className="marquee-container mx-auto w-full max-w-4xl opacity-70 transition-opacity hover:opacity-100">
             {/* gradient masks */}
             <div className="pointer-events-none absolute inset-y-0 left-0 w-10 bg-gradient-to-r from-[#FDFBF1] to-transparent" />
             <div className="pointer-events-none absolute inset-y-0 right-0 w-10 bg-gradient-to-l from-[#FDFBF1] to-transparent" />
 
             <div className="marquee-track whitespace-nowrap">
-              {[1, 2].map((loop) => (
-                <div
-                  key={loop}
-                  className="flex items-center gap-24 px-12"
-                  aria-hidden={loop === 2}
-                >
-                  <img
-                    src="/partners/mckinsey.png"
-                    alt="McKinsey & Company"
-                    className="partner-logo"
-                  />
-                  <img
-                    src="/partners/srcc.png"
-                    alt="SRCC"
-                    className="partner-logo"
-                  />
-                  <img
-                    src="/partners/sig.png"
-                    alt="SIG"
-                    className="partner-logo"
-                  />
-                  <img
-                    src="/partners/ycp-auctus.png"
-                    alt="YCP Auctus"
-                    className="partner-logo-ycp"
-                  />
-                  <img
-                    src="/partners/susquehanna.png"
-                    alt="Susquehanna"
-                    className="partner-logo"
-                  />
+              {[0, 1].map((loop) => (
+                <div key={loop} className="flex items-center px-12" aria-hidden={loop === 1}>
+                  {logos.map((logo, idx) => (
+                    <div key={`${loop}-${idx}`} className="partner-logo-wrapper mx-12">
+                      <img src={logo.src} alt={logo.alt} className="partner-logo-img" />
+                    </div>
+                  ))}
                 </div>
               ))}
             </div>
