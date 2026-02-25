@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import Image from "next/image";
 import { Inter, Geist_Mono, Playfair_Display } from "next/font/google";
 import "./globals.css";
 
@@ -38,9 +39,11 @@ export default function RootLayout({
             <nav className="mx-auto flex h-14 max-w-6xl items-center justify-between px-4 sm:h-16">
               <Link href="/" className="flex items-center gap-2">
                 <div className="flex h-7 w-7 items-center justify-center">
-                  <img
-                    src="https://lh3.googleusercontent.com/rd-d/ALs6j_G3kdxY-Jbtwl7e4iPu2Gn8xdIR4vlLjv6kYXXj2J8MEXFuGHdGit45lg7EibHpTINeuf-7k37LJ1c9xwBj1AZqBopWPTrtassMBShB1t-0-DHP26SvY7gl-G8NiuvhR56Hy0QtOJIor1V8yJ9uihB4ggay5GyJcBAH3jz1P6O7A-lyM3GaCie2_PlcY6sb3QsdIR7GywpCGGMdkWn8qiIpoydc4UPQvjCUtkp0dCVzm9t1f-0U72ke2QI9nVCke5pECSjJH_aB_WDCDZofbYPOu8uDa1rbtnSihefmrCjQKErlDE9b4ps14yhENUngvgjfaS8BBbAiVvEkl3vGmKSddkpR1zT3iggr51ePE4mWNwR1vMDGF0moguj3i_w0yqOXRwtb5-NTaljJ-7BJAYb_dw-b5K7ipcT08e49MRLwM0wZpj-1u4zlV1ywO5STjH_nmKZTa_ua8EzBtjeww7vRjVUJcRvqLxa_a_A_uzwk3uF9-B--VNQFAe-ZrsiCYCV-urpCmz__RA5dpL6jT2Atro4SloYsnrbgjOFmt_aWwX7QV6kRQdwnLWwscsmzAwd0leJh9TuOJAswtImJ2GNssYZoLxpBC-HbU-WbVNKc850m6xzQ6YLfu8n6WqhwY9T2Rt_G_leI4LD4fcKicqSRmECZg830eEO1Sha-0dT3bHi8AQdpb7eFIJd063dJ8-Hyrd8-8EeoSOHdjb0nDXu9JRlmp0pHNm_WTnzu-h3R6wRJe2X2iaJ4uycfS7smwhphZ4A2RyIIeDUZW5J7rP5-l-w1KTe-xH-2wY1ZUHY1GO70EClCaPTx_HvFShhlJbsOeTv-hSM0kfNJWTjzuhkB-UvUwz8vy4dvjh7VQrcee4QB-T-xlR802JkzKGpHOnUkLvPTrZOwKQBHxPfYjkeIaGtkXVt51NNCSYFKi5K55oi_Eyvun1e0R5u1myEHK0sD-zQ0WRTpOfliWkoJ7wQMoTbHuELtnboh8UIIa3rPa9pevLogYSWOW4Jc5tsHsLlI9aISLFCAbpIuA5i7iHKP7loWf3MvxuhOQUwSH5QPazgHvBx9chPP5Ja2H-BhLCmj7HyN90lVSudvi2EppNkBzytfvMveb0s4n86mg966=s1600"
+                  <Image
+                    src="/dhruva-logo.png"
                     alt="dhruva.ai logo"
+                    width={28}
+                    height={28}
                     className="h-7 w-7"
                   />
                 </div>
