@@ -113,8 +113,13 @@ async function fiberPersonSearch(
   }
 
   const data = await resp.json();
+
+  // According to Fiber's OpenAPI spec, the people-search response
+  // shape is: { output: { data: [ ...profiles ] } }
+  // We also keep some defensive fallbacks for future changes.
   const results =
     (Array.isArray(data) && data) ||
+    data.output?.data ||
     data.profiles ||
     data.results ||
     data.data ||
