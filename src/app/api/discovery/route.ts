@@ -544,8 +544,10 @@ SKILL GAP + LEARNING RESOURCES:
   - successPattern.top_skills_delta and
   - the most common skills inside targetProfiles.
 - For EVERY missing technical skill you report, also provide ONE high-quality learning resource URL.
-  - Prefer authoritative sources (Coursera, edX, official docs, or well known resources).
-  - Example providers: coursera.org, edx.org, udemy.com, kaggle.com, microsoft.com/learn.
+  - Prefer authoritative sources (Coursera, edX, official docs, or other well-known sites).
+  - Acceptable domains include: coursera.org, edx.org, udemy.com, kaggle.com, datacamp.com, openai.com, microsoft.com/learn, hubspot.com, and similar.
+  - If you are not certain of an exact deep link for a course, use a stable landing page for that provider (for example, the Coursera catalog page for that skill).
+  - NEVER invent random or obscure URLs; if unsure, point to a credible top-level or catalog page on a trusted provider rather than a made-up path.
 
 STRICT RULES:
 - Base every statement STRICTLY on differences between userProfile and targetProfiles/successPattern.
