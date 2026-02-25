@@ -160,6 +160,4 @@
   height: 100%;
   width: auto;
   object-fit: contain;
-  opacity: 0.85;
-  transition: opacity 150ms ease-out;
 }

@@ -14,8 +14,8 @@ export default async function Home() {
   const logos = [
     { src: "/partners/mckinsey.png", alt: "McKinsey & Company" },
     { src: "/partners/srcc.png", alt: "SRCC" },
-    { src: "/partners/susquehanna.png", alt: "Susquehanna Asia Venture Capital" },
     { src: "/partners/bain.png", alt: "Bain & Company" },
+    { src: "/partners/sig.png", alt: "SIG" },
     { src: "/partners/ycp-auctus.png", alt: "YCP Auctus" },
   ];
 
@@ -53,7 +53,7 @@ export default async function Home() {
           <p className="text-[10px] font-medium uppercase tracking-[0.22em] text-slate-500">
             Built by a team from
           </p>
-          <div className="marquee-container mx-auto w-full max-w-4xl opacity-70 transition-opacity hover:opacity-100">
+          <div className="marquee-container mx-auto w-full max-w-4xl">
             {/* gradient masks */}
             <div className="pointer-events-none absolute inset-y-0 left-0 w-10 bg-gradient-to-r from-[#FDFBF1] to-transparent" />
             <div className="pointer-events-none absolute inset-y-0 right-0 w-10 bg-gradient-to-l from-[#FDFBF1] to-transparent" />
