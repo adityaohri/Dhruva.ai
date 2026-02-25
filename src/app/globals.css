@@ -170,3 +170,21 @@
 .partner-logo-wrapper.partner-logo-bain .partner-logo-img {
   mix-blend-mode: darken;
 }
+
+/* Dhruva logo: force pure white behind star on bar and footer */
+.dhruva-logo-wrap {
+  background-color: #ffffff;
+  position: relative;
+}
+.dhruva-logo-wrap::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  background-color: #ffffff;
+  z-index: 0;
+}
+.dhruva-logo-wrap img {
+  position: relative;
+  z-index: 1;
+}
