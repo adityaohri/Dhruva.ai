@@ -20,48 +20,51 @@ export default async function DashboardPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#FDFBF1] text-slate-900">
-      <header className="border-b border-[#3C2A6A]/8 bg-[#FDFBF1]/80 backdrop-blur-sm">
-        <div className="mx-auto flex h-16 max-w-5xl items-center justify-between px-4">
-          <h1 className="font-serif text-xl font-semibold text-[#3C2A6A] tracking-tight">
-            dhruva.ai
-          </h1>
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-slate-600">
-              {user.email}
-            </span>
-            <form action="/auth/signout" method="POST">
-              <Button
-                type="submit"
-                variant="ghost"
-                size="sm"
-                className="rounded-full border border-transparent bg-transparent px-4 py-1 text-xs font-medium text-[#3C2A6A] hover:border-[#3C2A6A]/20 hover:bg-[#3C2A6A]/5"
-              >
-                Sign out
-              </Button>
-            </form>
-          </div>
-        </div>
-      </header>
-      <main className="mx-auto max-w-5xl space-y-10 px-4 py-10">
-        <div className="rounded-3xl border border-[#3C2A6A]/10 bg-[#FDFBF1]/80 px-8 py-6 text-card-foreground">
+    <div className="space-y-10">
+      <div className="flex flex-col justify-between gap-4 rounded-3xl border border-[#E5E7EB] bg-[#FDFBF1] px-8 py-6 text-card-foreground md:flex-row md:items-center">
+        <div>
           <h2 className="font-serif text-2xl font-semibold text-[#3C2A6A]">
             Profile Intelligence Workspace
           </h2>
           <p className="mt-2 max-w-2xl text-sm text-slate-700">
-            Upload your CV once, then use the Discovery Engine to see how your trajectory
-            lines up with real-world success patterns for any target role or firm.
+            Upload your CV once, then use the Discovery Engine to see how your
+            trajectory lines up with real-world success patterns for any target
+            role or firm.
           </p>
-          <Button
-            asChild
-            className="mt-4 rounded-full bg-[#3C2A6A] px-5 py-2 text-xs font-medium text-[#FDFBF1] shadow-sm transition-transform hover:-translate-y-0.5 hover:bg-[#4a347f]"
-          >
-            <Link href="/">Back to home</Link>
-          </Button>
         </div>
+        <div className="flex flex-col items-end gap-2 text-right">
+          <span className="text-xs text-slate-500">{user.email}</span>
+          <form action="/auth/signout" method="POST">
+            <Button
+              type="submit"
+              variant="outline"
+              size="sm"
+              className="rounded-full border border-[#3C2A6A]/20 bg-white/60 px-4 py-1 text-xs font-medium text-[#3C2A6A] hover:bg-[#3C2A6A] hover:text-[#FDFBF1]"
+            >
+              Sign out
+            </Button>
+          </form>
+        </div>
+      </div>
 
-        <CvAndDiscoverySection />
-      </main>
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
+        <div className="rounded-3xl border border-[#E5E7EB] bg-[#FDFBF1] p-6">
+          <CvAndDiscoverySection />
+        </div>
+        <div className="hidden rounded-3xl border border-[#E5E7EB] bg-[#FDFBF1] p-6 text-xs text-slate-700 lg:block">
+          <h3 className="font-serif text-sm font-semibold uppercase tracking-[0.18em] text-[#3C2A6A]">
+            How to use this workspace
+          </h3>
+          <ol className="mt-3 space-y-2 list-decimal list-inside">
+            <li>Upload your latest CV and save the parsed profile.</li>
+            <li>Set a target role and company in the Discovery Engine.</li>
+            <li>
+              Study the real profiles and the gap analysis to sharpen your next
+              career move.
+            </li>
+          </ol>
+        </div>
+      </div>
     </div>
   );
 }
