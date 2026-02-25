@@ -63,11 +63,6 @@ export default async function Home() {
                     className="partner-logo"
                   />
                   <img
-                    src="/partners/bain.png"
-                    alt="Bain & Company"
-                    className="partner-logo-bain"
-                  />
-                  <img
                     src="/partners/srcc.png"
                     alt="SRCC"
                     className="partner-logo"
