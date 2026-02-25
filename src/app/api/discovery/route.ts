@@ -75,7 +75,7 @@ async function fiberPersonSearch(
 
   // We:
   // - pass the API key in the body (per Fiber docs),
-  // - filter by currentCompanies (target company),
+  // - filter by currentCompanies (target company, as object),
   // - and use keywords.containsAny for the target role text,
   // - request detailed work experience so the Golden Step logic has richer data.
   const body = {
@@ -88,7 +88,11 @@ async function fiberPersonSearch(
     },
     pageSize,
     cursor: null,
-    currentCompanies: [targetCompany],
+    currentCompanies: [
+      {
+        name: targetCompany,
+      },
+    ],
     prospectExclusionListIDs: [],
     companyExclusionListIDs: [],
   };
