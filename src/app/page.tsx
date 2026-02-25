@@ -1,7 +1,6 @@
 import Link from "next/link";
 import Image from "next/image";
 import { createClient } from "@/lib/supabase/server";
-import { redirect } from "next/navigation";
 import { Button } from "@/components/ui/button";
 
 export default async function Home() {
@@ -10,9 +9,7 @@ export default async function Home() {
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (user) {
-    redirect("/dashboard");
-  }
+  const isAuthed = !!user;
 
   return (
     <div className="flex min-h-[70vh] flex-col items-center justify-center">
@@ -34,7 +31,9 @@ export default async function Home() {
             size="lg"
             className="rounded-full bg-[#3C2A6A] px-10 text-sm font-medium text-[#FDFBF1] hover:bg-[#4a347f]"
           >
-            <Link href="/login">Get Started</Link>
+            <Link href={isAuthed ? "/dashboard" : "/login"}>
+              {isAuthed ? "Go to Profile Audit" : "Get Started"}
+            </Link>
           </Button>
           <span className="text-xs text-slate-500">
             You can adjust your profile and discovery targets anytime in the
