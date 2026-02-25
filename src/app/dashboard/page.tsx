@@ -47,7 +47,7 @@ export default async function DashboardPage() {
         </div>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
+      <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
         <div className="rounded-3xl border border-[#E5E7EB] bg-[#FDFBF1] p-6">
           <CvAndDiscoverySection />
         </div>
