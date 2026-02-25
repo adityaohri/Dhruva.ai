@@ -40,6 +40,28 @@ export default async function Home() {
             Profile Audit workspace.
           </span>
         </div>
+
+        <section className="mt-6 w-full space-y-4">
+          <p className="text-[10px] font-medium uppercase tracking-[0.22em] text-slate-500">
+            Built by a team from
+          </p>
+          <div className="flex flex-wrap items-center justify-center gap-x-8 gap-y-3 text-xs text-slate-700 sm:text-sm">
+            <span className="font-semibold text-[#111827]">McKinsey &amp; Company</span>
+            <span className="font-semibold text-[#111827]">Bain &amp; Company</span>
+            <span className="rounded-full border border-[#E5E7EB] px-3 py-1">
+              SRCC
+            </span>
+            <span className="rounded-full border border-[#E5E7EB] px-3 py-1">
+              SIG
+            </span>
+            <span className="rounded-full border border-[#E5E7EB] px-3 py-1">
+              YCP Auctus
+            </span>
+            <span className="rounded-full border border-[#E5E7EB] px-3 py-1">
+              United Nations
+            </span>
+          </div>
+        </section>
       </main>
     </div>
   );
