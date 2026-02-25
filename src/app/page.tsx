@@ -54,7 +54,7 @@ export default async function Home() {
               {[1, 2].map((loop) => (
                 <div
                   key={loop}
-                  className="flex items-center gap-16 px-8"
+                  className="flex items-center gap-24 px-12"
                   aria-hidden={loop === 2}
                 >
                   <img
@@ -75,6 +75,11 @@ export default async function Home() {
                   <img
                     src="/partners/ycp-auctus.png"
                     alt="YCP Auctus"
+                    className="partner-logo-ycp"
+                  />
+                  <img
+                    src="/partners/susquehanna.png"
+                    alt="Susquehanna"
                     className="partner-logo"
                   />
                 </div>
