@@ -65,6 +65,7 @@ function estimateFiberCost(numResults: number): number {
 async function fiberPersonSearch(
   targetRole: string,
   targetCompany: string,
+  targetIndustry?: string,
   pageSize: number = 15
 ): Promise<any[]> {
   if (!FIBER_API_KEY) {
@@ -89,7 +90,9 @@ async function fiberPersonSearch(
         anyOf: ["IND"],
       },
       keywords: {
-        containsAny: [targetRole],
+        containsAny: targetIndustry
+          ? [targetRole, targetIndustry]
+          : [targetRole],
       },
     },
     pageSize,
@@ -155,7 +158,8 @@ function getLinkedInUrl(raw: any): string | null {
 
 async function suggestPeerCompanies(
   targetRole: string,
-  targetCompany: string
+  targetCompany: string,
+  targetIndustry?: string
 ): Promise<string[]> {
   if (!OPENAI_API_KEY) return [];
 
@@ -163,6 +167,9 @@ async function suggestPeerCompanies(
   const prompt = [
     "You are a career intelligence assistant.",
     `Given the target role "${targetRole}" at company "${targetCompany}",`,
+    targetIndustry
+      ? `and the target industry "${targetIndustry}",`
+      : "and its current industry context,",
     "suggest 3 peer companies of similar size, prestige, and industry.",
     "Return ONLY a comma-separated list of company names, no extra text.",
   ].join(" ");
@@ -381,7 +388,7 @@ function deriveSuccessPattern(
 }
 
 export async function POST(req: NextRequest) {
-  const { targetRole, targetCompany, phase } = await req.json();
+  const { targetRole, targetCompany, targetIndustry, phase } = await req.json();
 
   if (!targetRole || !targetCompany) {
     return NextResponse.json(
@@ -395,28 +402,60 @@ export async function POST(req: NextRequest) {
 
   try {
     // Always run Fiber search first
-    let rawResults = await fiberPersonSearch(targetRole, targetCompany);
+    let rawResults = await fiberPersonSearch(
+      targetRole,
+      targetCompany,
+      targetIndustry
+    );
     const targetResults = [...rawResults];
 
+    const similarCompanies: string[] = [];
+    let similarResults: any[] = [];
+
     if (rawResults.length < 5) {
-      const peers = await suggestPeerCompanies(targetRole, targetCompany);
+      const peers = await suggestPeerCompanies(
+        targetRole,
+        targetCompany,
+        targetIndustry
+      );
       for (const peer of peers) {
-        const more = await fiberPersonSearch(targetRole, peer);
+        similarCompanies.push(peer);
+        const more = await fiberPersonSearch(targetRole, peer, targetIndustry);
         rawResults = rawResults.concat(more);
+        similarResults = similarResults.concat(more);
       }
     }
 
-    // Public view used by the dashboard: names + LinkedIn URLs
-    // For the UI list we ONLY show results for the target company.
-    const publicProfiles = targetResults.map((raw: any) => ({
-      full_name: raw.full_name || raw.name || raw.display_name || "Unknown",
-      linkedin_url: getLinkedInUrl(raw),
-    }));
+    // Public view used by the dashboard: names + LinkedIn URLs, plus roles/companies
+    const targetPublicProfiles = targetResults.map((raw: any) => {
+      const mapped = mapFiberProfile(raw);
+      const firstExp = mapped.experience_history[0];
+      return {
+        full_name: mapped.full_name,
+        current_title: mapped.current_occupation || null,
+        current_company: firstExp?.company ?? null,
+        linkedin_url: getLinkedInUrl(raw),
+      };
+    });
+
+    const similarPublicProfiles = similarResults.map((raw: any) => {
+      const mapped = mapFiberProfile(raw);
+      const firstExp = mapped.experience_history[0];
+      return {
+        full_name: mapped.full_name,
+        current_title: mapped.current_occupation || null,
+        current_company: firstExp?.company ?? null,
+        linkedin_url: getLinkedInUrl(raw),
+      };
+    });
 
     if (mode === "fiber") {
-      // For the first call, just show the target profiles list
-      // (limit to 15 names for the UI)
-      return NextResponse.json({ profiles: publicProfiles.slice(0, 15) });
+      return NextResponse.json({
+        companiesSearched: [targetCompany],
+        similarCompanies,
+        targetProfiles: targetPublicProfiles.slice(0, 15),
+        similarProfiles: similarPublicProfiles.slice(0, 15),
+      });
     }
 
     // ---- Gap analysis phase ----
@@ -490,14 +529,28 @@ You will be given a JSON object with:
 
 Your job is to produce a HOLISTIC, DATA-DRIVEN gap analysis.
 
+DEEP PATTERN RECOGNITION:
+- Carefully scan the FULL work histories (experience_history) of ALL targetProfiles.
+- Look for \"career anchors\" such as:
+  - recurring internships or employers,
+  - recurring society/club roles (eg. Placement Cell, Consulting Club),
+  - recurring \"Golden Step\" roles (eg. Big 4, boutique consulting, product analytics) held just before the target role.
+- When you describe a pattern, make it QUANTITATIVE where possible, e.g.:
+  - \"around 70% (14/20) held a Junior Coordinator or higher role in a Tier-1 society\"
+  - \"about 60% (12/20) completed at least one finance or strategy internship\".
+
+SKILL GAP + LEARNING RESOURCES:
+- Compare userProfile.skills against:
+  - successPattern.top_skills_delta and
+  - the most common skills inside targetProfiles.
+- For EVERY missing technical skill you report, also provide ONE high-quality learning resource URL.
+  - Prefer authoritative sources (Coursera, edX, official docs, or well known resources).
+  - Example providers: coursera.org, edx.org, udemy.com, kaggle.com, microsoft.com/learn.
+
 STRICT RULES:
 - Base every statement STRICTLY on differences between userProfile and targetProfiles/successPattern.
-- When you talk about trajectories, refer to actual patterns you see in targetProfiles
-  (industries, prior roles, seniority, tenure) and how the user compares.
-- When you talk about skills, compare userProfile.skills to both
-  successPattern.top_skills_delta and recurring skills inside targetProfiles.
 - Do NOT invent information that is not present in the input JSON.
-- If some part of the data is genuinely missing, say so explicitly (e.g. "no GPA data in successPattern"),
+- If some part of the data is genuinely missing, say so explicitly (e.g. \"no GPA data in successPattern\"),
   but still focus most of the analysis on what IS present.
 - Avoid generic career advice that could apply to anyone; ground each point in a concrete observation.
 
@@ -506,8 +559,9 @@ Return ONLY a JSON object in the following shape:
 {
   "overallSummary": string,
   "trajectoryFit": string,
+  "careerAnchors": string[],
   "skillGaps": {
-    "missingTechnical": string[],
+    "missingTechnical": { "name": string, "resourceUrl": string }[],
     "missingSoft": string[]
   },
   "concreteActions": string[]

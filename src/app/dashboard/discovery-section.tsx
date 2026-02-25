@@ -15,6 +15,8 @@ import { type ParsedCV } from "@/app/actions/cv-parser";
 
 type PublicProfile = {
   full_name: string;
+  current_title: string | null;
+  current_company: string | null;
   linkedin_url: string | null;
 };
 
@@ -25,7 +27,11 @@ interface DiscoverySectionProps {
 export function DiscoverySection({ parsed }: DiscoverySectionProps) {
   const [targetRole, setTargetRole] = useState("Business Analyst");
   const [targetCompany, setTargetCompany] = useState("McKinsey & Company");
-  const [profiles, setProfiles] = useState<PublicProfile[]>([]);
+  const [targetIndustry, setTargetIndustry] = useState("Management Consulting");
+  const [targetProfiles, setTargetProfiles] = useState<PublicProfile[]>([]);
+  const [similarProfiles, setSimilarProfiles] = useState<PublicProfile[]>([]);
+  const [companiesSearched, setCompaniesSearched] = useState<string[]>([]);
+  const [similarCompanies, setSimilarCompanies] = useState<string[]>([]);
   const [gapAnalysis, setGapAnalysis] = useState<any | null>(null);
   const [runningProfiles, setRunningProfiles] = useState(false);
   const [runningGap, setRunningGap] = useState(false);
@@ -36,7 +42,10 @@ export function DiscoverySection({ parsed }: DiscoverySectionProps) {
 
     setError(null);
     setGapAnalysis(null);
-    setProfiles([]);
+    setTargetProfiles([]);
+    setSimilarProfiles([]);
+    setCompaniesSearched([]);
+    setSimilarCompanies([]);
     setRunningProfiles(true);
     setRunningGap(false);
 
@@ -48,6 +57,7 @@ export function DiscoverySection({ parsed }: DiscoverySectionProps) {
         body: JSON.stringify({
           targetRole,
           targetCompany,
+          targetIndustry,
           phase: "fiber",
         }),
       });
@@ -60,9 +70,15 @@ export function DiscoverySection({ parsed }: DiscoverySectionProps) {
       }
 
       const fiberData = (await fiberResp.json()) as {
-        profiles: PublicProfile[];
+        companiesSearched: string[];
+        similarCompanies: string[];
+        targetProfiles: PublicProfile[];
+        similarProfiles: PublicProfile[];
       };
-      setProfiles(fiberData.profiles || []);
+      setCompaniesSearched(fiberData.companiesSearched || []);
+      setSimilarCompanies(fiberData.similarCompanies || []);
+      setTargetProfiles(fiberData.targetProfiles || []);
+      setSimilarProfiles(fiberData.similarProfiles || []);
       setRunningProfiles(false);
 
       // Phase 2: OpenAI gap analysis
@@ -74,6 +90,7 @@ export function DiscoverySection({ parsed }: DiscoverySectionProps) {
         body: JSON.stringify({
           targetRole,
           targetCompany,
+          targetIndustry,
           phase: "gap",
         }),
       });
@@ -110,7 +127,7 @@ export function DiscoverySection({ parsed }: DiscoverySectionProps) {
         </CardDescription>
       </CardHeader>
       <CardContent className="pt-6 space-y-4">
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid gap-4 sm:grid-cols-3">
           <div className="space-y-2">
             <Label
               htmlFor="target-role"
@@ -141,6 +158,21 @@ export function DiscoverySection({ parsed }: DiscoverySectionProps) {
               className="h-9 rounded-full border border-[#3C2A6A]/15 bg-[#FDFBF1] text-sm focus-visible:ring-[#3C2A6A]"
             />
           </div>
+          <div className="space-y-2">
+            <Label
+              htmlFor="target-industry"
+              className="text-xs uppercase tracking-wide text-slate-600"
+            >
+              Target industry
+            </Label>
+            <Input
+              id="target-industry"
+              value={targetIndustry}
+              onChange={(e) => setTargetIndustry(e.target.value)}
+              placeholder="e.g. Management consulting"
+              className="h-9 rounded-full border border-[#3C2A6A]/15 bg-[#FDFBF1] text-sm focus-visible:ring-[#3C2A6A]"
+            />
+          </div>
         </div>
 
         <Button
@@ -161,48 +193,136 @@ export function DiscoverySection({ parsed }: DiscoverySectionProps) {
 
         {error && <p className="text-xs text-red-700">{error}</p>}
 
-        {(profiles.length > 0 || gapAnalysis) && (
+        {(targetProfiles.length > 0 ||
+          similarProfiles.length > 0 ||
+          gapAnalysis) && (
           <div className="mt-8 grid gap-5 md:grid-cols-2 animate-in fade-in-50 slide-in-from-bottom-2">
             {/* Left: target profiles list */}
             <div className="space-y-3 rounded-3xl border border-slate-200 bg-white/90 p-5 shadow-none">
               <h3 className="font-serif text-sm font-semibold uppercase tracking-[0.18em] text-[#3C2A6A]">
                 Target profiles (Fiber)
               </h3>
+              <div className="mt-1 space-y-1 text-[10px] text-slate-600">
+                {companiesSearched.length > 0 && (
+                  <p>
+                    <span className="font-semibold text-[#3C2A6A]">
+                      Companies searched:
+                    </span>{" "}
+                    {companiesSearched.join(", ")}
+                  </p>
+                )}
+                {similarCompanies.length > 0 && (
+                  <p>
+                    <span className="font-semibold text-[#3C2A6A]">
+                      Similar companies:
+                    </span>{" "}
+                    {similarCompanies.join(", ")}
+                  </p>
+                )}
+              </div>
               {runningProfiles && (
                 <p className="text-xs text-slate-600">
                   Fetching real-world profiles for this role and company…
                 </p>
               )}
-              {!runningProfiles && profiles.length === 0 && (
+              {!runningProfiles &&
+                targetProfiles.length === 0 &&
+                similarProfiles.length === 0 && (
                 <p className="text-xs text-slate-500">
                   No matching profiles were found yet. Try a different role or company.
                 </p>
               )}
-              {profiles.length > 0 && (
-                <ul className="mt-2 space-y-1 text-xs text-slate-800">
-                  {profiles.map((p) => (
-                    <li key={p.linkedin_url ?? p.full_name}>
-                      <span className="font-medium">{p.full_name}</span>
-                      {p.linkedin_url && (
-                        <a
-                          href={p.linkedin_url}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="ml-2 inline-flex h-4 w-4 items-center justify-center rounded-sm text-[#0A66C2]"
-                          aria-label="Open LinkedIn profile"
-                        >
-                          <svg
-                            xmlns="http://www.w3.org/2000/svg"
-                            viewBox="0 0 24 24"
-                            className="h-3 w-3 fill-current"
-                          >
-                            <path d="M4.98 3.5C4.98 4.88 3.88 6 2.5 6S0 4.88 0 3.5 1.12 1 2.5 1 4.98 2.12 4.98 3.5zM.29 8.09h4.42V24H.29zM8.47 8.09h4.24v2.16h.06c.59-1.12 2.03-2.3 4.17-2.3 4.46 0 5.28 2.93 5.28 6.74V24h-4.42v-7.32c0-1.75-.03-4-2.44-4-2.44 0-2.81 1.9-2.81 3.87V24H8.47z" />
-                          </svg>
-                        </a>
-                      )}
-                    </li>
-                  ))}
-                </ul>
+              {targetProfiles.length > 0 && (
+                <div className="mt-3 space-y-1">
+                  <p className="text-[11px] font-medium text-slate-700">
+                    From target company
+                  </p>
+                  <ul className="space-y-1 text-xs text-slate-800">
+                    {targetProfiles.map((p) => {
+                      const roleLine =
+                        p.current_title ||
+                        p.current_company
+                          ? `${p.current_title ?? "Unknown role"}${
+                              p.current_company ? ` at ${p.current_company}` : ""
+                            }`
+                          : null;
+                      return (
+                        <li key={(p.linkedin_url ?? p.full_name) + "-target"}>
+                          <span className="font-medium">{p.full_name}</span>
+                          {roleLine && (
+                            <span className="text-slate-600">
+                              {" "}
+                              — {roleLine}
+                            </span>
+                          )}
+                          {p.linkedin_url && (
+                            <a
+                              href={p.linkedin_url}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="ml-2 inline-flex h-4 w-4 items-center justify-center rounded-sm text-[#0A66C2]"
+                              aria-label="Open LinkedIn profile"
+                            >
+                              <svg
+                                xmlns="http://www.w3.org/2000/svg"
+                                viewBox="0 0 24 24"
+                                className="h-3 w-3 fill-current"
+                              >
+                                <path d="M4.98 3.5C4.98 4.88 3.88 6 2.5 6S0 4.88 0 3.5 1.12 1 2.5 1 4.98 2.12 4.98 3.5zM.29 8.09h4.42V24H.29zM8.47 8.09h4.24v2.16h.06c.59-1.12 2.03-2.3 4.17-2.3 4.46 0 5.28 2.93 5.28 6.74V24h-4.42v-7.32c0-1.75-.03-4-2.44-4-2.44 0-2.81 1.9-2.81 3.87V24H8.47z" />
+                              </svg>
+                            </a>
+                          )}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              )}
+              {similarProfiles.length > 0 && (
+                <div className="mt-4 space-y-1">
+                  <p className="text-[11px] font-medium text-slate-700">
+                    From similar companies
+                  </p>
+                  <ul className="space-y-1 text-xs text-slate-800">
+                    {similarProfiles.map((p) => {
+                      const roleLine =
+                        p.current_title ||
+                        p.current_company
+                          ? `${p.current_title ?? "Unknown role"}${
+                              p.current_company ? ` at ${p.current_company}` : ""
+                            }`
+                          : null;
+                      return (
+                        <li key={(p.linkedin_url ?? p.full_name) + "-similar"}>
+                          <span className="font-medium">{p.full_name}</span>
+                          {roleLine && (
+                            <span className="text-slate-600">
+                              {" "}
+                              — {roleLine}
+                            </span>
+                          )}
+                          {p.linkedin_url && (
+                            <a
+                              href={p.linkedin_url}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="ml-2 inline-flex h-4 w-4 items-center justify-center rounded-sm text-[#0A66C2]"
+                              aria-label="Open LinkedIn profile"
+                            >
+                              <svg
+                                xmlns="http://www.w3.org/2000/svg"
+                                viewBox="0 0 24 24"
+                                className="h-3 w-3 fill-current"
+                              >
+                                <path d="M4.98 3.5C4.98 4.88 3.88 6 2.5 6S0 4.88 0 3.5 1.12 1 2.5 1 4.98 2.12 4.98 3.5zM.29 8.09h4.42V24H.29zM8.47 8.09h4.24v2.16h.06c.59-1.12 2.03-2.3 4.17-2.3 4.46 0 5.28 2.93 5.28 6.74V24h-4.42v-7.32c0-1.75-.03-4-2.44-4-2.44 0-2.81 1.9-2.81 3.87V24H8.47z" />
+                              </svg>
+                            </a>
+                          )}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
               )}
             </div>
 
@@ -244,6 +364,20 @@ export function DiscoverySection({ parsed }: DiscoverySectionProps) {
                     </section>
                   )}
 
+                  {Array.isArray(gapAnalysis.careerAnchors) &&
+                    gapAnalysis.careerAnchors.length > 0 && (
+                      <section>
+                        <p className="font-medium text-slate-700">
+                          Career anchors
+                        </p>
+                        <ul className="mt-1 list-disc list-inside">
+                          {gapAnalysis.careerAnchors.map((anchor: string) => (
+                            <li key={anchor}>{anchor}</li>
+                          ))}
+                        </ul>
+                      </section>
+                    )}
+
                   {gapAnalysis.skillGaps && (
                     <section className="space-y-2">
                       <p className="font-medium text-slate-700">
@@ -254,13 +388,16 @@ export function DiscoverySection({ parsed }: DiscoverySectionProps) {
                           gapAnalysis.skillGaps.missingTechnical
                         ) &&
                           gapAnalysis.skillGaps.missingTechnical.map(
-                            (s: string) => (
-                              <span
-                                key={s}
-                                className="rounded-full border border-[#3C2A6A]/25 bg-white/60 px-3 py-1 text-[11px] text-[#3C2A6A]"
+                            (s: { name: string; resourceUrl?: string }) => (
+                              <a
+                                key={s.name}
+                                href={s.resourceUrl || "#"}
+                                target={s.resourceUrl ? "_blank" : undefined}
+                                rel={s.resourceUrl ? "noreferrer" : undefined}
+                                className="rounded-full border border-[#3C2A6A]/25 bg-white/60 px-3 py-1 text-[11px] text-[#3C2A6A] hover:bg-[#3C2A6A]/5"
                               >
-                                {s}
-                              </span>
+                                {s.name}
+                              </a>
                             )
                           )}
                         {Array.isArray(gapAnalysis.skillGaps.missingSoft) &&
