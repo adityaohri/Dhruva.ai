@@ -143,7 +143,7 @@
 
 .marquee-track {
   display: inline-flex;
-  gap: 4.5rem;
+  gap: 6rem;
   animation: marquee-horizontal 28s linear infinite;
   will-change: transform;
 }
