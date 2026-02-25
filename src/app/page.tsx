@@ -59,7 +59,10 @@ export default async function Home() {
             <div className="marquee-track whitespace-nowrap">
               <div className="flex items-center px-12">
                 {logos.map((logo, idx) => (
-                  <div key={idx} className="partner-logo-wrapper mx-12">
+                  <div
+                    key={idx}
+                    className={`partner-logo-wrapper mx-12 ${logo.alt === "Bain & Company" ? "partner-logo-bain" : ""}`}
+                  >
                     <img src={logo.src} alt={logo.alt} className="partner-logo-img" />
                   </div>
                 ))}

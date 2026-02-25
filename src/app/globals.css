@@ -161,3 +161,11 @@
   width: auto;
   object-fit: contain;
 }
+
+/* Bain logo: match site background so white/dark doesn’t show */
+.partner-logo-wrapper.partner-logo-bain {
+  background-color: #FDFBF1;
+}
+.partner-logo-wrapper.partner-logo-bain .partner-logo-img {
+  mix-blend-mode: darken;
+}
