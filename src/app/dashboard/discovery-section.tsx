@@ -236,7 +236,7 @@ export function DiscoverySection({ parsed }: DiscoverySectionProps) {
         <Button
           onClick={handleRun}
           disabled={running || !parsed}
-          className="mt-1 rounded-full bg-[#3C2A6A] px-5 py-2 text-xs font-medium text-[#FDFBF1] shadow-sm transition-transform hover:-translate-y-0.5 hover:bg-[#4a347f] disabled:opacity-60"
+          className="mt-1 rounded-full bg-[#3C2A6A] px-5 py-2 text-xs font-medium text-[#FDFBF1] shadow-none transition-transform hover:-translate-y-0.5 hover:bg-[#4a347f] disabled:opacity-60"
         >
           {running ? "Analyzing…" : "Run Discovery from extracted CV"}
         </Button>
@@ -255,7 +255,7 @@ export function DiscoverySection({ parsed }: DiscoverySectionProps) {
 
         {(pattern || gap) && (
           <div className="mt-8 grid gap-5 md:grid-cols-2 animate-in fade-in-50 slide-in-from-bottom-2">
-            <div className="space-y-3 rounded-3xl border border-[#3C2A6A]/12 bg-white/90 p-5 shadow-[0_12px_40px_rgba(20,10,60,0.06)]">
+            <div className="space-y-3 rounded-3xl border border-slate-200 bg-white/90 p-5 shadow-none">
               <h3 className="font-serif text-sm font-semibold uppercase tracking-[0.18em] text-[#3C2A6A]">
                 Success pattern snapshot
               </h3>
@@ -358,7 +358,7 @@ export function DiscoverySection({ parsed }: DiscoverySectionProps) {
             </div>
 
             {gap && (
-              <div className="space-y-3 rounded-3xl border border-[#3C2A6A]/12 bg-white/90 p-5 shadow-[0_12px_40px_rgba(20,10,60,0.06)]">
+              <div className="space-y-3 rounded-3xl border border-slate-200 bg-white/90 p-5 shadow-none">
                 <h3 className="font-serif text-sm font-semibold uppercase tracking-[0.18em] text-[#3C2A6A]">
                   Your gap analysis
                 </h3>

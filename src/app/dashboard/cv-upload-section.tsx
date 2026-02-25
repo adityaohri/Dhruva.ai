@@ -151,20 +151,6 @@ export function CvUploadSection({ onParsedChange }: CvUploadSectionProps) {
           Upload your CV once. We extract a structured profile that fuels the Discovery
           Engine below.
         </CardDescription>
-        {openAIConfigured !== null && (
-          <p
-            className={cn(
-              "text-sm",
-              openAIConfigured
-                ? "text-green-600 dark:text-green-400"
-                : "text-amber-600 dark:text-amber-400"
-            )}
-          >
-            {openAIConfigured
-              ? "OpenAI API key: configured"
-              : "OpenAI API key: not detected. Add OPENAI_API_KEY to .env.local and restart the dev server (npm run dev)."}
-          </p>
-        )}
       </CardHeader>
       <CardContent className="pt-6">
         {/* Drag-and-drop zone */}
@@ -174,9 +160,9 @@ export function CvUploadSection({ onParsedChange }: CvUploadSectionProps) {
           onDragOver={handleDrag}
           onDrop={handleDrop}
           className={cn(
-            "relative flex min-h-[190px] flex-col items-center justify-center rounded-3xl border border-white/60 bg-white/40 p-8 shadow-[0_18px_60px_rgba(20,10,60,0.12)] backdrop-blur-md transition",
+            "relative flex min-h-[190px] flex-col items-center justify-center rounded-3xl border border-slate-200 bg-white/40 p-8 shadow-none backdrop-blur-md transition",
             dragActive && "border-[#3C2A6A]/60 bg-white/60",
-            !dragActive && "hover:border-[#3C2A6A]/40 hover:bg-white/60"
+            !dragActive && "hover:border-[#3C2A6A]/50 hover:bg-white/60"
           )}
         >
           <input
@@ -261,7 +247,7 @@ export function CvUploadSection({ onParsedChange }: CvUploadSectionProps) {
 
         {/* Parsed data form */}
         {parsed && (
-          <div className="mt-8 space-y-5 rounded-3xl border border-[#3C2A6A]/10 bg-white/90 p-6 shadow-[0_12px_40px_rgba(20,10,60,0.06)] backdrop-blur-sm animate-in fade-in-50 slide-in-from-bottom-2">
+          <div className="mt-8 space-y-5 rounded-3xl border border-slate-200 bg-white/90 p-6 shadow-none backdrop-blur-sm animate-in fade-in-50 slide-in-from-bottom-2">
             <h3 className="font-serif text-lg font-semibold text-[#3C2A6A]">
               Extracted profile
             </h3>
