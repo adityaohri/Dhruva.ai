@@ -39,7 +39,7 @@ export default function RootLayout({
               <Link href="/" className="flex items-center gap-2">
                 <div className="dhruva-logo-wrap flex h-8 w-8 shrink-0 items-center justify-center rounded-full">
                   <img
-                    src="/dhruva-logo.png"
+                    src="/dhruva-star.png"
                     alt="dhruva.ai logo"
                     className="h-7 w-7 object-contain"
                   />
@@ -88,7 +88,7 @@ export default function RootLayout({
                 <div className="flex items-center gap-2">
                   <div className="dhruva-logo-wrap flex h-8 w-8 shrink-0 items-center justify-center rounded-full">
                     <img
-                      src="/dhruva-logo.png"
+                      src="/dhruva-star.png"
                       alt="dhruva.ai logo"
                       className="h-7 w-7 object-contain"
                     />
