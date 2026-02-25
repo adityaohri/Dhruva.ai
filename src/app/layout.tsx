@@ -33,7 +33,7 @@ export default function RootLayout({
       <body
         className={`${inter.variable} ${geistMono.variable} ${playfair.variable} antialiased`}
       >
-        <div className="min-h-screen bg-[#FDFBF1] text-slate-900">
+        <div className="flex min-h-screen flex-col bg-[#FDFBF1] text-slate-900">
           <header className="sticky top-0 z-40 border-b border-[#3C2A6A]/10 bg-[#FDFBF1]/80 backdrop-blur-md">
             <nav className="mx-auto flex h-14 max-w-6xl items-center justify-between px-4 sm:h-16">
               <Link href="/" className="flex items-center gap-2">
@@ -78,9 +78,52 @@ export default function RootLayout({
             </nav>
           </header>
 
-          <main className="mx-auto max-w-6xl px-4 py-8 sm:py-10">
+          <main className="flex-1 mx-auto max-w-6xl px-4 py-8 sm:py-10">
             {children}
           </main>
+
+          <footer className="mt-auto border-t border-slate-200 bg-white">
+            <div className="mx-auto flex max-w-6xl flex-col gap-8 px-4 py-8 sm:flex-row sm:items-start sm:justify-between sm:py-10">
+              <div className="flex flex-col gap-3 max-w-sm">
+                <div className="flex items-center gap-2">
+                  <img
+                    src="/dhruva-logo.png"
+                    alt="dhruva.ai logo"
+                    className="h-8 w-8"
+                  />
+                  <span className="font-serif text-lg font-semibold tracking-tight text-[#3C2A6A]">
+                    dhruva.ai
+                  </span>
+                </div>
+                <p className="text-sm text-slate-600 leading-relaxed">
+                  Your North Star for early career success. Human-led, AI-powered
+                  from New Delhi.
+                </p>
+              </div>
+              <div className="flex flex-col items-start gap-4 sm:items-end">
+                <div className="flex flex-wrap items-center gap-4 text-sm text-slate-600">
+                  <Link
+                    href="/privacy"
+                    className="transition-colors hover:text-[#3C2A6A]"
+                  >
+                    Privacy Policy
+                  </Link>
+                  <Link
+                    href="/terms"
+                    className="transition-colors hover:text-[#3C2A6A]"
+                  >
+                    Terms of Service
+                  </Link>
+                  <Link
+                    href="/contact"
+                    className="transition-colors hover:text-[#3C2A6A]"
+                  >
+                    Contact Us
+                  </Link>
+                </div>
+              </div>
+            </div>
+          </footer>
         </div>
       </body>
     </html>
