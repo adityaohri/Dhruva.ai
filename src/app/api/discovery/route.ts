@@ -83,6 +83,11 @@ async function fiberPersonSearch(
     apiKey: FIBER_API_KEY,
     searchParams: {
       getDetailedWorkExperience: true,
+      // Restrict people search to India using Fiber's
+      // country3LetterCode.anyOf filter.
+      country3LetterCode: {
+        anyOf: ["IND"],
+      },
       keywords: {
         containsAny: [targetRole],
       },
@@ -475,17 +480,25 @@ export async function POST(req: NextRequest) {
     const prompt = `
 You are an expert Career Coach.
 
-Compare this user's profile against the successful "Target Profiles" found by Fiber.
+You will be given a JSON object with:
+- userProfile: the candidate's parsed CV summary,
+- targetProfiles: real-world Fiber profiles for the target role/company,
+- successPattern: aggregate metrics derived ONLY from those Fiber profiles
+  (common_previous_roles, top_skills_delta, avg_tenure_in_previous_step, impact_keyword_density).
+
+Your job is to produce a DATA-DRIVEN gap analysis.
+- Base every assessment and recommendation STRICTLY on the fields in userProfile and successPattern.
+- When you talk about experience, leadership, projects, impact, or skills,
+  explicitly reference things like:
+  - whether the user's internships/roles resemble successPattern.common_previous_roles,
+  - how the user's experience length compares to successPattern.avg_tenure_in_previous_step,
+  - how numeric/impact-heavy the user's bullets likely are vs successPattern.impact_keyword_density,
+  - which skills from successPattern.top_skills_delta are missing from userProfile.skills.
+- Do NOT give generic career advice that could apply to anyone; every point must be justified
+  by differences between userProfile and successPattern.
+- If the Fiber data is too sparse to make a specific claim, say so explicitly instead of guessing.
 
 Treat “Experience”, “Work Experience”, and “Internships” as the same dimension when comparing.
-
-Analyze discrepancies across:
-- GPA
-- Internships / Experience
-- Leadership
-- Projects
-- Personal Impact
-- Skills
 
 Return ONLY a JSON object in the following shape:
 
