@@ -162,9 +162,10 @@
   object-fit: contain;
 }
 
-/* Bain logo: match site background so white/dark doesn’t show */
+/* Bain logo: match site background so white/dark doesn’t show; slightly larger */
 .partner-logo-wrapper.partner-logo-bain {
   background-color: #FDFBF1;
+  height: 5.5rem;
 }
 .partner-logo-wrapper.partner-logo-bain .partner-logo-img {
   mix-blend-mode: darken;
