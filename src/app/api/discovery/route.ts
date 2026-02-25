@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import OpenAI from "openai";
+import { createClient } from "@/lib/supabase/server";
 
 type ExperienceEntry = {
   title: string;
@@ -31,7 +32,7 @@ type DiscoveryResult = {
 
 const cache = new Map<string, DiscoveryResult>();
 
-// Fiber AI API key (replace PROXYCURL_API_KEY usage with this)
+// Fiber AI & OpenAI keys
 const FIBER_API_KEY = process.env.FIBER_API_KEY;
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 
@@ -128,6 +129,17 @@ async function fiberPersonSearch(
   );
 
   return results as any[];
+}
+
+function getLinkedInUrl(raw: any): string | null {
+  return (
+    raw.linkedin_url ||
+    raw.linkedinUrl ||
+    raw.linkedin ||
+    raw.profile_url ||
+    raw.profileUrl ||
+    null
+  );
 }
 
 async function suggestPeerCompanies(
@@ -358,7 +370,7 @@ function deriveSuccessPattern(
 }
 
 export async function POST(req: NextRequest) {
-  const { targetRole, targetCompany } = await req.json();
+  const { targetRole, targetCompany, phase } = await req.json();
 
   if (!targetRole || !targetCompany) {
     return NextResponse.json(
@@ -367,13 +379,11 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  const mode = (phase as "fiber" | "gap" | undefined) ?? "fiber";
   const key = `${targetCompany}::${targetRole}`.toLowerCase();
-  if (cache.has(key)) {
-    const cached = cache.get(key)!;
-    return NextResponse.json(cached);
-  }
 
   try {
+    // Always run Fiber search first
     let rawResults = await fiberPersonSearch(targetRole, targetCompany);
 
     if (rawResults.length < 5) {
@@ -384,16 +394,153 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // Public view used by the dashboard: names + LinkedIn URLs
+    const publicProfiles = rawResults.map((raw: any) => ({
+      full_name: raw.full_name || raw.name || raw.display_name || "Unknown",
+      linkedin_url: getLinkedInUrl(raw),
+    }));
+
+    if (mode === "fiber") {
+      // For the first call, just show the target profiles list
+      return NextResponse.json({ profiles: publicProfiles });
+    }
+
+    // ---- Gap analysis phase ----
+
     const profiles = rawResults.map(mapFiberProfile);
     const pattern = deriveSuccessPattern(profiles, targetRole, targetCompany);
 
-    const result: DiscoveryResult = {
-      profiles: profiles.slice(0, 10),
-      pattern,
-    };
-    cache.set(key, result);
+    // Load current user's saved profile from Supabase
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
 
-    return NextResponse.json(result);
+    if (!user) {
+      return NextResponse.json(
+        { error: "You must be logged in to run gap analysis." },
+        { status: 401 }
+      );
+    }
+
+    const { data: row, error: rowError } = await supabase
+      .from("user_profiles")
+      .select("*")
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    if (rowError) {
+      return NextResponse.json(
+        { error: rowError.message },
+        { status: 500 }
+      );
+    }
+
+    if (!row) {
+      return NextResponse.json(
+        { error: "No saved profile found for this user." },
+        { status: 404 }
+      );
+    }
+
+    const userProfileSummary = {
+      full_name: row.full_name,
+      university: row.university,
+      gpa: row.gpa,
+      skills: row.skills,
+      internships: row.internships,
+      leadership_positions: row.leadership_positions,
+      projects: row.projects,
+      others: row.others,
+      entrepreneurial_leadership: row.entrepreneurial_leadership,
+      personal_impact: row.personal_impact,
+    };
+
+    const targetProfilesPublic = publicProfiles;
+
+    if (!OPENAI_API_KEY) {
+      return NextResponse.json(
+        { error: "OPENAI_API_KEY is not configured." },
+        { status: 500 }
+      );
+    }
+
+    const client = new OpenAI({ apiKey: OPENAI_API_KEY });
+
+    const prompt = `
+You are an expert Career Coach.
+
+Compare this user's profile against the successful "Target Profiles" found by Fiber.
+
+Treat “Experience”, “Work Experience”, and “Internships” as the same dimension when comparing.
+
+Analyze discrepancies across:
+- GPA
+- Internships / Experience
+- Leadership
+- Projects
+- Personal Impact
+- Skills
+
+Return ONLY a JSON object in the following shape:
+
+{
+  "gpa": { "assessment": string, "recommendations": string[] },
+  "experience": { "assessment": string, "recommendations": string[] },
+  "leadership": { "assessment": string, "recommendations": string[] },
+  "projects": { "assessment": string, "recommendations": string[] },
+  "personalImpact": { "assessment": string, "recommendations": string[] },
+  "skills": {
+    "missingTechnical": string[],
+    "missingSoft": string[],
+    "summary": string
+  },
+  "bonusPointers": string[]
+}
+
+Do not include any explanatory text outside of this JSON.
+`;
+
+    const completion = await client.chat.completions.create({
+      model: "gpt-4o",
+      response_format: { type: "json_object" },
+      temperature: 0.3,
+      messages: [
+        { role: "system", content: "You are an expert Career Coach." },
+        {
+          role: "user",
+          content: prompt,
+        },
+        {
+          role: "user",
+          content: JSON.stringify({
+            userProfile: userProfileSummary,
+            targetProfiles: targetProfilesPublic,
+            successPattern: pattern,
+          }),
+        },
+      ],
+    });
+
+    const content = completion.choices[0]?.message?.content;
+    if (!content) {
+      return NextResponse.json(
+        { error: "OpenAI returned no content." },
+        { status: 500 }
+      );
+    }
+
+    let gapAnalysis: any;
+    try {
+      gapAnalysis = JSON.parse(content);
+    } catch {
+      return NextResponse.json(
+        { error: "OpenAI returned invalid JSON." },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json({ gapAnalysis, profiles: publicProfiles });
   } catch (e: any) {
     console.error("[discovery] error:", e);
     return NextResponse.json(
