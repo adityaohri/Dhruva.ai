@@ -155,6 +155,8 @@
 }
 
 .partner-logo-bain {
-  @apply partner-logo;
+  height: 3.5rem;
+  width: auto;
+  opacity: 0.9;
   mix-blend-mode: screen;
 }
