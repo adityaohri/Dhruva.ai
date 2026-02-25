@@ -13,7 +13,7 @@ export default async function Home() {
 
   return (
     <div className="flex min-h-[70vh] flex-col items-center justify-center">
-      <main className="mx-auto flex w-full max-w-3xl flex-col items-center gap-10 text-center">
+      <main className="mx-auto flex w-full max-w-4xl flex-col items-center gap-10 text-center">
         <div className="space-y-4">
           <h1 className="font-serif text-3xl font-semibold tracking-tight text-[#3C2A6A] sm:text-4xl">
             The AI layer for early career clarity
@@ -41,25 +41,50 @@ export default async function Home() {
           </span>
         </div>
 
-        <section className="mt-6 w-full space-y-4">
+        <section className="mt-8 w-full space-y-3">
           <p className="text-[10px] font-medium uppercase tracking-[0.22em] text-slate-500">
             Built by a team from
           </p>
-          <div className="flex flex-wrap items-center justify-center gap-x-8 gap-y-3 text-xs text-slate-700 sm:text-sm">
-            <span className="font-semibold text-[#111827]">McKinsey &amp; Company</span>
-            <span className="font-semibold text-[#111827]">Bain &amp; Company</span>
-            <span className="rounded-full border border-[#E5E7EB] px-3 py-1">
-              SRCC
-            </span>
-            <span className="rounded-full border border-[#E5E7EB] px-3 py-1">
-              SIG
-            </span>
-            <span className="rounded-full border border-[#E5E7EB] px-3 py-1">
-              YCP Auctus
-            </span>
-            <span className="rounded-full border border-[#E5E7EB] px-3 py-1">
-              United Nations
-            </span>
+          <div className="marquee-container mx-auto w-full max-w-4xl">
+            {/* gradient masks */}
+            <div className="pointer-events-none absolute inset-y-0 left-0 w-10 bg-gradient-to-r from-[#FDFBF1] to-transparent" />
+            <div className="pointer-events-none absolute inset-y-0 right-0 w-10 bg-gradient-to-l from-[#FDFBF1] to-transparent" />
+
+            <div className="marquee-track whitespace-nowrap">
+              {[1, 2].map((loop) => (
+                <div
+                  key={loop}
+                  className="flex items-center gap-10 px-4"
+                  aria-hidden={loop === 2}
+                >
+                  <img
+                    src="/partners/mckinsey.png"
+                    alt="McKinsey & Company"
+                    className="h-6 w-auto opacity-90"
+                  />
+                  <img
+                    src="/partners/bain.png"
+                    alt="Bain & Company"
+                    className="h-6 w-auto opacity-90"
+                  />
+                  <img
+                    src="/partners/srcc.png"
+                    alt="SRCC"
+                    className="h-8 w-auto opacity-90"
+                  />
+                  <img
+                    src="/partners/sig.png"
+                    alt="SIG"
+                    className="h-6 w-auto opacity-90"
+                  />
+                  <img
+                    src="/partners/ycp-auctus.png"
+                    alt="YCP Auctus"
+                    className="h-6 w-auto opacity-90"
+                  />
+                </div>
+              ))}
+            </div>
           </div>
         </section>
       </main>

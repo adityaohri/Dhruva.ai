@@ -126,3 +126,24 @@
     @apply bg-background text-foreground;
   }
 }
+
+@keyframes marquee-horizontal {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+.marquee-container {
+  position: relative;
+  overflow: hidden;
+}
+
+.marquee-track {
+  display: inline-flex;
+  gap: 3rem;
+  animation: marquee-horizontal 28s linear infinite;
+  will-change: transform;
+}
