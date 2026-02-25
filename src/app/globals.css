@@ -144,7 +144,8 @@
 .marquee-track {
   display: inline-flex;
   gap: 0;
-  animation: marquee-horizontal 28s linear infinite;
+  /* Temporarily disable animation to ensure logos stay visible */
+  animation: none;
   will-change: transform;
 }
 

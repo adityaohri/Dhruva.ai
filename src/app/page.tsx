@@ -59,15 +59,13 @@ export default async function Home() {
             <div className="pointer-events-none absolute inset-y-0 right-0 w-10 bg-gradient-to-l from-[#FDFBF1] to-transparent" />
 
             <div className="marquee-track whitespace-nowrap">
-              {[0, 1].map((loop) => (
-                <div key={loop} className="flex items-center px-12" aria-hidden={loop === 1}>
-                  {logos.map((logo, idx) => (
-                    <div key={`${loop}-${idx}`} className="partner-logo-wrapper mx-12">
-                      <img src={logo.src} alt={logo.alt} className="partner-logo-img" />
-                    </div>
-                  ))}
-                </div>
-              ))}
+              <div className="flex items-center px-12">
+                {logos.map((logo, idx) => (
+                  <div key={idx} className="partner-logo-wrapper mx-12">
+                    <img src={logo.src} alt={logo.alt} className="partner-logo-img" />
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         </section>
