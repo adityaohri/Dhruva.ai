@@ -87,12 +87,8 @@ export function DiscoverySection({ parsed }: DiscoverySectionProps) {
 
       const gapData = (await gapResp.json()) as {
         gapAnalysis: any;
-        profiles?: PublicProfile[];
       };
 
-      if (gapData.profiles && gapData.profiles.length) {
-        setProfiles(gapData.profiles);
-      }
       setGapAnalysis(gapData.gapAnalysis || null);
     } catch (e: any) {
       setError(e?.message || "Discovery failed");
@@ -229,151 +225,67 @@ export function DiscoverySection({ parsed }: DiscoverySectionProps) {
               )}
 
               {!runningGap && gapAnalysis && (
-                <div className="space-y-3 text-xs text-slate-800">
-                  {/* GPA */}
-                  {gapAnalysis.gpa && (
-                    <section>
-                      <p className="font-medium text-slate-700">GPA</p>
-                      <p className="mt-1">{gapAnalysis.gpa.assessment}</p>
-                      {Array.isArray(gapAnalysis.gpa.recommendations) &&
-                        gapAnalysis.gpa.recommendations.length > 0 && (
-                          <ul className="mt-1 list-disc list-inside">
-                            {gapAnalysis.gpa.recommendations.map(
-                              (r: string) => (
-                                <li key={r}>{r}</li>
-                              )
-                            )}
-                          </ul>
-                        )}
-                    </section>
-                  )}
-
-                  {/* Experience / Internships */}
-                  {gapAnalysis.experience && (
+                <div className="space-y-4 text-xs text-slate-800">
+                  {gapAnalysis.overallSummary && (
                     <section>
                       <p className="font-medium text-slate-700">
-                        Experience / Internships
+                        Overall summary
                       </p>
-                      <p className="mt-1">
-                        {gapAnalysis.experience.assessment}
-                      </p>
-                      {Array.isArray(gapAnalysis.experience.recommendations) &&
-                        gapAnalysis.experience.recommendations.length > 0 && (
-                          <ul className="mt-1 list-disc list-inside">
-                            {gapAnalysis.experience.recommendations.map(
-                              (r: string) => (
-                                <li key={r}>{r}</li>
-                              )
-                            )}
-                          </ul>
-                        )}
+                      <p className="mt-1">{gapAnalysis.overallSummary}</p>
                     </section>
                   )}
 
-                  {/* Leadership */}
-                  {gapAnalysis.leadership && (
-                    <section>
-                      <p className="font-medium text-slate-700">Leadership</p>
-                      <p className="mt-1">
-                        {gapAnalysis.leadership.assessment}
-                      </p>
-                      {Array.isArray(gapAnalysis.leadership.recommendations) &&
-                        gapAnalysis.leadership.recommendations.length > 0 && (
-                          <ul className="mt-1 list-disc list-inside">
-                            {gapAnalysis.leadership.recommendations.map(
-                              (r: string) => (
-                                <li key={r}>{r}</li>
-                              )
-                            )}
-                          </ul>
-                        )}
-                    </section>
-                  )}
-
-                  {/* Projects */}
-                  {gapAnalysis.projects && (
-                    <section>
-                      <p className="font-medium text-slate-700">Projects</p>
-                      <p className="mt-1">
-                        {gapAnalysis.projects.assessment}
-                      </p>
-                      {Array.isArray(gapAnalysis.projects.recommendations) &&
-                        gapAnalysis.projects.recommendations.length > 0 && (
-                          <ul className="mt-1 list-disc list-inside">
-                            {gapAnalysis.projects.recommendations.map(
-                              (r: string) => (
-                                <li key={r}>{r}</li>
-                              )
-                            )}
-                          </ul>
-                        )}
-                    </section>
-                  )}
-
-                  {/* Personal Impact */}
-                  {gapAnalysis.personalImpact && (
+                  {gapAnalysis.trajectoryFit && (
                     <section>
                       <p className="font-medium text-slate-700">
-                        Personal Impact
+                        Trajectory fit
                       </p>
-                      <p className="mt-1">
-                        {gapAnalysis.personalImpact.assessment}
-                      </p>
-                      {Array.isArray(
-                        gapAnalysis.personalImpact.recommendations
-                      ) &&
-                        gapAnalysis.personalImpact.recommendations.length >
-                          0 && (
-                          <ul className="mt-1 list-disc list-inside">
-                            {gapAnalysis.personalImpact.recommendations.map(
-                              (r: string) => (
-                                <li key={r}>{r}</li>
-                              )
-                            )}
-                          </ul>
-                        )}
+                      <p className="mt-1">{gapAnalysis.trajectoryFit}</p>
                     </section>
                   )}
 
-                  {/* Skills */}
-                  {gapAnalysis.skills && (
-                    <section>
-                      <p className="font-medium text-slate-700">Skills</p>
-                      <p className="mt-1">{gapAnalysis.skills.summary}</p>
-                      <div className="mt-2 space-y-1">
+                  {gapAnalysis.skillGaps && (
+                    <section className="space-y-2">
+                      <p className="font-medium text-slate-700">
+                        Skill gaps
+                      </p>
+                      <div className="flex flex-wrap gap-2">
                         {Array.isArray(
-                          gapAnalysis.skills.missingTechnical
+                          gapAnalysis.skillGaps.missingTechnical
                         ) &&
-                          gapAnalysis.skills.missingTechnical.length > 0 && (
-                            <p>
-                              <span className="font-medium">
-                                Missing technical:
-                              </span>{" "}
-                              {gapAnalysis.skills.missingTechnical.join(", ")}
-                            </p>
+                          gapAnalysis.skillGaps.missingTechnical.map(
+                            (s: string) => (
+                              <span
+                                key={s}
+                                className="rounded-full border border-[#3C2A6A]/25 bg-white/60 px-3 py-1 text-[11px] text-[#3C2A6A]"
+                              >
+                                {s}
+                              </span>
+                            )
                           )}
-                        {Array.isArray(gapAnalysis.skills.missingSoft) &&
-                          gapAnalysis.skills.missingSoft.length > 0 && (
-                            <p>
-                              <span className="font-medium">
-                                Missing soft skills:
-                              </span>{" "}
-                              {gapAnalysis.skills.missingSoft.join(", ")}
-                            </p>
+                        {Array.isArray(gapAnalysis.skillGaps.missingSoft) &&
+                          gapAnalysis.skillGaps.missingSoft.map(
+                            (s: string) => (
+                              <span
+                                key={s}
+                                className="rounded-full border border-[#3C2A6A]/15 bg-[#3C2A6A]/5 px-3 py-1 text-[11px] text-[#3C2A6A]"
+                              >
+                                {s}
+                              </span>
+                            )
                           )}
                       </div>
                     </section>
                   )}
 
-                  {/* Bonus pointers */}
-                  {Array.isArray(gapAnalysis.bonusPointers) &&
-                    gapAnalysis.bonusPointers.length > 0 && (
+                  {Array.isArray(gapAnalysis.concreteActions) &&
+                    gapAnalysis.concreteActions.length > 0 && (
                       <section>
                         <p className="font-medium text-slate-700">
-                          Bonus pointers
+                          Concrete actions
                         </p>
                         <ul className="mt-1 list-disc list-inside">
-                          {gapAnalysis.bonusPointers.map((r: string) => (
+                          {gapAnalysis.concreteActions.map((r: string) => (
                             <li key={r}>{r}</li>
                           ))}
                         </ul>

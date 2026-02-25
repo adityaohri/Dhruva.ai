@@ -396,6 +396,7 @@ export async function POST(req: NextRequest) {
   try {
     // Always run Fiber search first
     let rawResults = await fiberPersonSearch(targetRole, targetCompany);
+    const targetResults = [...rawResults];
 
     if (rawResults.length < 5) {
       const peers = await suggestPeerCompanies(targetRole, targetCompany);
@@ -406,7 +407,8 @@ export async function POST(req: NextRequest) {
     }
 
     // Public view used by the dashboard: names + LinkedIn URLs
-    const publicProfiles = rawResults.map((raw: any) => ({
+    // For the UI list we ONLY show results for the target company.
+    const publicProfiles = targetResults.map((raw: any) => ({
       full_name: raw.full_name || raw.name || raw.display_name || "Unknown",
       linkedin_url: getLinkedInUrl(raw),
     }));
@@ -478,7 +480,7 @@ export async function POST(req: NextRequest) {
     const client = new OpenAI({ apiKey: OPENAI_API_KEY });
 
     const prompt = `
-You are an expert Career Coach.
+You are an expert career coach.
 
 You will be given a JSON object with:
 - userProfile: the candidate's parsed CV summary,
@@ -486,34 +488,29 @@ You will be given a JSON object with:
 - successPattern: aggregate metrics derived ONLY from those Fiber profiles
   (common_previous_roles, top_skills_delta, avg_tenure_in_previous_step, impact_keyword_density).
 
-Your job is to produce a DATA-DRIVEN gap analysis.
-- Base every assessment and recommendation STRICTLY on the fields in userProfile and successPattern.
-- When you talk about experience, leadership, projects, impact, or skills,
-  explicitly reference things like:
-  - whether the user's internships/roles resemble successPattern.common_previous_roles,
-  - how the user's experience length compares to successPattern.avg_tenure_in_previous_step,
-  - how numeric/impact-heavy the user's bullets likely are vs successPattern.impact_keyword_density,
-  - which skills from successPattern.top_skills_delta are missing from userProfile.skills.
-- Do NOT give generic career advice that could apply to anyone; every point must be justified
-  by differences between userProfile and successPattern.
-- If the Fiber data is too sparse to make a specific claim, say so explicitly instead of guessing.
+Your job is to produce a HOLISTIC, DATA-DRIVEN gap analysis.
 
-Treat “Experience”, “Work Experience”, and “Internships” as the same dimension when comparing.
+STRICT RULES:
+- Base every statement STRICTLY on differences between userProfile and targetProfiles/successPattern.
+- When you talk about trajectories, refer to actual patterns you see in targetProfiles
+  (industries, prior roles, seniority, tenure) and how the user compares.
+- When you talk about skills, compare userProfile.skills to both
+  successPattern.top_skills_delta and recurring skills inside targetProfiles.
+- Do NOT invent information that is not present in the input JSON.
+- If some part of the data is genuinely missing, say so explicitly (e.g. "no GPA data in successPattern"),
+  but still focus most of the analysis on what IS present.
+- Avoid generic career advice that could apply to anyone; ground each point in a concrete observation.
 
 Return ONLY a JSON object in the following shape:
 
 {
-  "gpa": { "assessment": string, "recommendations": string[] },
-  "experience": { "assessment": string, "recommendations": string[] },
-  "leadership": { "assessment": string, "recommendations": string[] },
-  "projects": { "assessment": string, "recommendations": string[] },
-  "personalImpact": { "assessment": string, "recommendations": string[] },
-  "skills": {
+  "overallSummary": string,
+  "trajectoryFit": string,
+  "skillGaps": {
     "missingTechnical": string[],
-    "missingSoft": string[],
-    "summary": string
+    "missingSoft": string[]
   },
-  "bonusPointers": string[]
+  "concreteActions": string[]
 }
 
 Do not include any explanatory text outside of this JSON.
@@ -534,8 +531,8 @@ Do not include any explanatory text outside of this JSON.
           content: JSON.stringify({
             userProfile: userProfileSummary,
             // Send full structured profiles (with roles, skills, education)
-            // to the model so it can make a truly data-driven comparison.
-            targetProfiles: profiles.slice(0, 20),
+            // so the model can make a truly data-driven comparison.
+            targetProfiles: profiles,
             successPattern: pattern,
           }),
         },
@@ -560,7 +557,7 @@ Do not include any explanatory text outside of this JSON.
       );
     }
 
-    return NextResponse.json({ gapAnalysis, profiles: publicProfiles });
+    return NextResponse.json({ gapAnalysis });
   } catch (e: any) {
     console.error("[discovery] error:", e);
     return NextResponse.json(
