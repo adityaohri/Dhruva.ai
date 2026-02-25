@@ -65,7 +65,7 @@ function estimateFiberCost(numResults: number): number {
 async function fiberPersonSearch(
   targetRole: string,
   targetCompany: string,
-  pageSize: number = 10
+  pageSize: number = 15
 ): Promise<any[]> {
   if (!FIBER_API_KEY) {
     throw new Error("FIBER_API_KEY is not configured.");
@@ -143,6 +143,7 @@ async function fiberPersonSearch(
 
 function getLinkedInUrl(raw: any): string | null {
   return (
+    raw.url || // Fiber's generic profile URL (often LinkedIn)
     raw.linkedin_url ||
     raw.linkedinUrl ||
     raw.linkedin ||
@@ -412,7 +413,8 @@ export async function POST(req: NextRequest) {
 
     if (mode === "fiber") {
       // For the first call, just show the target profiles list
-      return NextResponse.json({ profiles: publicProfiles });
+      // (limit to 15 names for the UI)
+      return NextResponse.json({ profiles: publicProfiles.slice(0, 15) });
     }
 
     // ---- Gap analysis phase ----
@@ -465,8 +467,6 @@ export async function POST(req: NextRequest) {
       entrepreneurial_leadership: row.entrepreneurial_leadership,
       personal_impact: row.personal_impact,
     };
-
-    const targetProfilesPublic = publicProfiles;
 
     if (!OPENAI_API_KEY) {
       return NextResponse.json(
@@ -533,7 +533,9 @@ Do not include any explanatory text outside of this JSON.
           role: "user",
           content: JSON.stringify({
             userProfile: userProfileSummary,
-            targetProfiles: targetProfilesPublic,
+            // Send full structured profiles (with roles, skills, education)
+            // to the model so it can make a truly data-driven comparison.
+            targetProfiles: profiles.slice(0, 20),
             successPattern: pattern,
           }),
         },

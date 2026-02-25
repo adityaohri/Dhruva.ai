@@ -183,23 +183,26 @@ export function DiscoverySection({ parsed }: DiscoverySectionProps) {
                 </p>
               )}
               {profiles.length > 0 && (
-                <ul className="mt-2 list-disc list-inside space-y-1 text-xs text-slate-800">
+                <ul className="mt-2 space-y-1 text-xs text-slate-800">
                   {profiles.map((p) => (
                     <li key={p.linkedin_url ?? p.full_name}>
                       <span className="font-medium">{p.full_name}</span>
                       {p.linkedin_url && (
-                        <>
-                          {" "}
-                          —{" "}
-                          <a
-                            href={p.linkedin_url}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="text-[#3C2A6A] underline underline-offset-2"
+                        <a
+                          href={p.linkedin_url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="ml-2 inline-flex h-4 w-4 items-center justify-center rounded-sm text-[#0A66C2]"
+                          aria-label="Open LinkedIn profile"
+                        >
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            viewBox="0 0 24 24"
+                            className="h-3 w-3 fill-current"
                           >
-                            LinkedIn
-                          </a>
-                        </>
+                            <path d="M4.98 3.5C4.98 4.88 3.88 6 2.5 6S0 4.88 0 3.5 1.12 1 2.5 1 4.98 2.12 4.98 3.5zM.29 8.09h4.42V24H.29zM8.47 8.09h4.24v2.16h.06c.59-1.12 2.03-2.3 4.17-2.3 4.46 0 5.28 2.93 5.28 6.74V24h-4.42v-7.32c0-1.75-.03-4-2.44-4-2.44 0-2.81 1.9-2.81 3.87V24H8.47z" />
+                          </svg>
+                        </a>
                       )}
                     </li>
                   ))}
