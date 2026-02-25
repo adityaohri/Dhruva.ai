@@ -31,7 +31,8 @@ type DiscoveryResult = {
 
 const cache = new Map<string, DiscoveryResult>();
 
-const PROXYCURL_API_KEY = process.env.PROXYCURL_API_KEY;
+// Fiber AI API key (replace PROXYCURL_API_KEY usage with this)
+const FIBER_API_KEY = process.env.FIBER_API_KEY;
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 
 const TECH_KEYWORDS = [
@@ -54,48 +55,75 @@ const SOFT_KEYWORDS = [
   "client",
 ];
 
-function estimateProxycurlCost(numResults: number): number {
-  return numResults * 2.5; // mid-point of 2–3 credits / result
+function estimateFiberCost(numResults: number): number {
+  // Fiber AI pricing will differ, but we log a simple estimate so you can
+  // keep an eye on credit usage in the console.
+  return numResults; // adjust if you know the exact credit model
 }
 
-async function proxycurlPersonSearch(
+async function fiberPersonSearch(
   targetRole: string,
   targetCompany: string,
   pageSize: number = 10
 ): Promise<any[]> {
-  if (!PROXYCURL_API_KEY) {
-    throw new Error("PROXYCURL_API_KEY is not configured.");
+  if (!FIBER_API_KEY) {
+    throw new Error("FIBER_API_KEY is not configured.");
   }
 
-  const url = "https://nubela.co/proxycurl/api/v2/search/person/";
-  const params = new URLSearchParams({
-    enrich_profiles: "enrich",
-    current_role_title: targetRole,
-    current_company_name: targetCompany,
-    page_size: String(pageSize),
-  });
+  // Fiber people search endpoint
+  const url = "https://api.fiber.ai/v1/people-search";
 
-  const resp = await fetch(`${url}?${params.toString()}`, {
-    headers: {
-      Authorization: `Bearer ${PROXYCURL_API_KEY}`,
+  // We:
+  // - pass the API key in the body (per Fiber docs),
+  // - filter by currentCompanies (target company),
+  // - and use keywords.containsAny for the target role text,
+  // - request detailed work experience so the Golden Step logic has richer data.
+  const body = {
+    apiKey: FIBER_API_KEY,
+    searchParams: {
+      getDetailedWorkExperience: true,
+      keywords: {
+        containsAny: [targetRole],
+      },
     },
+    pageSize,
+    cursor: null,
+    currentCompanies: [targetCompany],
+    prospectExclusionListIDs: [],
+    companyExclusionListIDs: [],
+  };
+
+  const resp = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
     cache: "no-store",
   });
 
   if (!resp.ok) {
-    throw new Error(`Proxycurl error ${resp.status}: ${await resp.text()}`);
+    const text = await resp.text();
+    throw new Error(`Fiber AI error ${resp.status}: ${text}`);
   }
 
   const data = await resp.json();
-  const results = Array.isArray(data) ? data : data.results ?? [];
+  const results =
+    (Array.isArray(data) && data) ||
+    data.profiles ||
+    data.results ||
+    data.data ||
+    [];
+
   console.log(
-    "[discovery] Proxycurl returned",
+    "[discovery] Fiber AI returned",
     results.length,
-    "results (~",
-    estimateProxycurlCost(results.length),
+    "results (estimated cost ~",
+    estimateFiberCost(results.length),
     "credits)"
   );
-  return results;
+
+  return results as any[];
 }
 
 async function suggestPeerCompanies(
@@ -130,31 +158,61 @@ async function suggestPeerCompanies(
   }
 }
 
-function mapProxycurlProfile(raw: any): SuccessProfile {
-  const full_name = raw.full_name || raw.name || "Unknown";
-  const headline = raw.headline || "";
+function mapFiberProfile(raw: any): SuccessProfile {
+  /**
+   * Fiber AI typically returns a structured person object.
+   * We defensively check several likely keys so the frontend
+   * `SuccessProfile` shape remains stable even if the exact Fiber
+   * JSON fields change slightly.
+   */
+  const full_name =
+    raw.full_name || raw.name || raw.display_name || "Unknown";
 
-  const experiencesRaw = raw.experiences || raw.employment || [];
+  const headline =
+    raw.headline ||
+    raw.current_title ||
+    raw.current_position ||
+    "";
+
+  const experiencesRaw =
+    raw.experience ||
+    raw.experiences ||
+    raw.employment_history ||
+    [];
   const experience_history: ExperienceEntry[] = [];
   for (const exp of experiencesRaw) {
-    const title = exp.title || exp.role || "";
+    const title = exp.title || exp.role || exp.position || "";
     let company = "";
     if (exp.company && typeof exp.company === "object") {
-      company = exp.company.name || "";
+      company = exp.company.name || exp.company_title || "";
     } else if (typeof exp.company === "string") {
       company = exp.company;
+    } else if (exp.employer_name) {
+      company = exp.employer_name;
     }
     if (!title && !company) continue;
     experience_history.push({
       title,
       company,
-      start_date: exp.start_date || exp.starts_at || null,
-      end_date: exp.end_date || exp.ends_at || null,
-      description: exp.description || exp.summary || null,
+      start_date:
+        exp.start_date ||
+        exp.starts_at ||
+        exp.start_date_iso ||
+        null,
+      end_date:
+        exp.end_date ||
+        exp.ends_at ||
+        exp.end_date_iso ||
+        null,
+      description:
+        exp.description ||
+        exp.summary ||
+        exp.responsibilities ||
+        null,
     });
   }
 
-  const skillsRaw = raw.skills || [];
+  const skillsRaw = raw.skills || raw.skill_tags || [];
   let skills: string[];
   if (typeof skillsRaw === "string") {
     skills = skillsRaw
@@ -167,7 +225,7 @@ function mapProxycurlProfile(raw: any): SuccessProfile {
       .filter(Boolean);
   }
 
-  const educationRaw = raw.education || [];
+  const educationRaw = raw.education || raw.education_history || [];
   const education: string[] = [];
   for (const ed of educationRaw) {
     if (typeof ed === "string") {
@@ -312,17 +370,17 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    let rawResults = await proxycurlPersonSearch(targetRole, targetCompany);
+    let rawResults = await fiberPersonSearch(targetRole, targetCompany);
 
     if (rawResults.length < 5) {
       const peers = await suggestPeerCompanies(targetRole, targetCompany);
       for (const peer of peers) {
-        const more = await proxycurlPersonSearch(targetRole, peer);
+        const more = await fiberPersonSearch(targetRole, peer);
         rawResults = rawResults.concat(more);
       }
     }
 
-    const profiles = rawResults.map(mapProxycurlProfile);
+    const profiles = rawResults.map(mapFiberProfile);
     const pattern = deriveSuccessPattern(profiles, targetRole, targetCompany);
 
     const result: DiscoveryResult = {
