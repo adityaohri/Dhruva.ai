@@ -14,13 +14,11 @@ export default async function Home() {
   const logos = [
     { src: "/partners/mckinsey.png", alt: "McKinsey & Company" },
     { src: "/partners/srcc.png", alt: "SRCC" },
-    { src: "/partners/bain.png", alt: "Bain & Company" },
     { src: "/partners/sig.png", alt: "SIG" },
-    { src: "/partners/ycp-auctus.png", alt: "YCP Auctus" },
   ];
 
   return (
-    <div className="flex min-h-[70vh] flex-col items-center justify-center">
+    <div className="flex min-h-[70vh] flex-col items-center pt-10 sm:pt-16">
       <main className="mx-auto flex w-full max-w-4xl flex-col items-center gap-10 text-center">
         <div className="space-y-4">
           <h1 className="font-serif text-3xl font-semibold tracking-tight text-[#3C2A6A] sm:text-4xl">
