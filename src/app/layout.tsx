@@ -34,14 +34,14 @@ export default function RootLayout({
         className={`${inter.variable} ${geistMono.variable} ${playfair.variable} antialiased`}
       >
         <div className="flex min-h-screen flex-col bg-[#FDFBF1] text-slate-900">
-          <header className="sticky top-0 z-40 border-b border-[#3C2A6A]/10 bg-[#FDFBF1]/80 backdrop-blur-md">
-            <nav className="mx-auto flex h-14 max-w-6xl items-center justify-between px-4 sm:h-16">
+          <header className="sticky top-0 z-40 px-4 pt-4">
+            <nav className="mx-auto flex h-14 max-w-6xl items-center justify-between rounded-2xl bg-white px-5 shadow-sm sm:h-16 sm:px-6">
               <Link href="/" className="flex items-center gap-2">
-                <div className="flex h-7 w-7 items-center justify-center">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white">
                   <img
                     src="/dhruva-logo.png"
                     alt="dhruva.ai logo"
-                    className="h-7 w-7"
+                    className="h-7 w-7 object-contain"
                   />
                 </div>
                 <span className="font-serif text-lg font-semibold tracking-tight text-[#3C2A6A]">
