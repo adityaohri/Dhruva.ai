@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import Image from "next/image";
 import { Inter, Geist_Mono, Playfair_Display } from "next/font/google";
 import "./globals.css";
 
@@ -39,11 +38,9 @@ export default function RootLayout({
             <nav className="mx-auto flex h-14 max-w-6xl items-center justify-between px-4 sm:h-16">
               <Link href="/" className="flex items-center gap-2">
                 <div className="flex h-7 w-7 items-center justify-center">
-                  <Image
+                  <img
                     src="/dhruva-logo.png"
                     alt="dhruva.ai logo"
-                    width={28}
-                    height={28}
                     className="h-7 w-7"
                   />
                 </div>
