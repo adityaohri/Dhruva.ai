@@ -51,23 +51,15 @@ export default async function Home() {
           <p className="text-[10px] font-medium uppercase tracking-[0.22em] text-slate-500">
             Built by a team from
           </p>
-          <div className="marquee-container mx-auto w-full max-w-4xl">
-            {/* gradient masks */}
-            <div className="pointer-events-none absolute inset-y-0 left-0 w-10 bg-gradient-to-r from-[#FDFBF1] to-transparent" />
-            <div className="pointer-events-none absolute inset-y-0 right-0 w-10 bg-gradient-to-l from-[#FDFBF1] to-transparent" />
-
-            <div className="marquee-track whitespace-nowrap">
-              <div className="flex items-center px-12">
-                {logos.map((logo, idx) => (
-                  <div
-                    key={idx}
-                    className={`partner-logo-wrapper mx-12 ${logo.alt === "Bain & Company" ? "partner-logo-bain" : ""}`}
-                  >
-                    <img src={logo.src} alt={logo.alt} className="partner-logo-img" />
-                  </div>
-                ))}
+          <div className="mx-auto flex w-full max-w-4xl flex-wrap items-center justify-center gap-x-12 gap-y-4">
+            {logos.map((logo, idx) => (
+              <div
+                key={idx}
+                className={`partner-logo-wrapper ${logo.alt === "Bain & Company" ? "partner-logo-bain" : ""}`}
+              >
+                <img src={logo.src} alt={logo.alt} className="partner-logo-img" />
               </div>
-            </div>
+            ))}
           </div>
         </section>
       </main>

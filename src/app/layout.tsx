@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Inter, Geist_Mono, Playfair_Display } from "next/font/google";
+import { Navbar } from "@/components/navbar";
 import "./globals.css";
 
 const inter = Inter({
@@ -34,49 +35,7 @@ export default function RootLayout({
         className={`${inter.variable} ${geistMono.variable} ${playfair.variable} antialiased`}
       >
         <div className="flex min-h-screen flex-col bg-[#FDFBF1] text-slate-900">
-          <header className="sticky top-0 z-40 px-4 pt-4">
-            <nav className="mx-auto flex h-14 max-w-6xl items-center justify-between rounded-2xl bg-white px-5 shadow-sm sm:h-16 sm:px-6">
-              <Link href="/" className="flex items-center gap-2">
-                <div className="dhruva-logo-wrap flex h-12 w-12 shrink-0 items-center justify-center rounded-full">
-                  <img
-                    src="/dhruva-star.png?v=2"
-                    alt="dhruva.ai logo"
-                    className="h-11 w-11 object-contain"
-                  />
-                </div>
-                <span className="font-serif text-lg font-semibold tracking-tight text-[#3C2A6A]">
-                  dhruva.ai
-                </span>
-              </Link>
-
-              <div className="flex items-center gap-5 text-xs font-medium text-slate-700 sm:text-sm">
-                <Link
-                  href="/"
-                  className="transition-colors hover:text-[#3C2A6A]"
-                >
-                  Home
-                </Link>
-                <Link
-                  href="/dashboard"
-                  className="transition-colors hover:text-[#3C2A6A]"
-                >
-                  Profile Audit
-                </Link>
-                <Link
-                  href="/opportunity"
-                  className="transition-colors hover:text-[#3C2A6A]"
-                >
-                  Opportunity Intelligence
-                </Link>
-                <Link
-                  href="/outreach"
-                  className="transition-colors hover:text-[#3C2A6A]"
-                >
-                  Outreach Copilot
-                </Link>
-              </div>
-            </nav>
-          </header>
+          <Navbar />
 
           <main className="flex-1 mx-auto max-w-6xl px-4 py-8 sm:py-10">
             {children}
