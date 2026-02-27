@@ -40,37 +40,53 @@ export function DiscoverySection({ parsed }: DiscoverySectionProps) {
   const [downloadingReport, setDownloadingReport] = useState(false);
   const [showFullSummary, setShowFullSummary] = useState(false);
 
+  // Helper to aggressively normalise any JSON-like string into a structured object.
   const parsedGapAnalysis = useMemo(() => {
     if (!gapAnalysis) return null;
-    let result: any = gapAnalysis;
 
-    try {
-      if (typeof result === "string") {
-        const maybe = JSON.parse(result);
-        if (maybe && typeof maybe === "object") {
-          result = maybe;
+    const stripFences = (text: string) =>
+      text.replace(/```json/gi, "").replace(/```/g, "").trim();
+
+    const tryParse = (value: unknown): any => {
+      let current: any = value;
+
+      for (let i = 0; i < 3; i++) {
+        if (typeof current === "string") {
+          const cleaned = stripFences(current);
+          if (cleaned.startsWith("{") && cleaned.includes("overallSummary")) {
+            try {
+              current = JSON.parse(cleaned);
+              continue;
+            } catch {
+              // fall through
+            }
+          }
         }
-      }
-    } catch {
-      // ignore
-    }
 
-    if (
-      result &&
-      typeof result.overallSummary === "string" &&
-      result.overallSummary.trim().startsWith("{")
-    ) {
-      try {
-        const inner = JSON.parse(result.overallSummary);
-        if (inner && typeof inner === "object") {
-          result = inner;
+        if (
+          current &&
+          typeof current === "object" &&
+          typeof (current as any).overallSummary === "string"
+        ) {
+          const inner = stripFences((current as any).overallSummary);
+          if (inner.startsWith("{") && inner.includes("overallSummary")) {
+            try {
+              current = JSON.parse(inner);
+              continue;
+            } catch {
+              // fall through
+            }
+          }
         }
-      } catch {
-        // ignore
-      }
-    }
 
-    return result;
+        break;
+      }
+
+      if (current && typeof current === "object") return current;
+      return null;
+    };
+
+    return tryParse(gapAnalysis);
   }, [gapAnalysis]);
 
   const anchorRadials = useMemo(() => {
@@ -581,15 +597,22 @@ export function DiscoverySection({ parsed }: DiscoverySectionProps) {
                         ) &&
                           parsedGapAnalysis.skillGaps.missingTechnical.map(
                             (s: { name: string; resourceUrl?: string }) => (
-                              <a
+                              <button
                                 key={s.name}
-                                href={s.resourceUrl || "#"}
-                                target={s.resourceUrl ? "_blank" : undefined}
-                                rel={s.resourceUrl ? "noreferrer" : undefined}
+                                type="button"
+                                onClick={() => {
+                                  if (s.resourceUrl) {
+                                    window.open(
+                                      s.resourceUrl,
+                                      "_blank",
+                                      "noopener,noreferrer"
+                                    );
+                                  }
+                                }}
                                 className="rounded-full border border-[#3C2A6A]/25 bg-white/60 px-3 py-1 text-[11px] text-[#3C2A6A] hover:bg-[#3C2A6A]/5"
                               >
                                 {s.name}
-                              </a>
+                              </button>
                             )
                           )}
                         {Array.isArray(

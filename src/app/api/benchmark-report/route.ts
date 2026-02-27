@@ -64,13 +64,17 @@ export async function POST(req: NextRequest) {
   let { width, height } = page.getSize();
 
   // Cream background similar to site (#FDFBF1)
-  page.drawRectangle({
-    x: 0,
-    y: 0,
-    width,
-    height,
-    color: rgb(0xfd / 255, 0xfb / 255, 0xf1 / 255),
-  });
+  const drawBackground = () => {
+    page.drawRectangle({
+      x: 0,
+      y: 0,
+      width,
+      height,
+      color: rgb(0xfd / 255, 0xfb / 255, 0xf1 / 255),
+    });
+  };
+
+  drawBackground();
 
   const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
   const bold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
@@ -81,12 +85,13 @@ export async function POST(req: NextRequest) {
     const logoPath = path.join(process.cwd(), "public", "dhruva-logo.png");
     const logoBytes = await fs.readFile(logoPath);
     const logoImage = await pdfDoc.embedPng(logoBytes);
-    const scale = 80 / logoImage.height;
+    const scale = 60 / logoImage.height;
     const logoWidth = logoImage.width * scale;
     const logoHeight = logoImage.height * scale;
+    // place logo top-right with padding
     page.drawImage(logoImage, {
-      x: 40,
-      y: cursorY - logoHeight,
+      x: width - logoWidth - 40,
+      y: height - logoHeight - 40,
       width: logoWidth,
       height: logoHeight,
     });
@@ -94,14 +99,15 @@ export async function POST(req: NextRequest) {
     // If logo load fails, continue without crashing
   }
 
+  // Title top-left
   page.drawText("Profile Benchmarking Report", {
     x: 40,
-    y: cursorY - 40,
+    y: height - 80,
     size: 18,
     font: bold,
     color: rgb(0.235, 0.165, 0.415),
   });
-  cursorY -= 80;
+  cursorY = height - 110;
 
   const marginX = 40;
   const maxWidth = width - marginX * 2;
@@ -111,13 +117,7 @@ export async function POST(req: NextRequest) {
       // create a new page and reset background + cursor
       page = pdfDoc.addPage([595.28, 841.89]);
       ({ width, height } = page.getSize());
-      page.drawRectangle({
-        x: 0,
-        y: 0,
-        width,
-        height,
-        color: rgb(0xfd / 255, 0xfb / 255, 0xf1 / 255),
-      });
+      drawBackground();
       cursorY = height - 60;
     }
     return page;
