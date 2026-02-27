@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { RadialBarChart, RadialBar, PolarAngleAxis } from "recharts";
 import {
   Card,
   CardHeader,
@@ -38,6 +39,55 @@ export function DiscoverySection({ parsed }: DiscoverySectionProps) {
   const [error, setError] = useState<string | null>(null);
   const [downloadingReport, setDownloadingReport] = useState(false);
   const [showFullSummary, setShowFullSummary] = useState(false);
+
+  const parsedGapAnalysis = useMemo(() => {
+    if (!gapAnalysis) return null;
+    let result: any = gapAnalysis;
+
+    try {
+      if (typeof result === "string") {
+        const maybe = JSON.parse(result);
+        if (maybe && typeof maybe === "object") {
+          result = maybe;
+        }
+      }
+    } catch {
+      // ignore
+    }
+
+    if (
+      result &&
+      typeof result.overallSummary === "string" &&
+      result.overallSummary.trim().startsWith("{")
+    ) {
+      try {
+        const inner = JSON.parse(result.overallSummary);
+        if (inner && typeof inner === "object") {
+          result = inner;
+        }
+      } catch {
+        // ignore
+      }
+    }
+
+    return result;
+  }, [gapAnalysis]);
+
+  const anchorRadials = useMemo(() => {
+    if (!parsedGapAnalysis?.careerAnchors) return [];
+    return (parsedGapAnalysis.careerAnchors as string[]).map(
+      (anchor: string, idx: number) => {
+        const match = anchor.match(/(\d+)\s*%/);
+        const value = match ? Number(match[1]) : 50;
+        const label = anchor.replace(match?.[0] ?? "", "").trim();
+        return {
+          name: label || `Anchor ${idx + 1}`,
+          value: isNaN(value) ? 50 : Math.max(0, Math.min(100, value)),
+          raw: anchor,
+        };
+      }
+    );
+  }, [parsedGapAnalysis?.careerAnchors]);
 
   const handleRun = async () => {
     if (!parsed) return;
@@ -231,7 +281,7 @@ export function DiscoverySection({ parsed }: DiscoverySectionProps) {
 
         {(targetProfiles.length > 0 ||
           similarProfiles.length > 0 ||
-          gapAnalysis) && (
+          parsedGapAnalysis) && (
           <div className="mt-8 grid gap-5 md:grid-cols-2 animate-in fade-in-50 slide-in-from-bottom-2">
             {/* Left: target profiles list */}
             <div className="space-y-3 rounded-3xl border border-slate-200 bg-white/90 p-5 shadow-none">
@@ -388,22 +438,22 @@ export function DiscoverySection({ parsed }: DiscoverySectionProps) {
               )}
 
               {!runningGap && !gapAnalysis && (
-                <p className="text-xs text-slate-500">
+                  <p className="text-xs text-slate-500">
                   Run discovery to see a structured gap analysis here.
                 </p>
               )}
 
-              {!runningGap && gapAnalysis && (
+              {!runningGap && parsedGapAnalysis && (
                 <div className="space-y-5 text-xs text-slate-800">
                   {/* Executive summary */}
-                  {gapAnalysis.overallSummary && (
+                  {parsedGapAnalysis.overallSummary && (
                     <section className="space-y-1">
                       <p className="font-serif text-sm font-semibold text-[#3C2A6A]">
                         Executive summary
                       </p>
                       {(() => {
                         const raw = String(
-                          gapAnalysis.overallSummary ?? ""
+                          parsedGapAnalysis.overallSummary ?? ""
                         ).trim();
                         const maxChars = 700;
                         const isLong = raw.length > maxChars;
@@ -434,14 +484,14 @@ export function DiscoverySection({ parsed }: DiscoverySectionProps) {
                   )}
 
                   {/* Trajectory fit with horizontal scale */}
-                  {gapAnalysis.trajectoryFit && (
+                  {parsedGapAnalysis.trajectoryFit && (
                     <section className="space-y-1">
                       <p className="font-medium text-slate-700">
                         Trajectory fit
                       </p>
                       {(() => {
                         const text = String(
-                          gapAnalysis.trajectoryFit ?? ""
+                          parsedGapAnalysis.trajectoryFit ?? ""
                         ).toLowerCase();
                         let score = 60;
                         if (text.includes("high")) score = 85;
@@ -462,7 +512,7 @@ export function DiscoverySection({ parsed }: DiscoverySectionProps) {
                               </span>
                             </div>
                             <p className="mt-1 text-[11px] text-slate-700">
-                              {gapAnalysis.trajectoryFit}
+                              {parsedGapAnalysis.trajectoryFit}
                             </p>
                           </>
                         );
@@ -470,28 +520,54 @@ export function DiscoverySection({ parsed }: DiscoverySectionProps) {
                     </section>
                   )}
 
-                  {/* Career anchors */}
-                  {Array.isArray(gapAnalysis.careerAnchors) &&
-                    gapAnalysis.careerAnchors.length > 0 && (
-                      <section className="space-y-2">
-                        <p className="font-medium text-slate-700">
-                          Career anchors
-                        </p>
-                        <div className="flex flex-wrap gap-2">
-                          {gapAnalysis.careerAnchors.map((anchor: string) => (
-                            <span
-                              key={anchor}
-                              className="rounded-full border border-[#3C2A6A]/20 bg-white/80 px-3 py-1 text-[11px] text-slate-800"
+                  {/* Career anchors as radial cards */}
+                  {anchorRadials.length > 0 && (
+                    <section className="space-y-3">
+                      <p className="font-medium text-slate-700">
+                        Career anchors
+                      </p>
+                      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                        {anchorRadials.map((anchor) => (
+                          <div
+                            key={anchor.raw}
+                            className="flex flex-col items-center rounded-2xl border border-slate-200 bg-white/90 p-3 shadow-sm"
+                          >
+                            <RadialBarChart
+                              width={80}
+                              height={80}
+                              innerRadius="70%"
+                              outerRadius="100%"
+                              data={[anchor]}
+                              startAngle={90}
+                              endAngle={-270}
                             >
-                              {anchor}
-                            </span>
-                          ))}
-                        </div>
-                      </section>
-                    )}
+                              <PolarAngleAxis
+                                type="number"
+                                domain={[0, 100]}
+                                dataKey="value"
+                                tick={false}
+                              />
+                              <RadialBar
+                                dataKey="value"
+                                cornerRadius={999}
+                                fill="#3C2A6A"
+                                background
+                              />
+                            </RadialBarChart>
+                            <p className="mt-1 text-[11px] font-semibold text-[#3C2A6A]">
+                              {anchor.value}%
+                            </p>
+                            <p className="mt-0.5 text-[10px] text-slate-700 text-center">
+                              {anchor.name}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                    </section>
+                  )}
 
                   {/* Skill gaps */}
-                  {gapAnalysis.skillGaps && (
+                  {parsedGapAnalysis.skillGaps && (
                     <section className="space-y-2">
                       <p className="font-medium text-slate-700">
                         Skill gaps{" "}
@@ -501,9 +577,9 @@ export function DiscoverySection({ parsed }: DiscoverySectionProps) {
                       </p>
                       <div className="flex flex-wrap gap-2">
                         {Array.isArray(
-                          gapAnalysis.skillGaps.missingTechnical
+                          parsedGapAnalysis.skillGaps.missingTechnical
                         ) &&
-                          gapAnalysis.skillGaps.missingTechnical.map(
+                          parsedGapAnalysis.skillGaps.missingTechnical.map(
                             (s: { name: string; resourceUrl?: string }) => (
                               <a
                                 key={s.name}
@@ -516,8 +592,10 @@ export function DiscoverySection({ parsed }: DiscoverySectionProps) {
                               </a>
                             )
                           )}
-                        {Array.isArray(gapAnalysis.skillGaps.missingSoft) &&
-                          gapAnalysis.skillGaps.missingSoft.map(
+                        {Array.isArray(
+                          parsedGapAnalysis.skillGaps.missingSoft
+                        ) &&
+                          parsedGapAnalysis.skillGaps.missingSoft.map(
                             (s: string) => (
                               <span
                                 key={s}
@@ -532,14 +610,14 @@ export function DiscoverySection({ parsed }: DiscoverySectionProps) {
                   )}
 
                   {/* Concrete actions checklist */}
-                  {Array.isArray(gapAnalysis.concreteActions) &&
-                    gapAnalysis.concreteActions.length > 0 && (
+                  {Array.isArray(parsedGapAnalysis.concreteActions) &&
+                    parsedGapAnalysis.concreteActions.length > 0 && (
                       <section className="space-y-2">
                         <p className="font-medium text-slate-700">
                           Concrete actions
                         </p>
                         <ul className="mt-1 space-y-1">
-                          {gapAnalysis.concreteActions.map((r: string) => (
+                          {parsedGapAnalysis.concreteActions.map((r: string) => (
                             <li
                               key={r}
                               className="flex items-start gap-2 text-[11px]"
