@@ -620,12 +620,48 @@ Do not include any explanatory text outside of this JSON.
 
     let gapAnalysis: any;
     try {
+      // First, try to parse the content directly as JSON.
       gapAnalysis = JSON.parse(content);
     } catch {
-      return NextResponse.json(
-        { error: "Gap model returned invalid JSON." },
-        { status: 500 }
-      );
+      // Claude sometimes wraps JSON with prose or markdown fences.
+      // Try a series of fallbacks before giving up.
+      let cleaned = content.trim();
+
+      // Remove common markdown code fences like ```json ... ```
+      cleaned = cleaned.replace(/```json/gi, "").replace(/```/g, "").trim();
+
+      let parsed: any | null = null;
+
+      // Attempt to parse the cleaned string directly.
+      try {
+        parsed = JSON.parse(cleaned);
+      } catch {
+        // If that fails, try to extract the JSON object between the first and last braces.
+        const firstBrace = cleaned.indexOf("{");
+        const lastBrace = cleaned.lastIndexOf("}");
+        if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+          const inner = cleaned.slice(firstBrace, lastBrace + 1);
+          try {
+            parsed = JSON.parse(inner);
+          } catch {
+            // ignore and fall through to final fallback
+          }
+        }
+      }
+
+      if (parsed) {
+        gapAnalysis = parsed;
+      } else {
+        // As a last resort, return a minimal structured object so the UI/PDF
+        // can still render something readable instead of an error.
+        gapAnalysis = {
+          overallSummary: cleaned,
+          trajectoryFit: "",
+          careerAnchors: [],
+          skillGaps: { missingTechnical: [], missingSoft: [] },
+          concreteActions: [],
+        };
+      }
     }
 
     return NextResponse.json({ gapAnalysis });
