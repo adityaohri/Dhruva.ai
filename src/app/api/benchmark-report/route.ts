@@ -220,7 +220,12 @@ export async function POST(req: NextRequest) {
   }
 
   const pdfBytes = await pdfDoc.save();
-  return new NextResponse(pdfBytes, {
+  const pdfArrayBuffer = pdfBytes.buffer.slice(
+    pdfBytes.byteOffset,
+    pdfBytes.byteOffset + pdfBytes.byteLength
+  );
+
+  return new NextResponse(pdfArrayBuffer, {
     status: 200,
     headers: {
       "Content-Type": "application/pdf",
