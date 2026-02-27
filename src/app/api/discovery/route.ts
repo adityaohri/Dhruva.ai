@@ -544,27 +544,44 @@ function normaliseGapAnalysis(raw: any): Record<string, unknown> {
     try {
       const inner = JSON.parse(overallStr) as Record<string, unknown>;
       if (inner.overallSummary != null) out.overallSummary = str(inner.overallSummary);
-        if (inner.trajectoryFit != null) out.trajectoryFit = str(inner.trajectoryFit);
-        if (Array.isArray(inner.careerAnchors)) out.careerAnchors = inner.careerAnchors.map((x) => str(x)).filter(Boolean);
-        if (inner.skillGaps && typeof inner.skillGaps === "object") {
-          const sg = inner.skillGaps as Record<string, unknown>;
-          const tech = Array.isArray(sg.missingTechnical)
-            ? sg.missingTechnical.map((t) =>
+      if (inner.trajectoryFit != null) out.trajectoryFit = str(inner.trajectoryFit);
+      if (Array.isArray(inner.careerAnchors))
+        out.careerAnchors = inner.careerAnchors.map((x) => str(x)).filter(Boolean);
+      if (inner.skillGaps && typeof inner.skillGaps === "object") {
+        const sg = inner.skillGaps as Record<string, unknown>;
+        const tech = Array.isArray(sg.missingTechnical)
+          ? sg.missingTechnical
+              .map((t) =>
                 typeof t === "object" && t && "name" in t
-                  ? { name: str((t as any).name), resourceUrl: typeof (t as any).resourceUrl === "string" ? (t as any).resourceUrl : undefined }
+                  ? {
+                      name: str((t as any).name),
+                      resourceUrl:
+                        typeof (t as any).resourceUrl === "string"
+                          ? (t as any).resourceUrl
+                          : undefined,
+                    }
                   : { name: str(t), resourceUrl: undefined }
-              ).filter((t) => t.name)
-            : [];
-          out.skillGaps = { missingTechnical: tech, missingSoft: Array.isArray(sg.missingSoft) ? sg.missingSoft.map((x) => str(x)).filter(Boolean) : [] };
-        }
-        if (Array.isArray(inner.concreteActions)) out.concreteActions = inner.concreteActions.map((x) => str(x)).filter(Boolean);
+              )
+              .filter((t) => t.name)
+          : [];
+        out.skillGaps = {
+          missingTechnical: tech,
+          missingSoft: Array.isArray(sg.missingSoft)
+            ? sg.missingSoft.map((x) => str(x)).filter(Boolean)
+            : [],
+        };
+      }
+      if (Array.isArray(inner.concreteActions))
+        out.concreteActions = inner.concreteActions.map((x) => str(x)).filter(Boolean);
     } catch {
-      out.overallSummary = "Summary could not be parsed.";
+      // If we cannot parse the nested JSON, fall back to the original
+      // text so the UI and PDF still show a detailed summary instead
+      // of an error placeholder.
+      out.overallSummary = overallStr;
     }
   }
 
   if (!out.trajectoryFit) out.trajectoryFit = str(obj.trajectoryFit);
-  if (out.trajectoryFit && (out.trajectoryFit as string).startsWith("{")) out.trajectoryFit = "";
 
   if (Array.isArray(obj.careerAnchors)) out.careerAnchors = obj.careerAnchors.map((x) => str(x)).filter(Boolean);
   if (obj.skillGaps && typeof obj.skillGaps === "object") {
