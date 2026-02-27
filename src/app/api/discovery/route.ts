@@ -158,6 +158,130 @@ function getLinkedInUrl(raw: any): string | null {
   );
 }
 
+function getFollowerCount(raw: any): number {
+  const candidates = [
+    raw.linkedin_followers,
+    raw.linkedinFollowers,
+    raw.followers,
+    raw.num_followers,
+    raw.connections,
+    raw.linkedin_connections,
+    raw.linkedinConnections,
+  ];
+
+  for (const val of candidates) {
+    if (typeof val === "number" && Number.isFinite(val)) return val;
+    if (typeof val === "string") {
+      const n = Number(val.replace(/,/g, "").trim());
+      if (Number.isFinite(n)) return n;
+    }
+  }
+  return 0;
+}
+
+function normaliseCompanyName(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/[.,]/g, "")
+    .replace(/\b(ltd|limited|inc|llp|company|co)\b/g, "")
+    .trim();
+}
+
+function deriveParentCompanyName(name: string): string | null {
+  const lower = name.toLowerCase();
+  const splitByAmp = lower.split("&")[0]?.trim();
+  if (splitByAmp && splitByAmp.length >= 3) return splitByAmp;
+  const tokens = lower.split(/\s+/);
+  if (tokens.length > 1) return tokens[0];
+  return null;
+}
+
+function getCurrentCompanyName(raw: any): string {
+  if (raw.current_company && typeof raw.current_company === "string") {
+    return raw.current_company;
+  }
+  if (raw.currentCompany && typeof raw.currentCompany === "string") {
+    return raw.currentCompany;
+  }
+  const experiencesRaw =
+    raw.experience || raw.experiences || raw.employment_history || [];
+  if (Array.isArray(experiencesRaw) && experiencesRaw.length > 0) {
+    const exp = experiencesRaw[0];
+    if (exp) {
+      if (typeof exp.company === "string") return exp.company;
+      if (exp.company && typeof exp.company === "object") {
+        return (
+          exp.company.name ||
+          exp.company_title ||
+          exp.employer_name ||
+          ""
+        );
+      }
+      if (typeof exp.employer_name === "string") return exp.employer_name;
+    }
+  }
+  return "";
+}
+
+function rankFiberResults(
+  rawResults: any[],
+  targetRole: string,
+  targetCompany: string
+): any[] {
+  if (!rawResults.length) return [];
+
+  const normTargetCompany = normaliseCompanyName(targetCompany);
+  const parent = deriveParentCompanyName(targetCompany);
+  const normParent = parent ? normaliseCompanyName(parent) : null;
+  const roleLower = targetRole.toLowerCase();
+
+  const scored = rawResults.map((raw) => {
+    const followers = getFollowerCount(raw);
+    const companyName = getCurrentCompanyName(raw);
+    const normCompany = normaliseCompanyName(companyName);
+
+    const companyMatch =
+      !!normCompany && normCompany.includes(normTargetCompany);
+    const parentMatch =
+      normParent && normParent.length >= 3
+        ? normCompany.includes(normParent)
+        : false;
+
+    const headline = String(
+      raw.headline || raw.current_title || raw.current_position || ""
+    ).toLowerCase();
+    const roleMatch = !!roleLower && headline.includes(roleLower);
+
+    let score = 0;
+    if (followers >= 500) score += 10;
+    else score += followers / 1000;
+    if (companyMatch) score += 5;
+    if (parentMatch) score += 3;
+    if (roleMatch) score += 4;
+
+    return {
+      raw,
+      score,
+      followers,
+      companyMatch,
+      parentMatch,
+      roleMatch,
+    };
+  });
+
+  // Prefer profiles with at least 500 followers; if none, fall back to all.
+  let filtered = scored.filter((s) => s.followers >= 500);
+  if (!filtered.length) filtered = scored;
+
+  filtered.sort(
+    (a, b) =>
+      b.score - a.score ||
+      b.followers - a.followers
+  );
+
+  return filtered.map((s) => s.raw);
+}
+
 async function suggestPeerCompanies(
   targetRole: string,
   targetCompany: string,
@@ -480,12 +604,18 @@ export async function POST(req: NextRequest) {
       targetCompany,
       targetIndustry
     );
-    const targetResults = [...rawResults];
+    const targetResults = rankFiberResults(
+      rawResults,
+      targetRole,
+      targetCompany
+    );
 
     const similarCompanies: string[] = [];
     let similarResults: any[] = [];
 
-    if (rawResults.length < 5) {
+    // If we don't have enough strong profiles (after follower + role/company ranking),
+    // expand the search more aggressively across peer companies.
+    if (targetResults.length < 8) {
       const peers = await suggestPeerCompanies(
         targetRole,
         targetCompany,
@@ -495,7 +625,8 @@ export async function POST(req: NextRequest) {
         similarCompanies.push(peer);
         const more = await fiberPersonSearch(targetRole, peer, targetIndustry);
         rawResults = rawResults.concat(more);
-        similarResults = similarResults.concat(more);
+        const rankedMore = rankFiberResults(more, targetRole, peer);
+        similarResults = similarResults.concat(rankedMore);
       }
     }
 

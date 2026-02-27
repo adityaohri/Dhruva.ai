@@ -347,7 +347,6 @@ export async function POST(req: NextRequest) {
         color: rgb(1, 1, 1),
         borderColor: rgb(0.9, 0.9, 0.95),
         borderWidth: 1,
-        opacity: 0.96,
       });
 
       // Percentage label
