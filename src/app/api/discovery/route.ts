@@ -610,7 +610,7 @@ Do not include any explanatory text outside of this JSON.
     const textPart = completion.content.find(
       (c) => c.type === "text"
     ) as { type: "text"; text: string } | undefined;
-    const content = textPart?.text?.trim() || "";
+    let content = textPart?.text?.trim() || "";
     if (!content) {
       return NextResponse.json(
         { error: "Gap model returned no content." },
@@ -618,21 +618,54 @@ Do not include any explanatory text outside of this JSON.
       );
     }
 
-    // Claude is returning a JSON string that itself contains a JSON object.
-    // We parse in two layers: outer response, then inner object.
-    let gapAnalysis: any;
+    // Try to coerce whatever Claude returned into the expected JSON shape.
+    // We never hard‑fail; worst case we wrap the raw text as overallSummary.
+    const stripFences = (text: string) =>
+      text.replace(/```json/gi, "").replace(/```/g, "").trim();
+
+    content = stripFences(content);
+
+    let gapAnalysis: any = null;
+
+    // 1) Try parsing as-is
     try {
-      const first = JSON.parse(content);
-      if (typeof first === "string") {
-        gapAnalysis = JSON.parse(first);
-      } else {
-        gapAnalysis = first;
-      }
+      gapAnalysis = JSON.parse(content);
     } catch {
-      return NextResponse.json(
-        { error: "Gap model returned invalid JSON." },
-        { status: 500 }
-      );
+      // ignore
+    }
+
+    // 2) If it's a string that itself contains JSON, parse inner
+    if (typeof gapAnalysis === "string") {
+      try {
+        gapAnalysis = JSON.parse(stripFences(gapAnalysis));
+      } catch {
+        // ignore
+      }
+    }
+
+    // 3) If still not an object, try extracting between first/last { }
+    if (!gapAnalysis || typeof gapAnalysis !== "object") {
+      const firstBrace = content.indexOf("{");
+      const lastBrace = content.lastIndexOf("}");
+      if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+        const inner = content.slice(firstBrace, lastBrace + 1);
+        try {
+          gapAnalysis = JSON.parse(inner);
+        } catch {
+          // ignore
+        }
+      }
+    }
+
+    // 4) Final fallback: at least give the UI something structured
+    if (!gapAnalysis || typeof gapAnalysis !== "object") {
+      gapAnalysis = {
+        overallSummary: content,
+        trajectoryFit: "",
+        careerAnchors: [],
+        skillGaps: { missingTechnical: [], missingSoft: [] },
+        concreteActions: [],
+      };
     }
 
     return NextResponse.json({ gapAnalysis });
