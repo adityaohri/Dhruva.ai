@@ -39,6 +39,7 @@ export function DiscoverySection({ parsed }: DiscoverySectionProps) {
   const [error, setError] = useState<string | null>(null);
   const [downloadingReport, setDownloadingReport] = useState(false);
   const [showFullSummary, setShowFullSummary] = useState(false);
+  const [showFullTrajectory, setShowFullTrajectory] = useState(false);
 
   // Helper to aggressively normalise any JSON-like string into a structured object.
   const parsedGapAnalysis = useMemo(() => {
@@ -558,13 +559,21 @@ export function DiscoverySection({ parsed }: DiscoverySectionProps) {
                         Trajectory fit
                       </p>
                       {(() => {
-                        const text = String(
+                        const rawText = String(
                           parsedGapAnalysis.trajectoryFit ?? ""
-                        ).toLowerCase();
+                        ).trim();
+                        const textLower = rawText.toLowerCase();
                         let score = 60;
-                        if (text.includes("high")) score = 85;
-                        else if (text.includes("moderate")) score = 60;
-                        else if (text.includes("low")) score = 30;
+                        if (textLower.includes("high")) score = 85;
+                        else if (textLower.includes("moderate")) score = 60;
+                        else if (textLower.includes("low")) score = 30;
+
+                        const maxChars = 500;
+                        const isLong = rawText.length > maxChars;
+                        const visible =
+                          !isLong || showFullTrajectory
+                            ? rawText
+                            : rawText.slice(0, maxChars) + "…";
 
                         return (
                           <>
@@ -579,9 +588,20 @@ export function DiscoverySection({ parsed }: DiscoverySectionProps) {
                                 {score}% fit
                               </span>
                             </div>
-                            <p className="mt-1 text-[11px] text-slate-700">
-                              {parsedGapAnalysis.trajectoryFit}
+                            <p className="mt-1 text-[11px] text-slate-700 leading-relaxed">
+                              {visible}
                             </p>
+                            {isLong && (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setShowFullTrajectory((prev) => !prev)
+                                }
+                                className="mt-1 text-[11px] font-medium text-[#3C2A6A] hover:underline"
+                              >
+                                {showFullTrajectory ? "Show less" : "Read more"}
+                              </button>
+                            )}
                           </>
                         );
                       })()}
