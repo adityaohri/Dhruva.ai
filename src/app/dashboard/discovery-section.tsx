@@ -52,13 +52,18 @@ export function DiscoverySection({ parsed }: DiscoverySectionProps) {
 
       for (let i = 0; i < 3; i++) {
         if (typeof current === "string") {
-          const cleaned = stripFences(current);
-          if (cleaned.startsWith("{") && cleaned.includes("overallSummary")) {
-            try {
-              current = JSON.parse(cleaned);
-              continue;
-            } catch {
-              // fall through
+          let cleaned = stripFences(current);
+          if (cleaned.includes("overallSummary")) {
+            const firstBrace = cleaned.indexOf("{");
+            const lastBrace = cleaned.lastIndexOf("}");
+            if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+              const inner = cleaned.slice(firstBrace, lastBrace + 1);
+              try {
+                current = JSON.parse(inner);
+                continue;
+              } catch {
+                // fall through
+              }
             }
           }
         }
@@ -68,13 +73,18 @@ export function DiscoverySection({ parsed }: DiscoverySectionProps) {
           typeof current === "object" &&
           typeof (current as any).overallSummary === "string"
         ) {
-          const inner = stripFences((current as any).overallSummary);
-          if (inner.startsWith("{") && inner.includes("overallSummary")) {
-            try {
-              current = JSON.parse(inner);
-              continue;
-            } catch {
-              // fall through
+          let inner = stripFences((current as any).overallSummary);
+          if (inner.includes("overallSummary")) {
+            const firstBrace = inner.indexOf("{");
+            const lastBrace = inner.lastIndexOf("}");
+            if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+              const innerObj = inner.slice(firstBrace, lastBrace + 1);
+              try {
+                current = JSON.parse(innerObj);
+                continue;
+              } catch {
+                // fall through
+              }
             }
           }
         }
