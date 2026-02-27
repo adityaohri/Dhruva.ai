@@ -53,7 +53,7 @@ export async function POST(req: NextRequest) {
     };
 
   if (!gapAnalysis) {
-    return NextResponse.json(
+    return Response.json(
       { error: "gapAnalysis is required" },
       { status: 400 }
     );
