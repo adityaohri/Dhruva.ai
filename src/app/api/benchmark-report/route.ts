@@ -42,17 +42,47 @@ function safeStringArray(value: unknown): string[] {
 }
 
 /** Returns skillGaps shape with safe arrays. */
-function safeSkillGaps(value: unknown): { missingTechnical: { name: string; resourceUrl?: string }[]; missingSoft: string[] } {
+function safeSkillGaps(
+  value: unknown
+): { missingTechnical: { name: string; resourceUrl?: string }[]; missingSoft: string[] } {
   if (!value || typeof value !== "object") return { missingTechnical: [], missingSoft: [] };
   const o = value as Record<string, unknown>;
   const tech = Array.isArray(o.missingTechnical)
-    ? o.missingTechnical.map((t) => {
-        if (typeof t === "object" && t && "name" in t) return { name: String((t as any).name || ""), resourceUrl: typeof (t as any).resourceUrl === "string" ? (t as any).resourceUrl : undefined };
-        return { name: String(t), resourceUrl: undefined };
-      }).filter((t) => t.name)
+    ? o.missingTechnical
+        .map((t) => {
+          if (typeof t === "object" && t && "name" in t)
+            return {
+              name: String((t as any).name || ""),
+              resourceUrl:
+                typeof (t as any).resourceUrl === "string" ? (t as any).resourceUrl : undefined,
+            };
+          return { name: String(t), resourceUrl: undefined };
+        })
+        .filter((t) => t.name)
     : [];
   const soft = safeStringArray(o.missingSoft);
   return { missingTechnical: tech, missingSoft: soft };
+}
+
+type ParsedCareerAnchor = {
+  name: string;
+  value: number;
+  raw: string;
+};
+
+/** Extracts percentage + label from careerAnchors strings for visualisation. */
+function parseCareerAnchors(rawAnchors: string[]): ParsedCareerAnchor[] {
+  return rawAnchors.map((anchor, idx) => {
+    const match = anchor.match(/(\d+)\s*%/);
+    const value = match ? Number(match[1]) : 50;
+    const label = anchor.replace(match?.[0] ?? "", "").trim();
+    const safeValue = Number.isFinite(value) ? Math.max(0, Math.min(100, value)) : 50;
+    return {
+      name: label || `Anchor ${idx + 1}`,
+      value: safeValue,
+      raw: anchor,
+    };
+  });
 }
 
 function wrapText({
@@ -286,7 +316,98 @@ export async function POST(req: NextRequest) {
   const careerAnchorsList = safeStringArray(normalized.careerAnchors);
   if (careerAnchorsList.length) {
     drawSectionTitle("Career anchors");
-    drawBullets(careerAnchorsList);
+    const anchors = parseCareerAnchors(careerAnchorsList);
+
+    // Render as compact cards with percentage + mini progress bar,
+    // visually echoing the dashboard radial cards.
+    const columns = 3;
+    const gapX = 10;
+    const cardWidth = (maxWidth - gapX * (columns - 1)) / columns;
+    const cardHeight = 120;
+
+    let col = 0;
+    let rowTopY = cursorY;
+
+    for (const anchor of anchors) {
+      // Move to next row if needed
+      if (col === 0) {
+        ensureSpace(cardHeight + 20);
+        rowTopY = cursorY;
+      }
+
+      const x = marginX + col * (cardWidth + gapX);
+      const topY = rowTopY;
+      const bottomY = topY - cardHeight;
+
+      page.drawRectangle({
+        x,
+        y: bottomY,
+        width: cardWidth,
+        height: cardHeight,
+        color: rgb(1, 1, 1),
+        borderColor: rgb(0.9, 0.9, 0.95),
+        borderWidth: 1,
+        opacity: 0.96,
+      });
+
+      // Percentage label
+      const pctText = `${anchor.value}%`;
+      page.drawText(pctText, {
+        x: x + 12,
+        y: topY - 32,
+        size: 14,
+        font: bold,
+        color: rgb(0.235, 0.165, 0.415),
+      });
+
+      // Mini progress bar
+      const barX = x + 12;
+      const barY = topY - 50;
+      const barWidth = cardWidth - 24;
+      const barHeight = 6;
+      page.drawRectangle({
+        x: barX,
+        y: barY,
+        width: barWidth,
+        height: barHeight,
+        color: rgb(0.93, 0.93, 0.96),
+      });
+      page.drawRectangle({
+        x: barX,
+        y: barY,
+        width: (barWidth * anchor.value) / 100,
+        height: barHeight,
+        color: rgb(0.235, 0.165, 0.415),
+      });
+
+      // Anchor name (wrapped)
+      const nameLines = wrapText({
+        text: anchor.name,
+        font,
+        size: 9,
+        maxWidth: cardWidth - 24,
+      });
+      let textY = topY - 66;
+      for (const line of nameLines) {
+        page.drawText(line, {
+          x: x + 12,
+          y: textY,
+          size: 9,
+          font,
+          color: rgb(0.2, 0.2, 0.28),
+        });
+        textY -= 11;
+      }
+
+      col += 1;
+      if (col >= columns) {
+        col = 0;
+        cursorY = bottomY - 16;
+      }
+    }
+    if (col !== 0) {
+      cursorY = rowTopY - cardHeight - 16;
+    }
   }
 
   const skillGapsSafe = safeSkillGaps(normalized.skillGaps);
@@ -296,18 +417,161 @@ export async function POST(req: NextRequest) {
     const soft = skillGapsSafe.missingSoft;
     if (tech.length) {
       drawParagraph("Technical skills (with suggested resources):");
-      drawBullets(tech.map((s) => (s.resourceUrl ? `${s.name} — ${s.resourceUrl}` : s.name)));
+      // Render tech skills as pill-like chips to mirror the UI.
+      const maxX = marginX + maxWidth;
+      let pillX = marginX;
+      let pillY = cursorY;
+      const lineHeight = 18;
+
+      const ensureRowSpace = () => {
+        const p = ensureSpace(lineHeight + 8);
+        if (p !== page) {
+          pillX = marginX;
+          pillY = cursorY;
+        }
+      };
+
+      for (const s of tech) {
+        const label = s.name;
+        const textWidth = font.widthOfTextAtSize(label, 9);
+        const paddingX = 10;
+        const pillWidth = textWidth + paddingX * 2;
+        const pillHeight = 14;
+
+        if (pillX + pillWidth > maxX) {
+          // Wrap to next row
+          pillX = marginX;
+          pillY -= lineHeight;
+        }
+
+        ensureRowSpace();
+
+        page.drawRectangle({
+          x: pillX,
+          y: pillY - pillHeight,
+          width: pillWidth,
+          height: pillHeight,
+          color: rgb(1, 1, 1),
+          borderColor: rgb(0.235, 0.165, 0.415),
+          borderWidth: 0.7,
+        });
+
+        page.drawText(label, {
+          x: pillX + paddingX,
+          y: pillY - pillHeight + 3,
+          size: 9,
+          font,
+          color: rgb(0.235, 0.165, 0.415),
+        });
+
+        pillX += pillWidth + 6;
+      }
+
+      cursorY = pillY - lineHeight;
+
+      const anyUrls = tech.some((s) => !!s.resourceUrl);
+      if (anyUrls) {
+        drawParagraph(
+          "Tip: In your digital copy, click these skill areas to open the suggested learning resources."
+        );
+      }
     }
     if (soft.length) {
       drawParagraph("Soft skills:");
-      drawBullets(soft);
+      // Render soft skills as softer, filled pills.
+      const maxX = marginX + maxWidth;
+      let pillX = marginX;
+      let pillY = cursorY;
+      const lineHeight = 18;
+
+      const ensureRowSpaceSoft = () => {
+        const p = ensureSpace(lineHeight + 8);
+        if (p !== page) {
+          pillX = marginX;
+          pillY = cursorY;
+        }
+      };
+
+      for (const s of soft) {
+        const label = s;
+        const textWidth = font.widthOfTextAtSize(label, 9);
+        const paddingX = 10;
+        const pillWidth = textWidth + paddingX * 2;
+        const pillHeight = 14;
+
+        if (pillX + pillWidth > maxX) {
+          pillX = marginX;
+          pillY -= lineHeight;
+        }
+
+        ensureRowSpaceSoft();
+
+        page.drawRectangle({
+          x: pillX,
+          y: pillY - pillHeight,
+          width: pillWidth,
+          height: pillHeight,
+          color: rgb(0.93, 0.91, 0.97),
+          borderColor: rgb(0.235, 0.165, 0.415),
+          borderWidth: 0.4,
+        });
+
+        page.drawText(label, {
+          x: pillX + paddingX,
+          y: pillY - pillHeight + 3,
+          size: 9,
+          font,
+          color: rgb(0.235, 0.165, 0.415),
+        });
+
+        pillX += pillWidth + 6;
+      }
+
+      cursorY = pillY - lineHeight;
     }
   }
 
   const concreteActionsList = safeStringArray(normalized.concreteActions);
   if (concreteActionsList.length) {
     drawSectionTitle("Concrete actions");
-    drawBullets(concreteActionsList);
+    // Render as checklist-style items with small square boxes, echoing the
+    // structured action plan in the reference PDF.
+    for (const item of concreteActionsList) {
+      const lines = wrapText({
+        text: item,
+        font,
+        size: 10,
+        maxWidth: maxWidth - 16,
+      });
+
+      const requiredHeight = 14 * lines.length + 6;
+      ensureSpace(requiredHeight);
+
+      // Checkbox
+      page.drawRectangle({
+        x: marginX,
+        y: cursorY - 10,
+        width: 9,
+        height: 9,
+        borderColor: rgb(0.235, 0.165, 0.415),
+        borderWidth: 0.8,
+        color: rgb(1, 1, 1),
+      });
+
+      let textY = cursorY;
+      for (const line of lines) {
+        page.drawText(line, {
+          x: marginX + 14,
+          y: textY,
+          size: 10,
+          font,
+          color: rgb(0.15, 0.15, 0.18),
+        });
+        textY -= 12;
+      }
+
+      cursorY = textY - 4;
+    }
   }
 
   const pdfBytes = await pdfDoc.save();
