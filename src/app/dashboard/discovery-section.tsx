@@ -194,14 +194,17 @@ export function DiscoverySection({ parsed }: DiscoverySectionProps) {
   };
 
   const handleDownloadReport = async () => {
-    if (!gapAnalysis) return;
+    if (!gapAnalysis && !parsedGapAnalysis) return;
     setDownloadingReport(true);
     try {
       const res = await fetch("/api/benchmark-report", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          gapAnalysis,
+          // Prefer the fully parsed/normalised analysis so the PDF
+          // layout matches the on-screen cards instead of dumping any
+          // raw JSON strings that may exist in the original payload.
+          gapAnalysis: parsedGapAnalysis ?? gapAnalysis,
           targetRole,
           targetCompany,
           targetIndustry,
@@ -478,9 +481,30 @@ export function DiscoverySection({ parsed }: DiscoverySectionProps) {
                         Executive summary
                       </p>
                       {(() => {
-                        const raw = String(
+                        let raw = String(
                           parsedGapAnalysis.overallSummary ?? ""
                         ).trim();
+
+                        // Last-resort normalisation: if the "overallSummary"
+                        // itself contains a full JSON object (with keys like
+                        // overallSummary/trajectoryFit), peel that inner
+                        // object and use its own overallSummary string so the
+                        // UI never shows raw JSON blobs.
+                        if (raw.startsWith("{") && raw.includes("overallSummary")) {
+                          try {
+                            const inner = JSON.parse(raw);
+                            if (
+                              inner &&
+                              typeof inner === "object" &&
+                              typeof inner.overallSummary === "string"
+                            ) {
+                              raw = inner.overallSummary.trim();
+                            }
+                          } catch {
+                            // ignore and fall back to the original string
+                          }
+                        }
+
                         const maxChars = 700;
                         const isLong = raw.length > maxChars;
                         const visible =

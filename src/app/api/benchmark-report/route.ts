@@ -46,7 +46,7 @@ function wrapText({
 export async function POST(req: NextRequest) {
   const { gapAnalysis, targetRole, targetCompany, targetIndustry } =
     (await req.json()) as {
-      gapAnalysis?: GapAnalysis;
+      gapAnalysis?: GapAnalysis | string;
       targetRole?: string;
       targetCompany?: string;
       targetIndustry?: string;
@@ -57,6 +57,43 @@ export async function POST(req: NextRequest) {
       { error: "gapAnalysis is required" },
       { status: 400 }
     );
+  }
+
+  // Normalise any JSON-like string or nested "overallSummary" JSON so
+  // the PDF sections (overall summary, trajectory, anchors, skills)
+  // always render clean, human-readable text instead of raw blobs.
+  let normalized: GapAnalysis;
+  if (typeof gapAnalysis === "string") {
+    let cleaned = gapAnalysis.trim();
+    try {
+      normalized = JSON.parse(cleaned);
+    } catch {
+      if (cleaned.startsWith("{") && cleaned.includes("overallSummary")) {
+        try {
+          const firstBrace = cleaned.indexOf("{");
+          const lastBrace = cleaned.lastIndexOf("}");
+          const inner = cleaned.slice(firstBrace, lastBrace + 1);
+          normalized = JSON.parse(inner);
+        } catch {
+          normalized = { overallSummary: cleaned };
+        }
+      } else {
+        normalized = { overallSummary: cleaned };
+      }
+    }
+  } else {
+    normalized = { ...gapAnalysis };
+    const raw = normalized.overallSummary?.trim();
+    if (raw && raw.startsWith("{") && raw.includes("overallSummary")) {
+      try {
+        const inner = JSON.parse(raw);
+        if (inner && typeof inner === "object") {
+          normalized = inner;
+        }
+      } catch {
+        // keep best-effort structure
+      }
+    }
   }
 
   const pdfDoc = await PDFDocument.create();
@@ -200,19 +237,19 @@ export async function POST(req: NextRequest) {
   }
 
   drawSectionTitle("Overall summary");
-  drawParagraph(gapAnalysis.overallSummary);
+  drawParagraph(normalized.overallSummary);
 
   drawSectionTitle("Trajectory fit");
-  drawParagraph(gapAnalysis.trajectoryFit);
+  drawParagraph(normalized.trajectoryFit);
 
-  if (gapAnalysis.careerAnchors && gapAnalysis.careerAnchors.length) {
+  if (normalized.careerAnchors && normalized.careerAnchors.length) {
     drawSectionTitle("Career anchors");
-    drawBullets(gapAnalysis.careerAnchors);
+    drawBullets(normalized.careerAnchors);
   }
 
-  if (gapAnalysis.skillGaps) {
-    const tech = gapAnalysis.skillGaps.missingTechnical || [];
-    const soft = gapAnalysis.skillGaps.missingSoft || [];
+  if (normalized.skillGaps) {
+    const tech = normalized.skillGaps.missingTechnical || [];
+    const soft = normalized.skillGaps.missingSoft || [];
     if (tech.length || soft.length) {
       drawSectionTitle("Skill gaps");
 
@@ -231,9 +268,9 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  if (gapAnalysis.concreteActions && gapAnalysis.concreteActions.length) {
+  if (normalized.concreteActions && normalized.concreteActions.length) {
     drawSectionTitle("Concrete actions");
-    drawBullets(gapAnalysis.concreteActions);
+    drawBullets(normalized.concreteActions);
   }
 
   const pdfBytes = await pdfDoc.save();
