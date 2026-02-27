@@ -458,117 +458,18 @@ export async function POST(req: NextRequest) {
     const soft = skillGapsSafe.missingSoft;
     if (tech.length) {
       drawParagraph("Technical skills (with suggested resources):");
-      // Render tech skills as pill-like chips to mirror the UI.
-      const maxX = marginX + maxWidth;
-      let pillX = marginX;
-      let pillY = cursorY;
-      const lineHeight = 18;
-
-      const ensureRowSpace = () => {
-        const p = ensureSpace(lineHeight + 8);
-        if (p !== page) {
-          pillX = marginX;
-          pillY = cursorY;
-        }
-      };
-
-      for (const s of tech) {
-        const label = s.name;
-        const textWidth = font.widthOfTextAtSize(label, 9);
-        const paddingX = 10;
-        const pillWidth = textWidth + paddingX * 2;
-        const pillHeight = 14;
-
-        if (pillX + pillWidth > maxX) {
-          // Wrap to next row
-          pillX = marginX;
-          pillY -= lineHeight;
-        }
-
-        ensureRowSpace();
-
-        page.drawRectangle({
-          x: pillX,
-          y: pillY - pillHeight,
-          width: pillWidth,
-          height: pillHeight,
-          color: rgb(1, 1, 1),
-          borderColor: rgb(0.235, 0.165, 0.415),
-          borderWidth: 0.7,
-        });
-
-        page.drawText(label, {
-          x: pillX + paddingX,
-          y: pillY - pillHeight + 3,
-          size: 9,
-          font,
-          color: rgb(0.235, 0.165, 0.415),
-        });
-
-        pillX += pillWidth + 6;
-      }
-
-      cursorY = pillY - lineHeight;
-
-      const anyUrls = tech.some((s) => !!s.resourceUrl);
-      if (anyUrls) {
-        drawParagraph(
-          "Tip: In your digital copy, click these skill areas to open the suggested learning resources."
-        );
-      }
+      // Simpler, stable layout: one bullet per technical skill,
+      // with the resource URL shown as plain text beside the skill
+      // (avoids overlapping pills and keeps links visible).
+      const techItems = tech.map((s) =>
+        s.resourceUrl ? `${s.name} — ${s.resourceUrl}` : s.name
+      );
+      drawBullets(techItems);
     }
     if (soft.length) {
       drawParagraph("Soft skills:");
-      // Render soft skills as softer, filled pills.
-      const maxX = marginX + maxWidth;
-      let pillX = marginX;
-      let pillY = cursorY;
-      const lineHeight = 18;
-
-      const ensureRowSpaceSoft = () => {
-        const p = ensureSpace(lineHeight + 8);
-        if (p !== page) {
-          pillX = marginX;
-          pillY = cursorY;
-        }
-      };
-
-      for (const s of soft) {
-        const label = s;
-        const textWidth = font.widthOfTextAtSize(label, 9);
-        const paddingX = 10;
-        const pillWidth = textWidth + paddingX * 2;
-        const pillHeight = 14;
-
-        if (pillX + pillWidth > maxX) {
-          pillX = marginX;
-          pillY -= lineHeight;
-        }
-
-        ensureRowSpaceSoft();
-
-        page.drawRectangle({
-          x: pillX,
-          y: pillY - pillHeight,
-          width: pillWidth,
-          height: pillHeight,
-          color: rgb(0.93, 0.91, 0.97),
-          borderColor: rgb(0.235, 0.165, 0.415),
-          borderWidth: 0.4,
-        });
-
-        page.drawText(label, {
-          x: pillX + paddingX,
-          y: pillY - pillHeight + 3,
-          size: 9,
-          font,
-          color: rgb(0.235, 0.165, 0.415),
-        });
-
-        pillX += pillWidth + 6;
-      }
-
-      cursorY = pillY - lineHeight;
+      // Soft skills as a straightforward bullet list.
+      drawBullets(soft);
     }
   }
 
