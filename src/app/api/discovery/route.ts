@@ -618,79 +618,21 @@ Do not include any explanatory text outside of this JSON.
       );
     }
 
+    // Claude is returning a JSON string that itself contains a JSON object.
+    // We parse in two layers: outer response, then inner object.
     let gapAnalysis: any;
     try {
-      // First, try to parse the content directly as JSON.
-      gapAnalysis = JSON.parse(content);
-    } catch {
-      // Claude sometimes wraps JSON with prose or markdown fences.
-      // Try a series of fallbacks before giving up.
-      let cleaned = content.trim();
-
-      // Remove common markdown code fences like ```json ... ```
-      cleaned = cleaned.replace(/```json/gi, "").replace(/```/g, "").trim();
-
-      let parsed: any | null = null;
-
-      // Attempt to parse the cleaned string directly.
-      try {
-        parsed = JSON.parse(cleaned);
-      } catch {
-        // If that fails, try to extract the JSON object between the first and last braces.
-        const firstBrace = cleaned.indexOf("{");
-        const lastBrace = cleaned.lastIndexOf("}");
-        if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
-          const inner = cleaned.slice(firstBrace, lastBrace + 1);
-          try {
-            parsed = JSON.parse(inner);
-          } catch {
-            // ignore and fall through to final fallback
-          }
-        }
-      }
-
-      if (parsed) {
-        gapAnalysis = parsed;
+      const first = JSON.parse(content);
+      if (typeof first === "string") {
+        gapAnalysis = JSON.parse(first);
       } else {
-        // As a last resort, return a minimal structured object so the UI/PDF
-        // can still render something readable instead of an error.
-        gapAnalysis = {
-          overallSummary: cleaned,
-          trajectoryFit: "",
-          careerAnchors: [],
-          skillGaps: { missingTechnical: [], missingSoft: [] },
-          concreteActions: [],
-        };
+        gapAnalysis = first;
       }
-    }
-
-    // Normalise cases where the model double-encodes JSON:
-    // - whole response is a JSON string
-    // - or overallSummary itself contains the full JSON object as a string.
-    if (typeof gapAnalysis === "string") {
-      try {
-        const parsed = JSON.parse(gapAnalysis);
-        if (parsed && typeof parsed === "object") {
-          gapAnalysis = parsed;
-        }
-      } catch {
-        // leave as-is; UI will at least show text
-      }
-    }
-
-    if (
-      gapAnalysis &&
-      typeof gapAnalysis.overallSummary === "string" &&
-      gapAnalysis.overallSummary.trim().startsWith("{")
-    ) {
-      try {
-        const inner = JSON.parse(gapAnalysis.overallSummary);
-        if (inner && typeof inner === "object") {
-          gapAnalysis = inner;
-        }
-      } catch {
-        // keep existing structure
-      }
+    } catch {
+      return NextResponse.json(
+        { error: "Gap model returned invalid JSON." },
+        { status: 500 }
+      );
     }
 
     return NextResponse.json({ gapAnalysis });
