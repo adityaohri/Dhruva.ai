@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 import path from "path";
 import fs from "fs/promises";
@@ -220,12 +220,8 @@ export async function POST(req: NextRequest) {
   }
 
   const pdfBytes = await pdfDoc.save();
-  const pdfArrayBuffer = pdfBytes.buffer.slice(
-    pdfBytes.byteOffset,
-    pdfBytes.byteOffset + pdfBytes.byteLength
-  );
 
-  return new NextResponse(pdfArrayBuffer, {
+  return new Response(pdfBytes, {
     status: 200,
     headers: {
       "Content-Type": "application/pdf",
