@@ -607,10 +607,10 @@ Do not include any explanatory text outside of this JSON.
       ],
     });
 
-    const content = completion.content
-      .filter((c) => c.type === "text")
-      .map((c: any) => c.text)
-      .join(" ");
+    const textPart = completion.content.find(
+      (c) => c.type === "text"
+    ) as { type: "text"; text: string } | undefined;
+    const content = textPart?.text?.trim() || "";
     if (!content) {
       return NextResponse.json(
         { error: "Gap model returned no content." },
@@ -622,27 +622,10 @@ Do not include any explanatory text outside of this JSON.
     try {
       gapAnalysis = JSON.parse(content);
     } catch {
-      // Claude sometimes wraps JSON with extra prose or code fences.
-      const trimmed = content.trim();
-      const firstBrace = trimmed.indexOf("{");
-      const lastBrace = trimmed.lastIndexOf("}");
-      if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
-        try {
-          gapAnalysis = JSON.parse(trimmed.slice(firstBrace, lastBrace + 1));
-        } catch {
-          // fall through to safe fallback
-        }
-      }
-      if (!gapAnalysis) {
-        // As a last resort, wrap the raw text in a minimal, PDF-ready structure
-        gapAnalysis = {
-          overallSummary: trimmed,
-          trajectoryFit: "",
-          careerAnchors: [],
-          skillGaps: { missingTechnical: [], missingSoft: [] },
-          concreteActions: [],
-        };
-      }
+      return NextResponse.json(
+        { error: "Gap model returned invalid JSON." },
+        { status: 500 }
+      );
     }
 
     return NextResponse.json({ gapAnalysis });
