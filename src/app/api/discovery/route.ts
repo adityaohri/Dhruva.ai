@@ -613,7 +613,7 @@ Do not include any explanatory text outside of this JSON.
       .join(" ");
     if (!content) {
       return NextResponse.json(
-        { error: "OpenAI returned no content." },
+        { error: "Gap model returned no content." },
         { status: 500 }
       );
     }
@@ -622,10 +622,27 @@ Do not include any explanatory text outside of this JSON.
     try {
       gapAnalysis = JSON.parse(content);
     } catch {
-      return NextResponse.json(
-        { error: "OpenAI returned invalid JSON." },
-        { status: 500 }
-      );
+      // Claude sometimes wraps JSON with extra prose or code fences.
+      const trimmed = content.trim();
+      const firstBrace = trimmed.indexOf("{");
+      const lastBrace = trimmed.lastIndexOf("}");
+      if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+        try {
+          gapAnalysis = JSON.parse(trimmed.slice(firstBrace, lastBrace + 1));
+        } catch {
+          // fall through to safe fallback
+        }
+      }
+      if (!gapAnalysis) {
+        // As a last resort, wrap the raw text in a minimal, PDF-ready structure
+        gapAnalysis = {
+          overallSummary: trimmed,
+          trajectoryFit: "",
+          careerAnchors: [],
+          skillGaps: { missingTechnical: [], missingSoft: [] },
+          concreteActions: [],
+        };
+      }
     }
 
     return NextResponse.json({ gapAnalysis });
