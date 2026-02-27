@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   Card,
   CardHeader,
@@ -37,6 +37,7 @@ export function DiscoverySection({ parsed }: DiscoverySectionProps) {
   const [runningGap, setRunningGap] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [downloadingReport, setDownloadingReport] = useState(false);
+  const [showFullSummary, setShowFullSummary] = useState(false);
 
   const handleRun = async () => {
     if (!parsed) return;
@@ -393,39 +394,103 @@ export function DiscoverySection({ parsed }: DiscoverySectionProps) {
               )}
 
               {!runningGap && gapAnalysis && (
-                <div className="space-y-4 text-xs text-slate-800">
+                <div className="space-y-5 text-xs text-slate-800">
+                  {/* Executive summary */}
                   {gapAnalysis.overallSummary && (
-                    <section>
-                      <p className="font-medium text-slate-700">
-                        Overall summary
+                    <section className="space-y-1">
+                      <p className="font-serif text-sm font-semibold text-[#3C2A6A]">
+                        Executive summary
                       </p>
-                      <p className="mt-1">{gapAnalysis.overallSummary}</p>
+                      {(() => {
+                        const raw = String(
+                          gapAnalysis.overallSummary ?? ""
+                        ).trim();
+                        const maxChars = 700;
+                        const isLong = raw.length > maxChars;
+                        const visible =
+                          !isLong || showFullSummary
+                            ? raw
+                            : raw.slice(0, maxChars) + "…";
+                        return (
+                          <>
+                            <p className="mt-1 leading-relaxed text-slate-800">
+                              {visible}
+                            </p>
+                            {isLong && (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setShowFullSummary((prev) => !prev)
+                                }
+                                className="mt-1 text-[11px] font-medium text-[#3C2A6A] hover:underline"
+                              >
+                                {showFullSummary ? "Show less" : "Read more"}
+                              </button>
+                            )}
+                          </>
+                        );
+                      })()}
                     </section>
                   )}
 
+                  {/* Trajectory fit with horizontal scale */}
                   {gapAnalysis.trajectoryFit && (
-                    <section>
+                    <section className="space-y-1">
                       <p className="font-medium text-slate-700">
                         Trajectory fit
                       </p>
-                      <p className="mt-1">{gapAnalysis.trajectoryFit}</p>
+                      {(() => {
+                        const text = String(
+                          gapAnalysis.trajectoryFit ?? ""
+                        ).toLowerCase();
+                        let score = 60;
+                        if (text.includes("high")) score = 85;
+                        else if (text.includes("moderate")) score = 60;
+                        else if (text.includes("low")) score = 30;
+
+                        return (
+                          <>
+                            <div className="mt-1 flex items-center gap-3">
+                              <div className="h-1.5 flex-1 rounded-full bg-slate-200/80">
+                                <div
+                                  className="h-1.5 rounded-full bg-[#3C2A6A]"
+                                  style={{ width: `${score}%` }}
+                                />
+                              </div>
+                              <span className="text-[10px] text-slate-600">
+                                {score}% fit
+                              </span>
+                            </div>
+                            <p className="mt-1 text-[11px] text-slate-700">
+                              {gapAnalysis.trajectoryFit}
+                            </p>
+                          </>
+                        );
+                      })()}
                     </section>
                   )}
 
+                  {/* Career anchors */}
                   {Array.isArray(gapAnalysis.careerAnchors) &&
                     gapAnalysis.careerAnchors.length > 0 && (
-                      <section>
+                      <section className="space-y-2">
                         <p className="font-medium text-slate-700">
                           Career anchors
                         </p>
-                        <ul className="mt-1 list-disc list-inside">
+                        <div className="flex flex-wrap gap-2">
                           {gapAnalysis.careerAnchors.map((anchor: string) => (
-                            <li key={anchor}>{anchor}</li>
+                            <span
+                              key={anchor}
+                              className="rounded-full border border-[#3C2A6A]/20 bg-white/80 px-3 py-1 text-[11px] text-slate-800"
+                            >
+                              {anchor}
+                            </span>
                           ))}
-                        </ul>
+                        </div>
                       </section>
                     )}
 
+                  {/* Skill gaps */}
                   {gapAnalysis.skillGaps && (
                     <section className="space-y-2">
                       <p className="font-medium text-slate-700">
@@ -466,15 +531,22 @@ export function DiscoverySection({ parsed }: DiscoverySectionProps) {
                     </section>
                   )}
 
+                  {/* Concrete actions checklist */}
                   {Array.isArray(gapAnalysis.concreteActions) &&
                     gapAnalysis.concreteActions.length > 0 && (
-                      <section>
+                      <section className="space-y-2">
                         <p className="font-medium text-slate-700">
                           Concrete actions
                         </p>
-                        <ul className="mt-1 list-disc list-inside">
+                        <ul className="mt-1 space-y-1">
                           {gapAnalysis.concreteActions.map((r: string) => (
-                            <li key={r}>{r}</li>
+                            <li
+                              key={r}
+                              className="flex items-start gap-2 text-[11px]"
+                            >
+                              <span className="mt-[3px] inline-block h-3 w-3 rounded-[4px] border border-[#3C2A6A]/40 bg-white" />
+                              <span className="flex-1">{r}</span>
+                            </li>
                           ))}
                         </ul>
                       </section>
