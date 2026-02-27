@@ -491,17 +491,35 @@ export function DiscoverySection({ parsed }: DiscoverySectionProps) {
                         // object and use its own overallSummary string so the
                         // UI never shows raw JSON blobs.
                         if (raw.startsWith("{") && raw.includes("overallSummary")) {
+                          // First, try strict JSON parsing.
                           try {
                             const inner = JSON.parse(raw);
                             if (
                               inner &&
                               typeof inner === "object" &&
-                              typeof inner.overallSummary === "string"
+                              typeof (inner as any).overallSummary === "string"
                             ) {
-                              raw = inner.overallSummary.trim();
+                              raw = (inner as any).overallSummary.trim();
                             }
                           } catch {
-                            // ignore and fall back to the original string
+                            // If it's not valid JSON, fall back to a
+                            // best-effort regex that plucks the
+                            // "overallSummary" value from a JSON-like
+                            // blob. This keeps the UI readable even if
+                            // the model response is slightly malformed.
+                            const match = raw.match(
+                              /"overallSummary"\s*:\s*"([\s\S]*?)",\s*"(trajectoryFit|careerAnchors|skillGaps|concreteActions)"/
+                            );
+                            if (match?.[1]) {
+                              const unescaped = match[1]
+                                .replace(/\\"/g, '"')
+                                .replace(/\\n/g, " ")
+                                .replace(/\s+/g, " ")
+                                .trim();
+                              if (unescaped) {
+                                raw = unescaped;
+                              }
+                            }
                           }
                         }
 
