@@ -36,6 +36,7 @@ export function DiscoverySection({ parsed }: DiscoverySectionProps) {
   const [runningProfiles, setRunningProfiles] = useState(false);
   const [runningGap, setRunningGap] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [downloadingReport, setDownloadingReport] = useState(false);
 
   const handleRun = async () => {
     if (!parsed) return;
@@ -112,6 +113,40 @@ export function DiscoverySection({ parsed }: DiscoverySectionProps) {
     } finally {
       setRunningProfiles(false);
       setRunningGap(false);
+    }
+  };
+
+  const handleDownloadReport = async () => {
+    if (!gapAnalysis) return;
+    setDownloadingReport(true);
+    try {
+      const res = await fetch("/api/benchmark-report", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          gapAnalysis,
+          targetRole,
+          targetCompany,
+          targetIndustry,
+        }),
+      });
+      if (!res.ok) {
+        throw new Error("Failed to generate report");
+      }
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "profile-benchmarking-report.pdf";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (e) {
+      console.error(e);
+      alert("Could not download the report. Please try again.");
+    } finally {
+      setDownloadingReport(false);
     }
   };
 
@@ -331,6 +366,19 @@ export function DiscoverySection({ parsed }: DiscoverySectionProps) {
               <h3 className="font-serif text-sm font-semibold uppercase tracking-[0.18em] text-[#3C2A6A]">
                 Your gap analysis
               </h3>
+              <div className="mt-1">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="rounded-full border-[#3C2A6A]/30 bg-white/70 px-3 py-1 text-[11px] text-[#3C2A6A]"
+                  onClick={handleDownloadReport}
+                  disabled={!gapAnalysis || runningGap || downloadingReport}
+                >
+                  {downloadingReport
+                    ? "Preparing PDF…"
+                    : "Download benchmarking report (PDF)"}
+                </Button>
+              </div>
 
               {runningGap && (
                 <p className="text-xs text-slate-600">

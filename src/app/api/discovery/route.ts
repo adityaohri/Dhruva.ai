@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import OpenAI from "openai";
+import Anthropic from "@anthropic-ai/sdk";
 import { createClient } from "@/lib/supabase/server";
 
 type ExperienceEntry = {
@@ -32,9 +33,10 @@ type DiscoveryResult = {
 
 const cache = new Map<string, DiscoveryResult>();
 
-// Fiber AI & OpenAI keys
+// Fiber AI & model keys
 const FIBER_API_KEY = process.env.FIBER_API_KEY;
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
 
 const TECH_KEYWORDS = [
   "python",
@@ -509,14 +511,14 @@ export async function POST(req: NextRequest) {
       personal_impact: row.personal_impact,
     };
 
-    if (!OPENAI_API_KEY) {
+    if (!ANTHROPIC_API_KEY) {
       return NextResponse.json(
-        { error: "OPENAI_API_KEY is not configured." },
+        { error: "ANTHROPIC_API_KEY is not configured." },
         { status: 500 }
       );
     }
 
-    const client = new OpenAI({ apiKey: OPENAI_API_KEY });
+    const anthropic = new Anthropic({ apiKey: ANTHROPIC_API_KEY });
 
     const prompt = `
 You are an expert career coach.
@@ -579,30 +581,35 @@ Return ONLY a JSON object in the following shape:
 Do not include any explanatory text outside of this JSON.
 `;
 
-    const completion = await client.chat.completions.create({
-      model: "gpt-4o",
-      response_format: { type: "json_object" },
+    const completion = await anthropic.messages.create({
+      model: "claude-3-5-sonnet-20241022",
+      max_tokens: 2000,
       temperature: 0.3,
+      system: "You are an expert Career Coach.",
       messages: [
-        { role: "system", content: "You are an expert Career Coach." },
         {
           role: "user",
-          content: prompt,
-        },
-        {
-          role: "user",
-          content: JSON.stringify({
-            userProfile: userProfileSummary,
-            // Send full structured profiles (with roles, skills, education)
-            // so the model can make a truly data-driven comparison.
-            targetProfiles: profiles,
-            successPattern: pattern,
-          }),
+          content: [
+            { type: "text", text: prompt },
+            {
+              type: "text",
+              text: JSON.stringify({
+                userProfile: userProfileSummary,
+                // Send full structured profiles (with roles, skills, education)
+                // so the model can make a truly data-driven comparison.
+                targetProfiles: profiles,
+                successPattern: pattern,
+              }),
+            },
+          ],
         },
       ],
     });
 
-    const content = completion.choices[0]?.message?.content;
+    const content = completion.content
+      .filter((c) => c.type === "text")
+      .map((c: any) => c.text)
+      .join(" ");
     if (!content) {
       return NextResponse.json(
         { error: "OpenAI returned no content." },
