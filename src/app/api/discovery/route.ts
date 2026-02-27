@@ -582,8 +582,8 @@ Do not include any explanatory text outside of this JSON.
 `;
 
     const completion = await anthropic.messages.create({
-      // Use Claude Sonnet 4.6 as requested
-      model: "claude-sonnet-4.6",
+      // Use Claude Sonnet 4.6 (correct model ID)
+      model: "claude-sonnet-4-6",
       max_tokens: 2000,
       temperature: 0.3,
       system: "You are an expert Career Coach.",
