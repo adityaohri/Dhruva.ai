@@ -311,7 +311,49 @@ export async function POST(req: NextRequest) {
   drawParagraph(safeSectionText(normalized.overallSummary));
 
   drawSectionTitle("Trajectory fit");
-  drawParagraph(safeSectionText(normalized.trajectoryFit));
+  const trajectoryText = safeSectionText(normalized.trajectoryFit);
+  if (trajectoryText) {
+    // Derive a simple fit score from the text (mirrors the dashboard logic).
+    const lower = trajectoryText.toLowerCase();
+    let score = 60;
+    if (lower.includes("high") || lower.includes("strong")) score = 85;
+    else if (lower.includes("moderate")) score = 60;
+    else if (lower.includes("low") || lower.includes("weak")) score = 30;
+
+    const p = ensureSpace(30);
+    const barX = marginX;
+    const barY = cursorY - 8;
+    const barWidth = maxWidth;
+    const barHeight = 6;
+
+    // Background track
+    p.drawRectangle({
+      x: barX,
+      y: barY,
+      width: barWidth,
+      height: barHeight,
+      color: rgb(0.93, 0.93, 0.96),
+    });
+    // Filled portion showing fit percentage
+    p.drawRectangle({
+      x: barX,
+      y: barY,
+      width: (barWidth * score) / 100,
+      height: barHeight,
+      color: rgb(0.235, 0.165, 0.415),
+    });
+    // Numeric label on the right
+    p.drawText(`${score}% fit`, {
+      x: barX + barWidth - 48,
+      y: barY + 10,
+      size: 9,
+      font,
+      color: rgb(0.3, 0.3, 0.35),
+    });
+
+    cursorY -= 26;
+    drawParagraph(trajectoryText);
+  }
 
   const careerAnchorsList = safeStringArray(normalized.careerAnchors);
   if (careerAnchorsList.length) {
