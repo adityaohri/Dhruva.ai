@@ -200,7 +200,7 @@ export function DiscoverySection({ parsed }: DiscoverySectionProps) {
             {/* Left: target profiles list */}
             <div className="space-y-3 rounded-3xl border border-slate-200 bg-white/90 p-5 shadow-none">
               <h3 className="font-serif text-sm font-semibold uppercase tracking-[0.18em] text-[#3C2A6A]">
-                Target profiles (Fiber)
+                Target profiles
               </h3>
               <div className="mt-1 space-y-1 text-[10px] text-slate-600">
                 {companiesSearched.length > 0 && (

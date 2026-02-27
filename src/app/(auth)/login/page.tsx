@@ -178,9 +178,20 @@ function LoginForm() {
           )}
         </form>
         <CardFooter className="flex justify-center border-t pt-6">
-          <Link href="/" className="text-sm text-muted-foreground hover:underline">
-            ← Back to home
-          </Link>
+          <div className="flex flex-col items-center gap-2 text-sm text-muted-foreground">
+            <Link href="/" className="hover:underline">
+              ← Back to home
+            </Link>
+            <div>
+              Don&apos;t have an account?{" "}
+              <Link
+                href="/signup"
+                className="font-medium text-[#3C2A6A] hover:underline"
+              >
+                Sign up with email
+              </Link>
+            </div>
+          </div>
         </CardFooter>
       </Card>
     </div>
