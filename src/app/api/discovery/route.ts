@@ -389,6 +389,77 @@ function deriveSuccessPattern(
   };
 }
 
+/** Ensures gapAnalysis has no string field containing raw JSON (avoids wall of text in UI/PDF). */
+function normaliseGapAnalysis(raw: any): Record<string, unknown> {
+  const out: Record<string, unknown> = {
+    overallSummary: "",
+    trajectoryFit: "",
+    careerAnchors: [] as string[],
+    skillGaps: { missingTechnical: [], missingSoft: [] as string[] },
+    concreteActions: [] as string[],
+  };
+
+  const tryParseJsonString = (s: unknown): unknown => {
+    if (typeof s !== "string" || !s.trim().startsWith("{")) return s;
+    try {
+      return JSON.parse(s.replace(/^[\s\S]*?\{/, "{").replace(/\}[\s\S]*$/, "}"));
+    } catch {
+      return s;
+    }
+  };
+
+  const str = (v: unknown): string =>
+    typeof v === "string" ? v.trim() : v != null ? String(v) : "";
+
+  const parsed = tryParseJsonString(raw);
+  const obj = parsed && typeof parsed === "object" ? (parsed as Record<string, unknown>) : { overallSummary: str(raw) };
+
+  const overallStr = str(obj.overallSummary);
+  out.overallSummary = overallStr;
+  if (overallStr && overallStr.startsWith("{")) {
+    try {
+      const inner = JSON.parse(overallStr) as Record<string, unknown>;
+      if (inner.overallSummary != null) out.overallSummary = str(inner.overallSummary);
+        if (inner.trajectoryFit != null) out.trajectoryFit = str(inner.trajectoryFit);
+        if (Array.isArray(inner.careerAnchors)) out.careerAnchors = inner.careerAnchors.map((x) => str(x)).filter(Boolean);
+        if (inner.skillGaps && typeof inner.skillGaps === "object") {
+          const sg = inner.skillGaps as Record<string, unknown>;
+          const tech = Array.isArray(sg.missingTechnical)
+            ? sg.missingTechnical.map((t) =>
+                typeof t === "object" && t && "name" in t
+                  ? { name: str((t as any).name), resourceUrl: typeof (t as any).resourceUrl === "string" ? (t as any).resourceUrl : undefined }
+                  : { name: str(t), resourceUrl: undefined }
+              ).filter((t) => t.name)
+            : [];
+          out.skillGaps = { missingTechnical: tech, missingSoft: Array.isArray(sg.missingSoft) ? sg.missingSoft.map((x) => str(x)).filter(Boolean) : [] };
+        }
+        if (Array.isArray(inner.concreteActions)) out.concreteActions = inner.concreteActions.map((x) => str(x)).filter(Boolean);
+    } catch {
+      out.overallSummary = "Summary could not be parsed.";
+    }
+  }
+
+  if (!out.trajectoryFit) out.trajectoryFit = str(obj.trajectoryFit);
+  if (out.trajectoryFit && (out.trajectoryFit as string).startsWith("{")) out.trajectoryFit = "";
+
+  if (Array.isArray(obj.careerAnchors)) out.careerAnchors = obj.careerAnchors.map((x) => str(x)).filter(Boolean);
+  if (obj.skillGaps && typeof obj.skillGaps === "object") {
+    const sg = obj.skillGaps as Record<string, unknown>;
+    const tech = Array.isArray(sg.missingTechnical)
+      ? sg.missingTechnical.map((t) =>
+          typeof t === "object" && t && "name" in t
+            ? { name: str((t as any).name), resourceUrl: typeof (t as any).resourceUrl === "string" ? (t as any).resourceUrl : undefined }
+            : { name: str(t), resourceUrl: undefined }
+        ).filter((t) => t.name)
+      : [];
+    const soft = Array.isArray(sg.missingSoft) ? (sg.missingSoft as unknown[]).map((x) => str(x)).filter(Boolean) : [];
+    out.skillGaps = { missingTechnical: tech, missingSoft: soft };
+  }
+  if (Array.isArray(obj.concreteActions)) out.concreteActions = obj.concreteActions.map((x) => str(x)).filter(Boolean);
+
+  return out;
+}
+
 export async function POST(req: NextRequest) {
   const { targetRole, targetCompany, targetIndustry, phase } = await req.json();
 
@@ -521,64 +592,33 @@ export async function POST(req: NextRequest) {
     const anthropic = new Anthropic({ apiKey: ANTHROPIC_API_KEY });
 
     const prompt = `
-You are an expert career coach.
+You are an expert career coach. Your output will be parsed by code and shown in a structured report and PDF. You MUST return exactly one valid JSON object—no markdown, no code fences, no prose before or after.
 
-You will be given a JSON object with:
-- userProfile: the candidate's parsed CV summary,
-- targetProfiles: real-world Fiber profiles for the target role/company,
-- successPattern: aggregate metrics derived ONLY from those Fiber profiles
-  (common_previous_roles, top_skills_delta, avg_tenure_in_previous_step, impact_keyword_density).
+INPUT: You will receive a JSON object with:
+- userProfile: the candidate's parsed CV summary
+- targetProfiles: real-world Fiber profiles (with experience_history, skills, education) for the target role/company
+- successPattern: aggregate metrics from those profiles (common_previous_roles, top_skills_delta, avg_tenure_in_previous_step, impact_keyword_density)
 
-Your job is to produce a HOLISTIC, DATA-DRIVEN gap analysis.
+TASK: Produce a DATA-DRIVEN gap analysis. Every claim must be grounded in the input data. Use percentages and counts where possible (e.g. "12 of 20 profiles had X").
 
-DEEP PATTERN RECOGNITION:
-- Carefully scan the FULL work histories (experience_history) of ALL targetProfiles.
-- Look for \"career anchors\" such as:
-  - recurring internships or employers,
-  - recurring society/club roles (eg. Placement Cell, Consulting Club),
-  - recurring \"Golden Step\" roles (eg. Big 4, boutique consulting, product analytics) held just before the target role.
-- When you describe a pattern, make it QUANTITATIVE where possible, e.g.:
-  - \"around 70% (14/20) held a Junior Coordinator or higher role in a Tier-1 society\"
-  - \"about 60% (12/20) completed at least one finance or strategy internship\".
+OUTPUT FORMAT — You must return ONLY a single JSON object with these exact keys. Each value must be human-readable content (paragraphs or lists), NOT nested JSON or escaped strings:
 
-SKILL GAP + LEARNING RESOURCES:
-- Compare userProfile.skills against:
-  - successPattern.top_skills_delta and
-  - the most common skills inside targetProfiles.
-- For EVERY missing technical skill you report, also provide ONE high-quality learning resource URL.
-  - Prefer authoritative sources (Coursera, edX, official docs, or other well-known sites).
-  - Acceptable domains include: coursera.org, edx.org, udemy.com, kaggle.com, datacamp.com, openai.com, microsoft.com/learn, hubspot.com, and similar.
-  - If you are not certain of an exact deep link for a course, use a stable landing page for that provider (for example, the Coursera catalog page for that skill).
-  - NEVER invent random or obscure URLs; if unsure, point to a credible top-level or catalog page on a trusted provider rather than a made-up path.
+1) "overallSummary": One short paragraph (2–4 sentences) summarizing how the candidate compares to the target profiles. Plain English only. Example: "Your profile is strong in X; relative to 20 target profiles, Y is a gap. Z% had prior experience in W."
 
-STRICT RULES:
-- Base every statement STRICTLY on differences between userProfile and targetProfiles/successPattern.
-- Do NOT invent information that is not present in the input JSON.
-- If some part of the data is genuinely missing, say so explicitly (e.g. \"no GPA data in successPattern\"),
-  but still focus most of the analysis on what IS present.
-- Avoid generic career advice that could apply to anyone; ground each point in a concrete observation.
+2) "trajectoryFit": One short paragraph describing fit level (high/moderate/low) and why, with one concrete stat if possible. Plain English only. Example: "Moderate fit. About 65% of target profiles had a Big 4 or consulting internship before this role; your path is more product-focused."
 
-For CONCRETE ACTIONS:
-- Give 4–6 bullet points.
-- Each point must include at least ONE attainable example:
-  - either a specific type of company (eg. mid-market SaaS startup, Big 4 firm, boutique consulting firm, Tier-2 bank),
-  - or a concrete course/provider (eg. "Google Data Analytics on Coursera", "Wharton Business Foundations on Coursera").
-- Focus on options that are realistically reachable for an early-career candidate (not only FAANG / MBB).
+3) "careerAnchors": An array of 3–6 short strings. Each string is ONE quantified insight about the target cohort (e.g. "87% IIT/IIM or equivalent pedigree", "~70% had a Tier-1 society role", "~60% had at least one strategy or finance internship"). No JSON inside strings.
 
-Return ONLY a JSON object in the following shape:
+4) "skillGaps": An object with exactly two keys:
+   - "missingTechnical": Array of objects: { "name": "Skill name", "resourceUrl": "https://..." }. 3–8 skills the user lacks vs target profiles; each must have a real learning URL (Coursera, edX, Udemy, Kaggle, official docs, etc.). No invented or broken URLs.
+   - "missingSoft": Array of 2–5 short skill names (e.g. "Stakeholder communication", "Client presentation").
 
-{
-  "overallSummary": string,
-  "trajectoryFit": string,
-  "careerAnchors": string[],
-  "skillGaps": {
-    "missingTechnical": { "name": string, "resourceUrl": string }[],
-    "missingSoft": string[]
-  },
-  "concreteActions": string[]
-}
+5) "concreteActions": An array of 4–6 actionable bullet-point strings. Each must name a concrete step: company type, course name, or resource. Example: "Complete the Google Data Analytics certificate on Coursera." No nested JSON.
 
-Do not include any explanatory text outside of this JSON.
+CRITICAL:
+- Return ONLY the raw JSON object. No \`\`\`json\`\`\` or other markdown.
+- Do NOT put a full JSON object or escaped JSON inside any string field. Each field must be readable text or a proper array/object.
+- Populate ALL five top-level keys (overallSummary, trajectoryFit, careerAnchors, skillGaps, concreteActions). Empty arrays [] or short placeholder text are better than omitting a key or putting JSON inside a string.
 `;
 
     const completion = await anthropic.messages.create({
@@ -667,6 +707,9 @@ Do not include any explanatory text outside of this JSON.
         concreteActions: [],
       };
     }
+
+    // 5) Normalise: ensure no field is a string containing JSON (would show as wall of text in UI/PDF)
+    gapAnalysis = normaliseGapAnalysis(gapAnalysis);
 
     return NextResponse.json({ gapAnalysis });
   } catch (e: any) {

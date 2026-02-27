@@ -6,13 +6,54 @@ import fs from "fs/promises";
 type GapAnalysis = {
   overallSummary?: string;
   trajectoryFit?: string;
-  careerAnchors?: string[];
+  careerAnchors?: string[] | unknown;
   skillGaps?: {
-    missingTechnical?: { name: string; resourceUrl?: string }[];
-    missingSoft?: string[];
+    missingTechnical?: { name: string; resourceUrl?: string }[] | unknown;
+    missingSoft?: string[] | unknown;
   };
-  concreteActions?: string[];
+  concreteActions?: string[] | unknown;
 };
+
+/** Returns human-readable text only. Never returns raw JSON (avoids wall of text in PDF). */
+function safeSectionText(value: unknown): string {
+  const s = typeof value === "string" ? value.trim() : value != null ? String(value) : "";
+  if (!s) return "";
+  if (s.startsWith("{") && (s.includes("overallSummary") || s.includes("trajectoryFit"))) {
+    try {
+      const parsed = JSON.parse(s) as Record<string, unknown>;
+      const summary = parsed.overallSummary ?? parsed.trajectoryFit;
+      return typeof summary === "string" ? summary.trim() : "";
+    } catch {
+      return "";
+    }
+  }
+  return s;
+}
+
+/** Returns an array of strings; never raw JSON or mixed content. */
+function safeStringArray(value: unknown): string[] {
+  if (Array.isArray(value)) return value.map((x) => (typeof x === "string" ? x : x != null ? String(x) : "")).filter(Boolean);
+  if (typeof value === "string") {
+    const t = value.trim();
+    if (t.startsWith("[")) try { return (JSON.parse(t) as unknown[]).map((x) => String(x)).filter(Boolean); } catch { return []; }
+    return t ? [t] : [];
+  }
+  return [];
+}
+
+/** Returns skillGaps shape with safe arrays. */
+function safeSkillGaps(value: unknown): { missingTechnical: { name: string; resourceUrl?: string }[]; missingSoft: string[] } {
+  if (!value || typeof value !== "object") return { missingTechnical: [], missingSoft: [] };
+  const o = value as Record<string, unknown>;
+  const tech = Array.isArray(o.missingTechnical)
+    ? o.missingTechnical.map((t) => {
+        if (typeof t === "object" && t && "name" in t) return { name: String((t as any).name || ""), resourceUrl: typeof (t as any).resourceUrl === "string" ? (t as any).resourceUrl : undefined };
+        return { name: String(t), resourceUrl: undefined };
+      }).filter((t) => t.name)
+    : [];
+  const soft = safeStringArray(o.missingSoft);
+  return { missingTechnical: tech, missingSoft: soft };
+}
 
 function wrapText({
   text,
@@ -237,40 +278,36 @@ export async function POST(req: NextRequest) {
   }
 
   drawSectionTitle("Overall summary");
-  drawParagraph(normalized.overallSummary);
+  drawParagraph(safeSectionText(normalized.overallSummary));
 
   drawSectionTitle("Trajectory fit");
-  drawParagraph(normalized.trajectoryFit);
+  drawParagraph(safeSectionText(normalized.trajectoryFit));
 
-  if (normalized.careerAnchors && normalized.careerAnchors.length) {
+  const careerAnchorsList = safeStringArray(normalized.careerAnchors);
+  if (careerAnchorsList.length) {
     drawSectionTitle("Career anchors");
-    drawBullets(normalized.careerAnchors);
+    drawBullets(careerAnchorsList);
   }
 
-  if (normalized.skillGaps) {
-    const tech = normalized.skillGaps.missingTechnical || [];
-    const soft = normalized.skillGaps.missingSoft || [];
-    if (tech.length || soft.length) {
-      drawSectionTitle("Skill gaps");
-
-      if (tech.length) {
-        drawParagraph("Technical skills (with suggested resources):");
-        const techLines = tech.map((s) =>
-          s.resourceUrl ? `${s.name} — ${s.resourceUrl}` : s.name
-        );
-        drawBullets(techLines);
-      }
-
-      if (soft.length) {
-        drawParagraph("Soft skills:");
-        drawBullets(soft);
-      }
+  const skillGapsSafe = safeSkillGaps(normalized.skillGaps);
+  if (skillGapsSafe.missingTechnical.length || skillGapsSafe.missingSoft.length) {
+    drawSectionTitle("Skill gaps");
+    const tech = skillGapsSafe.missingTechnical;
+    const soft = skillGapsSafe.missingSoft;
+    if (tech.length) {
+      drawParagraph("Technical skills (with suggested resources):");
+      drawBullets(tech.map((s) => (s.resourceUrl ? `${s.name} — ${s.resourceUrl}` : s.name)));
+    }
+    if (soft.length) {
+      drawParagraph("Soft skills:");
+      drawBullets(soft);
     }
   }
 
-  if (normalized.concreteActions && normalized.concreteActions.length) {
+  const concreteActionsList = safeStringArray(normalized.concreteActions);
+  if (concreteActionsList.length) {
     drawSectionTitle("Concrete actions");
-    drawBullets(normalized.concreteActions);
+    drawBullets(concreteActionsList);
   }
 
   const pdfBytes = await pdfDoc.save();
