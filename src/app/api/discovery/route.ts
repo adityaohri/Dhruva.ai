@@ -664,6 +664,35 @@ Do not include any explanatory text outside of this JSON.
       }
     }
 
+    // Normalise cases where the model double-encodes JSON:
+    // - whole response is a JSON string
+    // - or overallSummary itself contains the full JSON object as a string.
+    if (typeof gapAnalysis === "string") {
+      try {
+        const parsed = JSON.parse(gapAnalysis);
+        if (parsed && typeof parsed === "object") {
+          gapAnalysis = parsed;
+        }
+      } catch {
+        // leave as-is; UI will at least show text
+      }
+    }
+
+    if (
+      gapAnalysis &&
+      typeof gapAnalysis.overallSummary === "string" &&
+      gapAnalysis.overallSummary.trim().startsWith("{")
+    ) {
+      try {
+        const inner = JSON.parse(gapAnalysis.overallSummary);
+        if (inner && typeof inner === "object") {
+          gapAnalysis = inner;
+        }
+      } catch {
+        // keep existing structure
+      }
+    }
+
     return NextResponse.json({ gapAnalysis });
   } catch (e: any) {
     console.error("[discovery] error:", e);

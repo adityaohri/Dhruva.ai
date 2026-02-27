@@ -60,8 +60,17 @@ export async function POST(req: NextRequest) {
   }
 
   const pdfDoc = await PDFDocument.create();
-  const page = pdfDoc.addPage([595.28, 841.89]);
-  const { width, height } = page.getSize();
+  let page = pdfDoc.addPage([595.28, 841.89]);
+  let { width, height } = page.getSize();
+
+  // Cream background similar to site (#FDFBF1)
+  page.drawRectangle({
+    x: 0,
+    y: 0,
+    width,
+    height,
+    color: rgb(0xfd / 255, 0xfb / 255, 0xf1 / 255),
+  });
 
   const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
   const bold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
@@ -99,9 +108,17 @@ export async function POST(req: NextRequest) {
 
   const ensureSpace = (needed: number) => {
     if (cursorY - needed < 60) {
-      const newPage = pdfDoc.addPage([595.28, 841.89]);
-      cursorY = newPage.getSize().height - 60;
-      return newPage;
+      // create a new page and reset background + cursor
+      page = pdfDoc.addPage([595.28, 841.89]);
+      ({ width, height } = page.getSize());
+      page.drawRectangle({
+        x: 0,
+        y: 0,
+        width,
+        height,
+        color: rgb(0xfd / 255, 0xfb / 255, 0xf1 / 255),
+      });
+      cursorY = height - 60;
     }
     return page;
   };
