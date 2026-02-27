@@ -220,9 +220,10 @@ export async function POST(req: NextRequest) {
   }
 
   const pdfBytes = await pdfDoc.save();
-  const pdfBlob = new Blob([pdfBytes], { type: "application/pdf" });
 
-  return new Response(pdfBlob, {
+  // Cast to any to satisfy BodyInit typing in this environment; at runtime
+  // Response happily accepts a Uint8Array as the body.
+  return new Response(pdfBytes as any, {
     status: 200,
     headers: {
       "Content-Type": "application/pdf",
