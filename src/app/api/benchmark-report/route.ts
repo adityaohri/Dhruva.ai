@@ -219,10 +219,10 @@ export async function POST(req: NextRequest) {
 
   const marginX = 40;
   const maxWidth = width - marginX * 2;
+  const bottomMargin = 70; // enough clearance so content never overlaps
 
   const ensureSpace = (needed: number) => {
-    if (cursorY - needed < 60) {
-      // create a new page and reset background + cursor
+    if (cursorY - needed < bottomMargin) {
       page = pdfDoc.addPage([595.28, 841.89]);
       ({ width, height } = page.getSize());
       drawBackground();
@@ -231,8 +231,14 @@ export async function POST(req: NextRequest) {
     return page;
   };
 
+  /** Extra gap before a new section so it never overlaps the previous block. */
+  const sectionGap = () => {
+    cursorY -= 20;
+  };
+
   const drawSectionTitle = (title: string) => {
-    const p = ensureSpace(30);
+    sectionGap();
+    const p = ensureSpace(36);
     p.drawText(title, {
       x: marginX,
       y: cursorY,
@@ -240,14 +246,14 @@ export async function POST(req: NextRequest) {
       font: bold,
       color: rgb(0.2, 0.2, 0.25),
     });
-    cursorY -= 18;
+    cursorY -= 22;
   };
 
   const drawParagraph = (text?: string) => {
     if (!text) return;
     const lines = wrapText({ text, font, size: 10, maxWidth });
     for (const line of lines) {
-      const p = ensureSpace(14);
+      const p = ensureSpace(15);
       p.drawText(line, {
         x: marginX,
         y: cursorY,
@@ -255,9 +261,9 @@ export async function POST(req: NextRequest) {
         font,
         color: rgb(0.15, 0.15, 0.18),
       });
-      cursorY -= 12;
+      cursorY -= 14;
     }
-    cursorY -= 4;
+    cursorY -= 8;
   };
 
   const drawBullets = (items?: string[]) => {
@@ -267,11 +273,11 @@ export async function POST(req: NextRequest) {
         text: item,
         font,
         size: 10,
-        maxWidth: maxWidth - 12,
+        maxWidth: maxWidth - 14,
       });
       for (let i = 0; i < lines.length; i++) {
         const prefix = i === 0 ? "• " : "  ";
-        const p = ensureSpace(14);
+        const p = ensureSpace(15);
         p.drawText(prefix + lines[i], {
           x: marginX,
           y: cursorY,
@@ -279,11 +285,11 @@ export async function POST(req: NextRequest) {
           font,
           color: rgb(0.15, 0.15, 0.18),
         });
-        cursorY -= 12;
+        cursorY -= 14;
       }
-      cursorY -= 2;
+      cursorY -= 10;
     }
-    cursorY -= 4;
+    cursorY -= 6;
   };
 
   const metaParts = [];
@@ -351,8 +357,9 @@ export async function POST(req: NextRequest) {
       color: rgb(0.3, 0.3, 0.35),
     });
 
-    cursorY -= 26;
+    cursorY -= 28;
     drawParagraph(trajectoryText);
+    cursorY -= 6;
   }
 
   const careerAnchorsList = safeStringArray(normalized.careerAnchors);
@@ -443,12 +450,13 @@ export async function POST(req: NextRequest) {
       col += 1;
       if (col >= columns) {
         col = 0;
-        cursorY = bottomY - 16;
+        cursorY = bottomY - 24;
       }
     }
     if (col !== 0) {
-      cursorY = rowTopY - cardHeight - 16;
+      cursorY = rowTopY - cardHeight - 24;
     }
+    cursorY -= 8;
   }
 
   const skillGapsSafe = safeSkillGaps(normalized.skillGaps);
@@ -458,6 +466,7 @@ export async function POST(req: NextRequest) {
     const soft = skillGapsSafe.missingSoft;
     if (tech.length) {
       drawParagraph("Technical skills (with suggested resources):");
+      cursorY -= 4;
       // Simpler, stable layout: one bullet per technical skill,
       // with the resource URL shown as plain text beside the skill
       // (avoids overlapping pills and keeps links visible).
@@ -465,9 +474,11 @@ export async function POST(req: NextRequest) {
         s.resourceUrl ? `${s.name} — ${s.resourceUrl}` : s.name
       );
       drawBullets(techItems);
+      cursorY -= 6;
     }
     if (soft.length) {
       drawParagraph("Soft skills:");
+      cursorY -= 4;
       // Soft skills as a straightforward bullet list.
       drawBullets(soft);
     }
@@ -486,7 +497,7 @@ export async function POST(req: NextRequest) {
         maxWidth: maxWidth - 16,
       });
 
-      const requiredHeight = 14 * lines.length + 6;
+      const requiredHeight = 16 * lines.length + 14;
       ensureSpace(requiredHeight);
 
       // Checkbox
@@ -509,10 +520,10 @@ export async function POST(req: NextRequest) {
           font,
           color: rgb(0.15, 0.15, 0.18),
         });
-        textY -= 12;
+        textY -= 14;
       }
 
-      cursorY = textY - 4;
+      cursorY = textY - 12;
     }
   }
 
