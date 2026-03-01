@@ -236,10 +236,17 @@ export async function POST(req: NextRequest) {
     cursorY -= 20;
   };
 
+  /** Title case for section headings (e.g. "Overall summary" -> "Overall Summary"). */
+  const toTitleCase = (s: string) =>
+    s
+      .split(/\s+/)
+      .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+      .join(" ");
+
   const drawSectionTitle = (title: string) => {
     sectionGap();
     const p = ensureSpace(36);
-    p.drawText(title, {
+    p.drawText(toTitleCase(title), {
       x: marginX,
       y: cursorY,
       size: 12,
@@ -313,10 +320,10 @@ export async function POST(req: NextRequest) {
     cursorY -= 8;
   }
 
-  drawSectionTitle("Overall summary");
+  drawSectionTitle("Overall Summary");
   drawParagraph(safeSectionText(normalized.overallSummary));
 
-  drawSectionTitle("Trajectory fit");
+  drawSectionTitle("Trajectory Fit");
   const trajectoryText = safeSectionText(normalized.trajectoryFit);
   if (trajectoryText) {
     // Use the same logic as the website: only "high" / "moderate" / "low"
@@ -365,7 +372,7 @@ export async function POST(req: NextRequest) {
 
   const careerAnchorsList = safeStringArray(normalized.careerAnchors);
   if (careerAnchorsList.length) {
-    drawSectionTitle("Career anchors");
+    drawSectionTitle("Career Anchors");
     const anchors = parseCareerAnchors(careerAnchorsList);
     const columns = 3;
     const gapX = 10;
@@ -373,7 +380,7 @@ export async function POST(req: NextRequest) {
     const lineHeight = 10;
     const headerH = 56; // space for pct + bar + gap
 
-    // Pre-compute wrapped name lines and card height per anchor so boxes fit content.
+    // Pre-compute wrapped name lines and card height per anchor so boxes fit all text.
     const anchorData = anchors.map((anchor) => {
       const nameLines = wrapText({
         text: anchor.name,
@@ -381,8 +388,8 @@ export async function POST(req: NextRequest) {
         size: 9,
         maxWidth: cardWidth - 24,
       });
-      const textH = Math.min(nameLines.length * lineHeight, 60);
-      const cardHeight = headerH + textH + 14;
+      const textH = nameLines.length * lineHeight;
+      const cardHeight = headerH + textH + 16;
       return { anchor, nameLines, cardHeight };
     });
 
@@ -446,7 +453,6 @@ export async function POST(req: NextRequest) {
 
       let textY = topY - 66;
       for (const line of nameLines) {
-        if (textY - lineHeight < bottomY + 8) break;
         page.drawText(line, {
           x: x + 12,
           y: textY,
@@ -471,7 +477,7 @@ export async function POST(req: NextRequest) {
 
   const skillGapsSafe = safeSkillGaps(normalized.skillGaps);
   if (skillGapsSafe.missingTechnical.length || skillGapsSafe.missingSoft.length) {
-    drawSectionTitle("Skill gaps");
+    drawSectionTitle("Skill Gaps");
     const tech = skillGapsSafe.missingTechnical;
     const soft = skillGapsSafe.missingSoft;
     if (tech.length) {
@@ -496,7 +502,7 @@ export async function POST(req: NextRequest) {
 
   const concreteActionsList = safeStringArray(normalized.concreteActions);
   if (concreteActionsList.length) {
-    drawSectionTitle("Concrete actions");
+    drawSectionTitle("Concrete Actions");
     // Render as checklist-style items with small square boxes, echoing the
     // structured action plan in the reference PDF.
     for (const item of concreteActionsList) {

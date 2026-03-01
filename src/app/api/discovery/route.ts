@@ -66,7 +66,7 @@ function estimateFiberCost(numResults: number): number {
 
 async function fiberPersonSearch(
   targetRole: string,
-  targetCompany: string,
+  targetCompany?: string,
   targetIndustry?: string,
   pageSize: number = 15
 ): Promise<any[]> {
@@ -76,15 +76,14 @@ async function fiberPersonSearch(
 
   const url = "https://api.fiber.ai/v1/people-search";
 
-  // Industry alignment: use provided industry or infer from company name
-  // (e.g. Apple -> Technology, McKinsey -> Management Consulting).
+  const company = targetCompany?.trim();
   const industry =
     targetIndustry?.trim() ||
-    inferIndustryFromCompany(targetCompany);
-  const keywords = [targetRole.trim()];
+    (company ? inferIndustryFromCompany(company) : undefined);
+  const keywords = [targetRole.trim()].filter(Boolean);
   if (industry) keywords.push(industry);
 
-  const body = {
+  const body: Record<string, unknown> = {
     apiKey: FIBER_API_KEY,
     searchParams: {
       getDetailedWorkExperience: true,
@@ -93,10 +92,13 @@ async function fiberPersonSearch(
     },
     pageSize,
     cursor: null,
-    currentCompanies: [{ name: targetCompany }],
     prospectExclusionListIDs: [],
     companyExclusionListIDs: [],
   };
+
+  if (company) {
+    (body as any).currentCompanies = [{ name: company }];
+  }
 
   const resp = await fetch(url, {
     method: "POST",
@@ -702,61 +704,71 @@ function normaliseGapAnalysis(raw: any): Record<string, unknown> {
 export async function POST(req: NextRequest) {
   const { targetRole, targetCompany, targetIndustry, phase } = await req.json();
 
-  if (!targetRole || !targetCompany) {
+  const hasIndustry = !!targetIndustry?.trim();
+  const hasRoleAndCompany =
+    !!targetRole?.trim() && !!targetCompany?.trim();
+  if (!hasIndustry && !hasRoleAndCompany) {
     return NextResponse.json(
-      { error: "targetRole and targetCompany are required" },
+      {
+        error:
+          "Provide either a target industry, or both target role and target company.",
+      },
       { status: 400 }
     );
   }
 
   const mode = (phase as "fiber" | "gap" | undefined) ?? "fiber";
-  const key = `${targetCompany}::${targetRole}`.toLowerCase();
 
   try {
-    // Normalise inputs: correct minor typos so "Apple" is not confused with "Good Apple"
-    const correctedCompany = correctCompanyNameTypo(targetCompany);
-    const correctedRole = targetRole.trim().replace(/\s+/g, " ");
+    const companyInput = targetCompany?.trim() ?? "";
+    const correctedCompany = companyInput
+      ? correctCompanyNameTypo(companyInput)
+      : "";
+    const correctedRole = (targetRole?.trim() ?? "").replace(/\s+/g, " ");
     const resolvedIndustry =
-      targetIndustry?.trim() || inferIndustryFromCompany(correctedCompany);
+      targetIndustry?.trim() ||
+      (correctedCompany ? inferIndustryFromCompany(correctedCompany) : undefined);
 
     let rawResults = await fiberPersonSearch(
-      correctedRole,
-      correctedCompany,
+      correctedRole || "professional",
+      correctedCompany || undefined,
       resolvedIndustry || undefined
     );
 
-    // Exact entity matching: keep only profiles whose current company is the
-    // intended entity (e.g. Apple Inc.), not a different one (e.g. Good Apple).
-    rawResults = rawResults.filter((raw) =>
-      isExactCompanyMatch(getCurrentCompanyName(raw), correctedCompany)
-    );
+    if (correctedCompany) {
+      rawResults = rawResults.filter((raw) =>
+        isExactCompanyMatch(getCurrentCompanyName(raw), correctedCompany)
+      );
+    }
 
     const targetResults = rankFiberResults(
       rawResults,
-      correctedRole,
-      correctedCompany
+      correctedRole || "professional",
+      correctedCompany || ""
     );
 
     const similarCompanies: string[] = [];
     let similarResults: any[] = [];
 
-    // If we don't have enough strong profiles (after follower + role/company ranking),
-    // expand the search more aggressively across peer companies.
-    if (targetResults.length < 8) {
+    if (correctedCompany && targetResults.length < 8) {
       const peers = await suggestPeerCompanies(
-        correctedRole,
+        correctedRole || "professional",
         correctedCompany,
         resolvedIndustry || undefined
       );
       for (const peer of peers) {
         similarCompanies.push(peer);
         const more = await fiberPersonSearch(
-          correctedRole,
+          correctedRole || "professional",
           peer,
           resolvedIndustry || undefined
         );
         rawResults = rawResults.concat(more);
-        const rankedMore = rankFiberResults(more, correctedRole, peer);
+        const rankedMore = rankFiberResults(
+          more,
+          correctedRole || "professional",
+          peer
+        );
         similarResults = similarResults.concat(rankedMore);
       }
     }
@@ -785,8 +797,13 @@ export async function POST(req: NextRequest) {
     });
 
     if (mode === "fiber") {
+      const companiesSearched = correctedCompany
+        ? [targetCompany?.trim() || correctedCompany]
+        : resolvedIndustry
+          ? [`Industry: ${resolvedIndustry}`]
+          : [];
       return NextResponse.json({
-        companiesSearched: [targetCompany],
+        companiesSearched,
         similarCompanies,
         targetProfiles: targetPublicProfiles.slice(0, 15),
         similarProfiles: similarPublicProfiles.slice(0, 15),
@@ -796,7 +813,11 @@ export async function POST(req: NextRequest) {
     // ---- Gap analysis phase ----
 
     const profiles = rawResults.map(mapFiberProfile);
-    const pattern = deriveSuccessPattern(profiles, targetRole, targetCompany);
+    const pattern = deriveSuccessPattern(
+      profiles,
+      correctedRole || "professional",
+      correctedCompany || ""
+    );
 
     // Load current user's saved profile from Supabase
     const supabase = await createClient();

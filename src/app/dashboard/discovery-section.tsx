@@ -26,9 +26,9 @@ interface DiscoverySectionProps {
 }
 
 export function DiscoverySection({ parsed }: DiscoverySectionProps) {
-  const [targetRole, setTargetRole] = useState("Business Analyst");
-  const [targetCompany, setTargetCompany] = useState("McKinsey & Company");
-  const [targetIndustry, setTargetIndustry] = useState("Management Consulting");
+  const [targetRole, setTargetRole] = useState("");
+  const [targetCompany, setTargetCompany] = useState("");
+  const [targetIndustry, setTargetIndustry] = useState("");
   const [targetProfiles, setTargetProfiles] = useState<PublicProfile[]>([]);
   const [similarProfiles, setSimilarProfiles] = useState<PublicProfile[]>([]);
   const [companiesSearched, setCompaniesSearched] = useState<string[]>([]);
@@ -285,7 +285,7 @@ export function DiscoverySection({ parsed }: DiscoverySectionProps) {
               id="target-industry"
               value={targetIndustry}
               onChange={(e) => setTargetIndustry(e.target.value)}
-              placeholder="e.g. Management consulting"
+              placeholder="e.g. Management Consulting"
               className="h-9 rounded-full border border-[#3C2A6A]/15 bg-[#FDFBF1] text-sm focus-visible:ring-[#3C2A6A]"
             />
           </div>
@@ -293,7 +293,12 @@ export function DiscoverySection({ parsed }: DiscoverySectionProps) {
 
         <Button
           onClick={handleRun}
-          disabled={runningProfiles || runningGap || !parsed}
+          disabled={
+            runningProfiles ||
+            runningGap ||
+            !parsed ||
+            (!targetIndustry?.trim() && !targetRole?.trim() && !targetCompany?.trim())
+          }
           className="mt-1 rounded-full bg-[#3C2A6A] px-5 py-2 text-xs font-medium text-[#FDFBF1] shadow-none transition-transform hover:-translate-y-0.5 hover:bg-[#4a347f] disabled:opacity-60"
         >
           {runningProfiles || runningGap
