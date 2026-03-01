@@ -74,36 +74,26 @@ async function fiberPersonSearch(
     throw new Error("FIBER_API_KEY is not configured.");
   }
 
-  // Fiber people search endpoint
   const url = "https://api.fiber.ai/v1/people-search";
 
-  // We:
-  // - pass the API key in the body (per Fiber docs),
-  // - filter by currentCompanies (target company, as object),
-  // - and use keywords.containsAny for the target role text,
-  // - request detailed work experience so the Golden Step logic has richer data.
+  // Industry alignment: use provided industry or infer from company name
+  // (e.g. Apple -> Technology, McKinsey -> Management Consulting).
+  const industry =
+    targetIndustry?.trim() ||
+    inferIndustryFromCompany(targetCompany);
+  const keywords = [targetRole.trim()];
+  if (industry) keywords.push(industry);
+
   const body = {
     apiKey: FIBER_API_KEY,
     searchParams: {
       getDetailedWorkExperience: true,
-      // Restrict people search to India using Fiber's
-      // country3LetterCode.anyOf filter.
-      country3LetterCode: {
-        anyOf: ["IND"],
-      },
-      keywords: {
-        containsAny: targetIndustry
-          ? [targetRole, targetIndustry]
-          : [targetRole],
-      },
+      country3LetterCode: { anyOf: ["IND"] },
+      keywords: { containsAny: keywords },
     },
     pageSize,
     cursor: null,
-    currentCompanies: [
-      {
-        name: targetCompany,
-      },
-    ],
+    currentCompanies: [{ name: targetCompany }],
     prospectExclusionListIDs: [],
     companyExclusionListIDs: [],
   };
@@ -187,6 +177,90 @@ function normaliseCompanyName(name: string): string {
     .trim();
 }
 
+/** Levenshtein distance for fuzzy matching (e.g. minor spelling). */
+function levenshtein(a: string, b: string): number {
+  const an = a.length;
+  const bn = b.length;
+  const d: number[][] = Array(an + 1)
+    .fill(null)
+    .map(() => Array(bn + 1).fill(0));
+  for (let i = 0; i <= an; i++) d[i][0] = i;
+  for (let j = 0; j <= bn; j++) d[0][j] = j;
+  for (let i = 1; i <= an; i++) {
+    for (let j = 1; j <= bn; j++) {
+      d[i][j] = Math.min(
+        d[i - 1][j] + 1,
+        d[i][j - 1] + 1,
+        d[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1)
+      );
+    }
+  }
+  return d[an][bn];
+}
+
+/** Correct common company/role typos so search and matching align. */
+function correctCompanyNameTypo(input: string): string {
+  const t = input.trim().replace(/\s+/g, " ");
+  const lower = t.toLowerCase();
+  const known: Record<string, string> = {
+    appel: "Apple",
+    mckinsey: "McKinsey",
+    mckinseyandcompany: "McKinsey & Company",
+    goldmansacks: "Goldman Sachs",
+    goldman: "Goldman Sachs",
+    google: "Google",
+    microsoft: "Microsoft",
+    amazon: "Amazon",
+    meta: "Meta",
+    bcg: "BCG",
+    bain: "Bain",
+    deloitte: "Deloitte",
+    accenture: "Accenture",
+    kpmg: "KPMG",
+    ey: "EY",
+    jpmorgan: "JPMorgan",
+    morganstanley: "Morgan Stanley",
+  };
+  const normalized = lower.replace(/[.,&\s]/g, "");
+  if (known[normalized]) return known[normalized];
+  return t;
+}
+
+/** Infer industry from company name when user does not specify. */
+function inferIndustryFromCompany(company: string): string | undefined {
+  const n = normaliseCompanyName(company);
+  if (/apple|google|microsoft|meta|amazon|adobe|oracle|ibm|intel|samsung|tech|software/.test(n))
+    return "Technology";
+  if (/mckinsey|bcg|bain|deloitte|accenture|kpmg|ey|consulting|strategy/.test(n))
+    return "Management Consulting";
+  if (/goldman|jpmorgan|morgan.?stanley|bank|investment|finance|blackstone/.test(n))
+    return "Financial Services";
+  if (/zomato|swiggy|uber|ola|consumer|retail/.test(n)) return "Consumer";
+  return undefined;
+}
+
+/**
+ * Exact entity match: profile company must be the intended entity, not a
+ * different one that merely contains the name (e.g. "Apple" vs "Good Apple").
+ * Also allow minor spelling variance (e.g. "Appel" vs "Apple").
+ */
+function isExactCompanyMatch(
+  profileCompany: string,
+  userTargetCompany: string
+): boolean {
+  const normProfile = normaliseCompanyName(profileCompany);
+  const normUser = normaliseCompanyName(userTargetCompany);
+  if (!normProfile || !normUser) return false;
+  // Exact or prefix match: "Apple" matches "Apple" and "Apple Inc", not "Good Apple".
+  if (normProfile === normUser) return true;
+  if (normProfile.startsWith(normUser + " ")) return true;
+  // Allow single-token typo: e.g. "appel" vs "apple" (edit distance <= 2).
+  if (normUser.length <= 20 && normProfile.length <= 20 && levenshtein(normProfile, normUser) <= 2)
+    return true;
+  if (normProfile.startsWith(normUser) && normProfile.length <= normUser.length + 4) return true;
+  return false;
+}
+
 function deriveParentCompanyName(name: string): string | null {
   const lower = name.toLowerCase();
   const splitByAmp = lower.split("&")[0]?.trim();
@@ -223,6 +297,27 @@ function getCurrentCompanyName(raw: any): string {
   return "";
 }
 
+/** Years in current (first) role; null if unknown. Used for credibility (prefer 1+ year). */
+function getTenureInCurrentRole(raw: any): number | null {
+  const experiencesRaw =
+    raw.experience || raw.experiences || raw.employment_history || [];
+  if (!Array.isArray(experiencesRaw) || experiencesRaw.length === 0) return null;
+  const exp = experiencesRaw[0];
+  if (!exp) return null;
+  const start =
+    exp.start_date || exp.starts_at || exp.start_date_iso || null;
+  if (!start) return null;
+  const startDate = new Date(start);
+  if (Number.isNaN(startDate.getTime())) return null;
+  const end = exp.end_date || exp.ends_at || exp.end_date_iso || null;
+  const endDate = end ? new Date(end) : new Date();
+  if (Number.isNaN(endDate.getTime())) return null;
+  const years =
+    (endDate.getTime() - startDate.getTime()) /
+    (1000 * 60 * 60 * 24 * 365.25);
+  return Math.max(0, years);
+}
+
 function rankFiberResults(
   rawResults: any[],
   targetRole: string,
@@ -236,7 +331,7 @@ function rankFiberResults(
   const roleLower = targetRole.toLowerCase();
 
   const scored = rawResults.map((raw) => {
-    const followers = getFollowerCount(raw);
+    const connections = getFollowerCount(raw);
     const companyName = getCurrentCompanyName(raw);
     const normCompany = normaliseCompanyName(companyName);
 
@@ -252,24 +347,27 @@ function rankFiberResults(
     ).toLowerCase();
     const roleMatch = !!roleLower && headline.includes(roleLower);
 
+    const tenureYears = getTenureInCurrentRole(raw);
+    const meaningfulTenure = tenureYears !== null && tenureYears >= 1;
+
     let score = 0;
-    if (followers >= 500) score += 10;
-    else score += followers / 1000;
+    if (connections >= 500) score += 10;
+    else score += connections / 1000;
     if (companyMatch) score += 5;
     if (parentMatch) score += 3;
     if (roleMatch) score += 4;
+    if (meaningfulTenure) score += 3;
 
     return {
       raw,
       score,
-      followers,
+      followers: connections,
       companyMatch,
       parentMatch,
       roleMatch,
     };
   });
 
-  // Prefer profiles with at least 500 followers; if none, fall back to all.
   let filtered = scored.filter((s) => s.followers >= 500);
   if (!filtered.length) filtered = scored;
 
@@ -615,16 +713,28 @@ export async function POST(req: NextRequest) {
   const key = `${targetCompany}::${targetRole}`.toLowerCase();
 
   try {
-    // Always run Fiber search first
+    // Normalise inputs: correct minor typos so "Apple" is not confused with "Good Apple"
+    const correctedCompany = correctCompanyNameTypo(targetCompany);
+    const correctedRole = targetRole.trim().replace(/\s+/g, " ");
+    const resolvedIndustry =
+      targetIndustry?.trim() || inferIndustryFromCompany(correctedCompany);
+
     let rawResults = await fiberPersonSearch(
-      targetRole,
-      targetCompany,
-      targetIndustry
+      correctedRole,
+      correctedCompany,
+      resolvedIndustry || undefined
     );
+
+    // Exact entity matching: keep only profiles whose current company is the
+    // intended entity (e.g. Apple Inc.), not a different one (e.g. Good Apple).
+    rawResults = rawResults.filter((raw) =>
+      isExactCompanyMatch(getCurrentCompanyName(raw), correctedCompany)
+    );
+
     const targetResults = rankFiberResults(
       rawResults,
-      targetRole,
-      targetCompany
+      correctedRole,
+      correctedCompany
     );
 
     const similarCompanies: string[] = [];
@@ -634,15 +744,19 @@ export async function POST(req: NextRequest) {
     // expand the search more aggressively across peer companies.
     if (targetResults.length < 8) {
       const peers = await suggestPeerCompanies(
-        targetRole,
-        targetCompany,
-        targetIndustry
+        correctedRole,
+        correctedCompany,
+        resolvedIndustry || undefined
       );
       for (const peer of peers) {
         similarCompanies.push(peer);
-        const more = await fiberPersonSearch(targetRole, peer, targetIndustry);
+        const more = await fiberPersonSearch(
+          correctedRole,
+          peer,
+          resolvedIndustry || undefined
+        );
         rawResults = rawResults.concat(more);
-        const rankedMore = rankFiberResults(more, targetRole, peer);
+        const rankedMore = rankFiberResults(more, correctedRole, peer);
         similarResults = similarResults.concat(rankedMore);
       }
     }
