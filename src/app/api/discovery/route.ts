@@ -168,8 +168,13 @@ async function scrapingdogGoogleSearch(
   const url = `${SCRAPINGDOG_GOOGLE}/?${params.toString()}`;
   const resp = await fetch(url, { cache: "no-store" });
   if (!resp.ok) throw new Error(`Scrapingdog Google error ${resp.status}`);
-  const data = (await resp.json()) as { organic_data?: { link?: string }[] };
-  const list = data.organic_data || [];
+  const data = (await resp.json()) as Record<string, unknown>;
+  // Scrapingdog may return organic_data or organic_results
+  const list = (Array.isArray(data.organic_data)
+    ? data.organic_data
+    : Array.isArray(data.organic_results)
+      ? data.organic_results
+      : []) as { link?: string }[];
   return list
     .filter((r) => r && typeof r.link === "string")
     .map((r) => ({ link: r.link! }));
@@ -389,6 +394,20 @@ async function scrapingdogDiscovery(
     }
   }
 
+  // If still no LinkedIn URLs (e.g. niche company like "Nation with Namo"), do a broader role/industry search
+  let similarProfileIds: string[] = [];
+  if (profileIds.length === 0 && company) {
+    const broadQuery = industry
+      ? `site:linkedin.com/in ${role} ${industry}`
+      : `site:linkedin.com/in ${role}`;
+    try {
+      const broadResults = await scrapingdogGoogleSearch(apiKey, broadQuery, 30, 0);
+      similarProfileIds = parseLinkedInProfileIdsFromGoogle(broadResults);
+    } catch {
+      // ignore
+    }
+  }
+
   const rawResults: any[] = [];
   const limit = 30;
   for (let i = 0; i < Math.min(profileIds.length, limit); i++) {
@@ -401,6 +420,15 @@ async function scrapingdogDiscovery(
     rawResults.push({ ...profile, _linkedinUrl: url });
   }
 
+  // If all profiles were filtered out (e.g. short tenure or no job descriptions), include them anyway so we show something
+  if (rawResults.length === 0 && profileIds.length > 0) {
+    for (let i = 0; i < Math.min(profileIds.length, limit); i++) {
+      const profile = await scrapingdogGetProfile(apiKey, profileIds[i]);
+      if (!profile) continue;
+      rawResults.push({ ...profile, _linkedinUrl: `https://www.linkedin.com/in/${profileIds[i]}/` });
+    }
+  }
+
   const normCompany = company ? normaliseCompanyName(company) : "";
   const ranked = [...rawResults].sort((a, b) => {
     const aTenure = company ? tenureAtCompanyYears(a, company) ?? 0 : 0;
@@ -408,7 +436,28 @@ async function scrapingdogDiscovery(
     return bTenure - aTenure;
   });
 
+  let similarRaw: any[] = [];
+  const similarLimit = 15;
+  for (let i = 0; i < Math.min(similarProfileIds.length, similarLimit); i++) {
+    const id = similarProfileIds[i];
+    if (profileIds.includes(id)) continue; // avoid duplicating target results
+    const profile = await scrapingdogGetProfile(apiKey, id);
+    if (!profile) continue;
+    similarRaw.push({ ...profile, _linkedinUrl: `https://www.linkedin.com/in/${id}/` });
+  }
+
   const targetPublicProfiles = ranked.slice(0, 15).map((raw: any) => {
+    const mapped = mapScrapingdogProfile(raw, raw._linkedinUrl || "");
+    const firstExp = mapped.experience_history?.[0];
+    return {
+      full_name: mapped.full_name,
+      current_title: mapped.current_occupation || null,
+      current_company: firstExp?.company ?? null,
+      linkedin_url: mapped.linkedin_url || null,
+    };
+  });
+
+  const similarPublicProfiles = similarRaw.slice(0, 15).map((raw: any) => {
     const mapped = mapScrapingdogProfile(raw, raw._linkedinUrl || "");
     const firstExp = mapped.experience_history?.[0];
     return {
@@ -422,9 +471,9 @@ async function scrapingdogDiscovery(
   return {
     rawResults: ranked,
     targetPublicProfiles,
-    similarPublicProfiles: [],
+    similarPublicProfiles,
     companiesSearched: company ? [company] : industry ? [`Industry: ${industry}`] : [],
-    similarCompanies: [],
+    similarCompanies: similarProfileIds.length > 0 && company ? ["Similar roles / industry"] : [],
   };
 }
 
