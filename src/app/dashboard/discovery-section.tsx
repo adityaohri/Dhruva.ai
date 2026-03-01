@@ -143,9 +143,13 @@ export function DiscoverySection({ parsed }: DiscoverySectionProps) {
 
       if (!fiberResp.ok) {
         const body = await fiberResp.json().catch(() => ({}));
-        throw new Error(
-          body.error || `Discovery API (Fiber) failed with ${fiberResp.status}`
-        );
+        const status = fiberResp.status;
+        const msg =
+          body.error ||
+          (status === 504
+            ? "Discovery API failed with 504 (timeout). Try again or use a different role/company."
+            : `Discovery API failed with ${status}`);
+        throw new Error(msg);
       }
 
       const fiberData = (await fiberResp.json()) as {
