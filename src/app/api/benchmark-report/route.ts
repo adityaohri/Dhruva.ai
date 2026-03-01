@@ -319,12 +319,13 @@ export async function POST(req: NextRequest) {
   drawSectionTitle("Trajectory fit");
   const trajectoryText = safeSectionText(normalized.trajectoryFit);
   if (trajectoryText) {
-    // Derive a simple fit score from the text (mirrors the dashboard logic).
+    // Use the same logic as the website: only "high" / "moderate" / "low"
+    // (avoid matching "strong" in body text which would wrongly give 85%).
     const lower = trajectoryText.toLowerCase();
     let score = 60;
-    if (lower.includes("high") || lower.includes("strong")) score = 85;
+    if (lower.includes("high")) score = 85;
     else if (lower.includes("moderate")) score = 60;
-    else if (lower.includes("low") || lower.includes("weak")) score = 30;
+    else if (lower.includes("low")) score = 30;
 
     const p = ensureSpace(30);
     const barX = marginX;
@@ -366,39 +367,55 @@ export async function POST(req: NextRequest) {
   if (careerAnchorsList.length) {
     drawSectionTitle("Career anchors");
     const anchors = parseCareerAnchors(careerAnchorsList);
-
-    // Render as compact cards with percentage + mini progress bar,
-    // visually echoing the dashboard radial cards.
     const columns = 3;
     const gapX = 10;
     const cardWidth = (maxWidth - gapX * (columns - 1)) / columns;
-    const cardHeight = 120;
+    const lineHeight = 10;
+    const headerH = 56; // space for pct + bar + gap
+
+    // Pre-compute wrapped name lines and card height per anchor so boxes fit content.
+    const anchorData = anchors.map((anchor) => {
+      const nameLines = wrapText({
+        text: anchor.name,
+        font,
+        size: 9,
+        maxWidth: cardWidth - 24,
+      });
+      const textH = Math.min(nameLines.length * lineHeight, 60);
+      const cardHeight = headerH + textH + 14;
+      return { anchor, nameLines, cardHeight };
+    });
 
     let col = 0;
     let rowTopY = cursorY;
+    let rowCardHeight = 0;
 
-    for (const anchor of anchors) {
-      // Move to next row if needed
+    for (let i = 0; i < anchorData.length; i++) {
+      const { anchor, nameLines, cardHeight } = anchorData[i];
       if (col === 0) {
-        ensureSpace(cardHeight + 20);
+        rowCardHeight = Math.max(
+          cardHeight,
+          anchorData[i + 1]?.cardHeight ?? 0,
+          anchorData[i + 2]?.cardHeight ?? 0
+        );
+        ensureSpace(rowCardHeight + 24);
         rowTopY = cursorY;
       }
 
       const x = marginX + col * (cardWidth + gapX);
       const topY = rowTopY;
-      const bottomY = topY - cardHeight;
+      const bottomY = topY - rowCardHeight;
 
       page.drawRectangle({
         x,
         y: bottomY,
         width: cardWidth,
-        height: cardHeight,
+        height: rowCardHeight,
         color: rgb(1, 1, 1),
         borderColor: rgb(0.9, 0.9, 0.95),
         borderWidth: 1,
       });
 
-      // Percentage label
       const pctText = `${anchor.value}%`;
       page.drawText(pctText, {
         x: x + 12,
@@ -408,35 +425,28 @@ export async function POST(req: NextRequest) {
         color: rgb(0.235, 0.165, 0.415),
       });
 
-      // Mini progress bar
       const barX = x + 12;
       const barY = topY - 50;
-      const barWidth = cardWidth - 24;
-      const barHeight = 6;
+      const barW = cardWidth - 24;
+      const barH = 6;
       page.drawRectangle({
         x: barX,
         y: barY,
-        width: barWidth,
-        height: barHeight,
+        width: barW,
+        height: barH,
         color: rgb(0.93, 0.93, 0.96),
       });
       page.drawRectangle({
         x: barX,
         y: barY,
-        width: (barWidth * anchor.value) / 100,
-        height: barHeight,
+        width: (barW * anchor.value) / 100,
+        height: barH,
         color: rgb(0.235, 0.165, 0.415),
       });
 
-      // Anchor name (wrapped)
-      const nameLines = wrapText({
-        text: anchor.name,
-        font,
-        size: 9,
-        maxWidth: cardWidth - 24,
-      });
       let textY = topY - 66;
       for (const line of nameLines) {
+        if (textY - lineHeight < bottomY + 8) break;
         page.drawText(line, {
           x: x + 12,
           y: textY,
@@ -444,7 +454,7 @@ export async function POST(req: NextRequest) {
           font,
           color: rgb(0.2, 0.2, 0.28),
         });
-        textY -= 11;
+        textY -= lineHeight;
       }
 
       col += 1;
@@ -454,7 +464,7 @@ export async function POST(req: NextRequest) {
       }
     }
     if (col !== 0) {
-      cursorY = rowTopY - cardHeight - 24;
+      cursorY = rowTopY - rowCardHeight - 24;
     }
     cursorY -= 8;
   }
