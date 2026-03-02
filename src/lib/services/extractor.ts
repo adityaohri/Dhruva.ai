@@ -11,8 +11,6 @@ export type RawJob = {
   snippet: string;
   source: string;
   company?: string | null;
-  // Allow any additional fields (e.g. isDirect) to flow through.
-  [key: string]: unknown;
 };
 
 export type EnrichedJob = RawJob & {
