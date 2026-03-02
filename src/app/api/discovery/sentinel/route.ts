@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
-  searchTheirStackJobs,
+  generateDorkQueries,
+  executeHunt,
+  fetchGoogleJobs,
   isDirectUrl,
   type SentinelFilters,
   type HuntResult,
@@ -154,9 +156,15 @@ export async function POST(req: NextRequest) {
       roles: body.roles,
     };
 
-    // TheirStack Jobs API – primary source of opportunities
-    const theirStackResults = await searchTheirStackJobs(filters);
-    const rawResults = [...theirStackResults];
+    const dorkQueries = generateDorkQueries(filters);
+    const queryStrings = dorkQueries.map((d) => d.query);
+
+    // Run dork hunt and Google Jobs in parallel (one layer deeper: individual listings with company)
+    const [organicResults, googleJobsResults] = await Promise.all([
+      executeHunt(queryStrings),
+      fetchGoogleJobs(filters),
+    ]);
+    const rawResults = [...organicResults, ...googleJobsResults];
     const baselineResults = dedupeTagAndFilter(rawResults, experience);
 
     // Opportunity Intelligence – standardisation & AI summarisation
@@ -168,10 +176,12 @@ export async function POST(req: NextRequest) {
       results: typedResults,
       resultsByCompany,
       meta: {
-        provider: "theirstack",
+        provider: "serpapi",
+        queriesCount: dorkQueries.length,
         totalBeforeDedupe: rawResults.length,
         totalAfterDedupe: typedResults.length,
         directCount: typedResults.filter((r) => r.isDirect).length,
+        fromGoogleJobs: googleJobsResults.length,
       },
     });
   } catch (e: unknown) {

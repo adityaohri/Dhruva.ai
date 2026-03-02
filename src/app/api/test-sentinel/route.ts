@@ -1,13 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
-  searchTheirStackJobs,
+  generateDorkQueries,
+  executeHunt,
   type SentinelFilters,
 } from "@/lib/services/sentinel";
 
 /**
  * Temporary test route for Sentinel (Opportunity Intelligence Day 1).
  * POST with body: { industry, jobType, experience, location?, pay?, companies?, roles? }
- * Returns raw JSON from the TheirStack Jobs API mapping so you can verify filters.
+ * Returns raw JSON: { dorkQueries, huntResults, error? } so you can verify dorks.
  */
 export async function POST(req: NextRequest) {
   try {
@@ -26,13 +27,17 @@ export async function POST(req: NextRequest) {
       roles: body.roles,
     };
 
-    const huntResults = await searchTheirStackJobs(filters);
+    const dorkQueries = generateDorkQueries(filters);
+    const queryStrings = dorkQueries.map((d) => d.query);
+    const huntResults = await executeHunt(queryStrings);
 
     return NextResponse.json({
       filters,
-      huntResults,
+        dorkQueries,
+        huntResults,
       meta: {
-        resultsCount: huntResults.length,
+          queriesCount: dorkQueries.length,
+          resultsCount: huntResults.length,
       },
     });
   } catch (e: unknown) {
@@ -60,13 +65,17 @@ export async function GET(req: NextRequest) {
   };
 
   try {
-    const huntResults = await searchTheirStackJobs(filters);
+    const dorkQueries = generateDorkQueries(filters);
+    const queryStrings = dorkQueries.map((d) => d.query);
+    const huntResults = await executeHunt(queryStrings);
 
     return NextResponse.json({
       filters,
-      huntResults,
+        dorkQueries,
+        huntResults,
       meta: {
-        resultsCount: huntResults.length,
+          queriesCount: dorkQueries.length,
+          resultsCount: huntResults.length,
       },
     });
   } catch (e: unknown) {

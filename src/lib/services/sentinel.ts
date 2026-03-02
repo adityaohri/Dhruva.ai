@@ -105,135 +105,179 @@ export function isDirectUrl(url: string): boolean {
   }
 }
 
-const THEIRSTACK_API_KEY = process.env.THEIRSTACK_API_KEY;
-const THEIRSTACK_JOBS_ENDPOINT = "https://api.theirstack.com/v1/jobs/search";
-
-function mapExperienceToTheirStack(experience: string): string | undefined {
-  const e = experience.toLowerCase();
-  if (e.includes("fresher") || e.includes("0-1") || e.includes("0-2") || e.includes("1-2")) {
-    return "Entry Level";
-  }
-  if (e.includes("2-5") || e.includes("mid")) {
-    return "Mid Level";
-  }
-  if (e.includes("5+") || e.includes("senior")) {
-    return "Senior Level";
-  }
-  return undefined;
-}
-
-function buildJobTitlePattern(filters: SentinelFilters): string | undefined {
-  const roles = filters.roles?.join(" ") ?? "";
-  const jobType = filters.jobType ?? "";
-  const pattern = `${roles} ${jobType}`.trim();
-  return pattern || undefined;
-}
-
 /**
- * Primary job search implementation – calls TheirStack Jobs API.
+ * Attempt to infer the hiring brand from the URL, especially for ATS domains.
  *
- * Maps our filters:
- * - industry     -> industries
- * - roles/jobType-> job_title_pattern
- * - experience   -> experience_level_filter
- * - location     -> job_country_code_or = ["IN"]
- * - companies    -> company_name_or
+ * Example:
+ *   https://kpmgindia.wd3.myworkdayjobs.com/ -> "KPMG India"
  */
-export async function searchTheirStackJobs(
-  filters: SentinelFilters,
-  options?: { apiKey?: string; limit?: number; offset?: number }
+export function extractBrandFromUrl(rawUrl: string): string | null {
+  try {
+    const url = new URL(rawUrl);
+    const host = url.hostname.toLowerCase();
+
+    if (host.includes("myworkdayjobs.com")) {
+      const sub = host.split(".")[0]; // e.g. "kpmgindia" or "kpmg"
+      let name = sub.replace(/^wd\d*/i, "").trim();
+      if (!name) return null;
+
+      // Special-case common patterns
+      if (/^kpmgindia$/i.test(name)) {
+        return "KPMG India";
+      }
+
+      // Insert space before "india" for "...india" style subdomains.
+      name = name.replace(/india$/i, " india");
+
+      return name
+        .split(/[_\s-]+/)
+        .filter(Boolean)
+        .map((t) => t.charAt(0).toUpperCase() + t.slice(1))
+        .join(" ");
+    }
+
+    // Generic heuristic for greenhouse/lever: use subdomain as brand.
+    if (host.endsWith("greenhouse.io") || host.endsWith("lever.co")) {
+      const sub = host.split(".")[0];
+      if (!sub) return null;
+      return sub
+        .split(/[_\s-]+/)
+        .filter(Boolean)
+        .map((t) => t.charAt(0).toUpperCase() + t.slice(1))
+        .join(" ");
+    }
+
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+const SERPAPI_BASE = "https://serpapi.com/search";
+
+async function fetchOneQuery(
+  q: string,
+  apiKey: string,
+  gl: string
 ): Promise<HuntResult[]> {
-  const apiKey = options?.apiKey ?? THEIRSTACK_API_KEY;
-  if (!apiKey) {
-    throw new Error("THEIRSTACK_API_KEY is not set.");
-  }
-
-  const limit = options?.limit ?? 60;
-  const offset = options?.offset ?? 0;
-
-  const body: Record<string, unknown> = {
-    offset,
-    limit,
-    // Required recency filter so the endpoint accepts the request.
-    posted_at_max_age_days: 21,
-    job_country_code_or: ["IN"], // primary location filter
-  };
-
-  if (filters.industry) {
-    body.industries = [filters.industry];
-  }
-
-  const pattern = buildJobTitlePattern(filters);
-  if (pattern) {
-    body.job_title_pattern = pattern;
-  }
-
-  const level = mapExperienceToTheirStack(filters.experience);
-  if (level) {
-    body.experience_level_filter = level;
-  }
-
-  if (filters.companies?.length) {
-    body.company_name_or = filters.companies;
-  }
-
-  const resp = await fetch(THEIRSTACK_JOBS_ENDPOINT, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Accept: "application/json",
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify(body),
-    cache: "no-store",
+  const params = new URLSearchParams({
+    engine: "google",
+    q,
+    api_key: apiKey,
+    gl,
+    num: "10",
   });
-
+  const url = `${SERPAPI_BASE}?${params.toString()}`;
+  const resp = await fetch(url, { cache: "no-store" });
   if (!resp.ok) {
-    const text = await resp.text().catch(() => "");
     console.warn(
-      `[sentinel] TheirStack jobs error ${resp.status}${
-        text ? `: ${text.slice(0, 300)}` : ""
-      }`
+      `[sentinel] SerpApi error for query "${q.slice(0, 50)}...": ${resp.status}`
     );
     return [];
   }
-
-  const data = (await resp.json()) as any;
-  const items: any[] =
-    (Array.isArray(data) && data) ||
-    data.jobs ||
-    data.data ||
-    data.results ||
-    [];
-
-  return items
-    .map((job) => {
-      const title =
-        job.job_title ||
-        job.title ||
-        "";
-      const url =
-        job.url ||
-        job.job_url ||
-        job.job_link ||
-        "";
-      if (!url) return null;
-      const snippet =
-        job.description ||
-        job.job_description ||
-        job.description_text ||
-        "";
-      const company =
-        job.company_name ||
-        job.company ||
-        null;
+  const data = (await resp.json()) as {
+    organic_results?: Array<{
+      title?: string;
+      link?: string;
+      snippet?: string;
+    }>;
+  };
+  const results = data.organic_results ?? [];
+  const source = q.length > 60 ? q.slice(0, 57) + "..." : q;
+  return results
+    .filter((r) => r.link)
+    .map((r) => {
+      const url = r.link!;
+      const brand = extractBrandFromUrl(url);
       return {
-        title,
+        title: r.title ?? "",
         url,
-        snippet,
-        source: "TheirStack",
-        company,
+        snippet: r.snippet ?? "",
+        source,
+        company: brand ?? null,
       } as HuntResult;
-    })
-    .filter((r): r is HuntResult => r !== null);
+    });
+}
+
+/**
+ * Execute dork hunt via SerpApi Google Search (queries run in parallel).
+ * Returns a flat array of results: { title, url, snippet, source }.
+ */
+export async function executeHunt(
+  queries: string[],
+  options?: { apiKey?: string; gl?: string }
+): Promise<HuntResult[]> {
+  const apiKey = options?.apiKey ?? process.env.SERPAPI_API_KEY;
+  if (!apiKey) {
+    throw new Error("SERPAPI_API_KEY is not set.");
+  }
+  const gl = options?.gl ?? "in";
+
+  const batches = queries.map((q) => fetchOneQuery(q, apiKey, gl));
+  const arrays = await Promise.all(batches);
+  return arrays.flat();
+}
+
+/** Google Jobs API response job entry. */
+interface GoogleJobEntry {
+  title?: string;
+  company_name?: string;
+  description?: string;
+  apply_options?: Array<{ link?: string }>;
+  related_links?: Array<{ link?: string }>;
+}
+
+/**
+ * Fetch individual job listings from SerpApi Google Jobs (one layer deeper than aggregate pages).
+ * Returns results with company_name so we can suggest company-wise.
+ */
+export async function fetchGoogleJobs(
+  filters: SentinelFilters,
+  options?: { apiKey?: string; gl?: string }
+): Promise<HuntResult[]> {
+  const apiKey = options?.apiKey ?? process.env.SERPAPI_API_KEY;
+  if (!apiKey) return [];
+  const gl = options?.gl ?? "in";
+  const location = (filters.location || "India").trim();
+  const roles = rolesSegment(filters);
+  const experience = experienceSegment(filters);
+  const q = `${roles} ${filters.industry || ""} ${experience} ${location}`.trim();
+  const params = new URLSearchParams({
+    engine: "google_jobs",
+    q,
+    api_key: apiKey,
+    gl,
+    location: location || "India",
+  });
+  const url = `${SERPAPI_BASE}?${params.toString()}`;
+  try {
+    const resp = await fetch(url, { cache: "no-store" });
+    if (!resp.ok) return [];
+    const data = (await resp.json()) as { jobs_results?: GoogleJobEntry[] };
+    const jobs = data.jobs_results ?? [];
+    return jobs
+      .map((job) => {
+        // Prefer LinkedIn apply link when present so we surface LinkedIn job openings
+        const options = job.apply_options ?? [];
+        const linkedinOption = options.find((o) =>
+          o.link?.toLowerCase().includes("linkedin.com")
+        );
+        const applyLink =
+          linkedinOption?.link ??
+          options[0]?.link ??
+          job.related_links?.[0]?.link;
+        if (!applyLink) return null;
+        const brand = extractBrandFromUrl(applyLink);
+        return {
+          title: job.title ?? "Job",
+          url: applyLink,
+          snippet: job.description ?? "",
+          source: "Google Jobs",
+          company: job.company_name?.trim() ?? brand ?? null,
+        } as HuntResult;
+      })
+      .filter((r): r is HuntResult => r != null);
+  } catch {
+    return [];
+  }
 }
