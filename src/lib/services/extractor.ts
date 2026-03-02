@@ -142,6 +142,8 @@ export function normalizeJobTitle(rawTitle: string, rawCompany: string): string 
   title = title.replace(/^naukri\s*[:\-–—]\s*/i, "");
   // Some LinkedIn snippets prefix with "In:" which is not part of the role.
   title = title.replace(/^in\s*[:\-–—]\s*/i, "");
+   // Some career portals prefix with "Careers:".
+  title = title.replace(/^careers\s*[:\-–—]\s*/i, "");
 
   // Remove leading location tags, e.g. "Bengaluru: KPMG India hiring Consultant"
   for (const loc of LOCATION_TOKENS) {
@@ -259,18 +261,6 @@ export function standardizeTitle(rawTitle: string, company: string): string {
   return normalizeJobTitle(rawTitle, company);
 }
 
-/**
- * Claude Summarizer.
- *
- * Summarize a job description into three high‑impact bullet points for a
- * strong candidate considering this role.
- *
- * Prompt:
- * "Summarize this job description into 3 high-impact bullet points:
- *  1) The Core Mission,
- *  2) Key Skills required, and
- *  3) The \"Golden Step\" (why this role is a career accelerator)."
- */
 export async function generateJobSummary(description: string): Promise<string | null> {
   const text = description?.trim();
   if (!text) return null;
@@ -278,26 +268,29 @@ export async function generateJobSummary(description: string): Promise<string | 
   const client = getAnthropicClient();
   if (!client) return null;
 
-  const prompt = [
-    "You are a career coach helping a high-potential candidate quickly scan job listings.",
-    "Using the raw job data below (title, company, snippet, and source),",
-    "write ONE concise sentence (max ~30 words) that describes what this role is about and why it matters.",
-    "",
-    "Return only that single sentence, no bullet points, no list, no headings.",
-    "",
-    "RAW JOB DATA:",
-    text,
-  ].join("\n");
-
   try {
     const completion = await client.messages.create({
       model: "claude-sonnet-4-6",
       max_tokens: 300,
       temperature: 0.4,
+      system: [
+        "You are an expert job summariser for high-potential candidates.",
+        "You must return EXACTLY three bullet points in this format:",
+        "- The Mission: <one short sentence>",
+        "- Critical Skills: <top 3 skills, comma-separated or short phrase>",
+        "- The Growth: <why this role is prestigious or career-accelerating>",
+        "Do not add any extra text before or after the bullets.",
+      ].join(" "),
       messages: [
         {
           role: "user",
-          content: prompt,
+          content: [
+            "Summarise the following job posting into three bullets.",
+            "Use the structure specified in the system prompt.",
+            "",
+            "RAW JOB DATA:",
+            text,
+          ].join("\n"),
         },
       ],
     });
@@ -404,6 +397,8 @@ function isPlaceholderCompanyName(name: string): boolean {
   if (isLocationToken(lower)) return true;
   // Single-word "in" (from LinkedIn snippets) is never a company.
   if (lower === "in") return true;
+  // Generic "careers" label from portals is not a company.
+  if (lower === "careers") return true;
   // Aggregator / job‑board brands should never be treated as the hiring company.
   if (/\b(naukri|linkedin|indeed|glassdoor|monster|google jobs?)\b/.test(lower)) return true;
   // Purely generic role phrases are not company names.
@@ -580,14 +575,26 @@ export async function standardiseAndSummariseJob(raw: RawJob): Promise<EnrichedJ
 
   const displayName = normalizeJobTitle((raw.title ?? "").toString(), company);
 
-  const summaryInput = JSON.stringify({
-    title: raw.title ?? "",
-    company,
-    snippet: raw.snippet ?? "",
-    source: raw.source ?? "",
-    url: raw.url ?? "",
-  });
-  const summary = await generateJobSummary(summaryInput);
+  let htmlPreview = "";
+  if (url) {
+    try {
+      const html = await fetchJobHtml(url);
+      htmlPreview = html.replace(/\s+/g, " ").slice(0, 4000);
+    } catch (e) {
+      console.warn("[extractor] fetchJobHtml failed in standardiseAndSummariseJob:", e);
+    }
+  }
+
+  const summaryFeed = [
+    `TITLE: ${raw.title ?? ""}`,
+    `COMPANY: ${company}`,
+    snippet ? `SNIPPET:\n${snippet}` : "",
+    htmlPreview ? `HTML:\n${htmlPreview}` : "",
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+
+  const summary = await generateJobSummary(summaryFeed);
 
   return {
     ...raw,

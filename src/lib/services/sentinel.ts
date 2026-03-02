@@ -143,6 +143,11 @@ export function extractBrandFromUrl(rawUrl: string): string | null {
     const url = new URL(rawUrl);
     const host = url.hostname.toLowerCase();
 
+    // Direct career sites where the brand is in the domain.
+    if (host.includes("careers.google.com")) return "Google";
+    if (host.includes("careers.apple.com")) return "Apple";
+    if (host.includes("jobs.mckinsey.com")) return "McKinsey & Company";
+
     if (host.includes("myworkdayjobs.com")) {
       const sub = host.split(".")[0]; // e.g. "kpmgindia" or "kpmg"
       let name = sub.replace(/^wd\d*/i, "").trim();
