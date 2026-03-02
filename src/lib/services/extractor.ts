@@ -271,22 +271,22 @@ export async function generateJobSummary(description: string): Promise<string | 
   try {
     const completion = await client.messages.create({
       model: "claude-sonnet-4-6",
-      max_tokens: 300,
-      temperature: 0.4,
+      max_tokens: 120,
+      temperature: 0.3,
       system: [
         "You are an expert job summariser for high-potential candidates.",
-        "You must return EXACTLY three bullet points in this format:",
-        "- The Mission: <one short sentence>",
-        "- Critical Skills: <top 3 skills, comma-separated or short phrase>",
-        "- The Growth: <why this role is prestigious or career-accelerating>",
-        "Do not add any extra text before or after the bullets.",
+        "Return EXACTLY ONE sentence (max ~30 words).",
+        "The sentence should capture:",
+        "- The core mission of the role,",
+        "- The most important skills, and",
+        "- Why this role is a strong or career-accelerating opportunity.",
+        "Do NOT use bullet points or multiple sentences. No headings or labels.",
       ].join(" "),
       messages: [
         {
           role: "user",
           content: [
-            "Summarise the following job posting into three bullets.",
-            "Use the structure specified in the system prompt.",
+            "Summarise the following job posting into a single sentence as per the system instructions.",
             "",
             "RAW JOB DATA:",
             text,
@@ -399,6 +399,8 @@ function isPlaceholderCompanyName(name: string): boolean {
   if (lower === "in") return true;
   // Generic "careers" label from portals is not a company.
   if (lower === "careers") return true;
+  // Generic "jobs"/"job" labels are not companies.
+  if (lower === "job" || lower === "jobs") return true;
   // Aggregator / job‑board brands should never be treated as the hiring company.
   if (/\b(naukri|linkedin|indeed|glassdoor|monster|google jobs?)\b/.test(lower)) return true;
   // Purely generic role phrases are not company names.

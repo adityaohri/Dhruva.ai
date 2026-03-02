@@ -59,13 +59,6 @@ type OpportunityResult = {
   originalIndex?: number;
 };
 
-function getSummaryLines(summary?: string | null, fallbackSnippet?: string): string[] {
-  const raw = (summary ?? fallbackSnippet ?? "").trim();
-  if (!raw) return [];
-  const lines = raw.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
-  return lines.slice(0, 3);
-}
-
 export type OpportunityFilters = {
   industry: string;
   jobType: string;
@@ -130,8 +123,6 @@ function getSourceBadge(url: string): string {
 }
 
 function OpportunityCard({ r }: { r: OpportunityResult }) {
-  const summaryLines = getSummaryLines(r.summary, r.snippet);
-
   return (
     <div className="flex flex-col rounded-2xl border border-[#E5E7EB] bg-white p-5 shadow-none transition-shadow hover:shadow-sm">
       <h3 className="font-semibold text-[#3C2A6A] line-clamp-2">
@@ -155,15 +146,10 @@ function OpportunityCard({ r }: { r: OpportunityResult }) {
           </span>
         )}
       </div>
-      {summaryLines.length > 0 && (
-        <ul className="mt-3 flex-1 space-y-1 text-xs text-slate-600">
-          {summaryLines.map((line, idx) => (
-            <li key={idx} className="flex gap-1">
-              <span className="mt-[5px] h-1.5 w-1.5 flex-none rounded-full bg-[#3C2A6A]" />
-              <span className="flex-1">{line}</span>
-            </li>
-          ))}
-        </ul>
+      {(r.summary || r.snippet) && (
+        <p className="mt-3 line-clamp-2 flex-1 text-xs text-slate-600">
+          {r.summary || r.snippet}
+        </p>
       )}
       <a
         href={r.url}
