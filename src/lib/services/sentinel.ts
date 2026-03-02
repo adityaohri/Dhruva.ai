@@ -1,6 +1,6 @@
 /**
- * Sentinel: turns user variables into Google Search dorks for job hunting.
- * Day 1 – Opportunity Intelligence.
+ * Sentinel: job hunting service.
+ * Initially used Google dorks via SerpApi; now powered by TheirStack Jobs API.
  */
 
 export interface SentinelFilters {
@@ -15,6 +15,7 @@ export interface SentinelFilters {
   roles?: string[];
 }
 
+// Legacy type kept for backwards‑compatibility with older test routes.
 export interface DorkQuery {
   type: "ats" | "direct_company" | "indian_portal" | "linkedin";
   query: string;
@@ -58,52 +59,10 @@ function experienceSegment(filters: SentinelFilters): string {
   return (filters.experience || "").trim() || "0-2 years";
 }
 
-/**
- * Generates three (or more) specific dork query strings for job hunting.
- */
-export function generateDorkQueries(filters: SentinelFilters): DorkQuery[] {
-  const roles = rolesSegment(filters);
-  const experience = experienceSegment(filters);
-  const location = (filters.location || "India").trim();
-  const queries: DorkQuery[] = [];
-
-  // 1. ATS Query
-  queries.push({
-    type: "ats",
-    query: `(site:boards.greenhouse.io OR site:lever.co OR site:myworkdayjobs.com) ${location} intext:'apply' ${roles} ${experience}`.trim(),
-  });
-
-  // 2. Direct Company Query (only if companies provided)
-  if (filters.companies?.length) {
-    const sites = filters.companies
-      .map((c) => toCareerSiteDomain(c))
-      .filter(Boolean);
-    const siteClause = sites.map((s) => `site:${s}`).join(" OR ");
-    queries.push({
-      type: "direct_company",
-      query: `(${siteClause}) ${roles}`.trim(),
-    });
-  }
-
-  // 3. Indian Portal Query
-  queries.push({
-    type: "indian_portal",
-    query: `site:naukri.com/job-listings ${roles} -inurl:login`.trim(),
-  });
-
-  // 4. LinkedIn jobs (broad)
-  queries.push({
-    type: "linkedin",
-    query: `site:linkedin.com/jobs ${roles} ${filters.industry || ""} ${location}`.trim(),
-  });
-
-  // 5. LinkedIn individual job pages (forces Google to return /jobs/view/ links when possible)
-  queries.push({
-    type: "linkedin",
-    query: `site:linkedin.com/jobs/view ${roles} ${filters.industry || ""} ${location}`.trim(),
-  });
-
-  return queries;
+// Legacy function kept so older test routes compile; no longer used by the
+// main Opportunity Intelligence flow.
+export function generateDorkQueries(_filters: SentinelFilters): DorkQuery[] {
+  return [];
 }
 
 export interface HuntResult {
@@ -146,119 +105,135 @@ export function isDirectUrl(url: string): boolean {
   }
 }
 
-const SERPAPI_BASE = "https://serpapi.com/search";
+const THEIRSTACK_API_KEY = process.env.THEIRSTACK_API_KEY;
+const THEIRSTACK_JOBS_ENDPOINT = "https://api.theirstack.com/v1/jobs/search";
 
-async function fetchOneQuery(
-  q: string,
-  apiKey: string,
-  gl: string
-): Promise<HuntResult[]> {
-  const params = new URLSearchParams({
-    engine: "google",
-    q,
-    api_key: apiKey,
-    gl,
-    num: "10",
-  });
-  const url = `${SERPAPI_BASE}?${params.toString()}`;
-  const resp = await fetch(url, { cache: "no-store" });
-  if (!resp.ok) {
-    console.warn(`[sentinel] SerpApi error for query "${q.slice(0, 50)}...": ${resp.status}`);
-    return [];
+function mapExperienceToTheirStack(experience: string): string | undefined {
+  const e = experience.toLowerCase();
+  if (e.includes("fresher") || e.includes("0-1") || e.includes("0-2") || e.includes("1-2")) {
+    return "Entry Level";
   }
-  const data = (await resp.json()) as {
-    organic_results?: Array<{
-      title?: string;
-      link?: string;
-      snippet?: string;
-    }>;
-  };
-  const results = data.organic_results ?? [];
-  const source = q.length > 60 ? q.slice(0, 57) + "..." : q;
-  return results
-    .filter((r) => r.link)
-    .map((r) => ({
-      title: r.title ?? "",
-      url: r.link!,
-      snippet: r.snippet ?? "",
-      source,
-    }));
+  if (e.includes("2-5") || e.includes("mid")) {
+    return "Mid Level";
+  }
+  if (e.includes("5+") || e.includes("senior")) {
+    return "Senior Level";
+  }
+  return undefined;
+}
+
+function buildJobTitlePattern(filters: SentinelFilters): string | undefined {
+  const roles = filters.roles?.join(" ") ?? "";
+  const jobType = filters.jobType ?? "";
+  const pattern = `${roles} ${jobType}`.trim();
+  return pattern || undefined;
 }
 
 /**
- * Execute dork hunt via SerpApi Google Search (queries run in parallel).
- * Returns a flat array of results: { title, url, snippet, source }.
+ * Primary job search implementation – calls TheirStack Jobs API.
+ *
+ * Maps our filters:
+ * - industry     -> industries
+ * - roles/jobType-> job_title_pattern
+ * - experience   -> experience_level_filter
+ * - location     -> job_country_code_or = ["IN"]
+ * - companies    -> company_name_or
  */
-export async function executeHunt(
-  queries: string[],
-  options?: { apiKey?: string; gl?: string }
-): Promise<HuntResult[]> {
-  const apiKey = options?.apiKey ?? process.env.SERPAPI_API_KEY;
-  if (!apiKey) {
-    throw new Error("SERPAPI_API_KEY is not set.");
-  }
-  const gl = options?.gl ?? "in";
-
-  const batches = queries.map((q) => fetchOneQuery(q, apiKey, gl));
-  const arrays = await Promise.all(batches);
-  return arrays.flat();
-}
-
-/** Google Jobs API response job entry. */
-interface GoogleJobEntry {
-  title?: string;
-  company_name?: string;
-  description?: string;
-  apply_options?: Array<{ link?: string }>;
-  related_links?: Array<{ link?: string }>;
-}
-
-/**
- * Fetch individual job listings from SerpApi Google Jobs (one layer deeper than aggregate pages).
- * Returns results with company_name so we can suggest company-wise.
- */
-export async function fetchGoogleJobs(
+export async function searchTheirStackJobs(
   filters: SentinelFilters,
-  options?: { apiKey?: string; gl?: string }
+  options?: { apiKey?: string; limit?: number; offset?: number }
 ): Promise<HuntResult[]> {
-  const apiKey = options?.apiKey ?? process.env.SERPAPI_API_KEY;
-  if (!apiKey) return [];
-  const gl = options?.gl ?? "in";
-  const location = (filters.location || "India").trim();
-  const roles = rolesSegment(filters);
-  const experience = experienceSegment(filters);
-  const q = `${roles} ${filters.industry || ""} ${experience} ${location}`.trim();
-  const params = new URLSearchParams({
-    engine: "google_jobs",
-    q,
-    api_key: apiKey,
-    gl,
-    location: location || "India",
+  const apiKey = options?.apiKey ?? THEIRSTACK_API_KEY;
+  if (!apiKey) {
+    throw new Error("THEIRSTACK_API_KEY is not set.");
+  }
+
+  const limit = options?.limit ?? 60;
+  const offset = options?.offset ?? 0;
+
+  const body: Record<string, unknown> = {
+    offset,
+    limit,
+    // Required recency filter so the endpoint accepts the request.
+    posted_at_max_age_days: 21,
+    job_country_code_or: ["IN"], // primary location filter
+  };
+
+  if (filters.industry) {
+    body.industries = [filters.industry];
+  }
+
+  const pattern = buildJobTitlePattern(filters);
+  if (pattern) {
+    body.job_title_pattern = pattern;
+  }
+
+  const level = mapExperienceToTheirStack(filters.experience);
+  if (level) {
+    body.experience_level_filter = level;
+  }
+
+  if (filters.companies?.length) {
+    body.company_name_or = filters.companies;
+  }
+
+  const resp = await fetch(THEIRSTACK_JOBS_ENDPOINT, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify(body),
+    cache: "no-store",
   });
-  const url = `${SERPAPI_BASE}?${params.toString()}`;
-  try {
-    const resp = await fetch(url, { cache: "no-store" });
-    if (!resp.ok) return [];
-    const data = (await resp.json()) as { jobs_results?: GoogleJobEntry[] };
-    const jobs = data.jobs_results ?? [];
-    return jobs.map((job) => {
-      // Prefer LinkedIn apply link when present so we surface LinkedIn job openings
-      const options = job.apply_options ?? [];
-      const linkedinOption = options.find((o) => o.link?.toLowerCase().includes("linkedin.com"));
-      const applyLink =
-        linkedinOption?.link ??
-        options[0]?.link ??
-        job.related_links?.[0]?.link;
-      if (!applyLink) return null;
-      return {
-        title: job.title ?? "Job",
-        url: applyLink,
-        snippet: job.description ?? "",
-        source: "Google Jobs",
-        company: job.company_name?.trim() ?? null,
-      } as HuntResult;
-    }).filter((r): r is HuntResult => r != null);
-  } catch {
+
+  if (!resp.ok) {
+    const text = await resp.text().catch(() => "");
+    console.warn(
+      `[sentinel] TheirStack jobs error ${resp.status}${
+        text ? `: ${text.slice(0, 300)}` : ""
+      }`
+    );
     return [];
   }
+
+  const data = (await resp.json()) as any;
+  const items: any[] =
+    (Array.isArray(data) && data) ||
+    data.jobs ||
+    data.data ||
+    data.results ||
+    [];
+
+  return items
+    .map((job) => {
+      const title =
+        job.job_title ||
+        job.title ||
+        "";
+      const url =
+        job.url ||
+        job.job_url ||
+        job.job_link ||
+        "";
+      if (!url) return null;
+      const snippet =
+        job.description ||
+        job.job_description ||
+        job.description_text ||
+        "";
+      const company =
+        job.company_name ||
+        job.company ||
+        null;
+      return {
+        title,
+        url,
+        snippet,
+        source: "TheirStack",
+        company,
+      } as HuntResult;
+    })
+    .filter((r): r is HuntResult => r !== null);
 }

@@ -1,16 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
-  generateDorkQueries,
-  executeHunt,
-  fetchGoogleJobs,
+  searchTheirStackJobs,
   isDirectUrl,
   type SentinelFilters,
   type HuntResult,
 } from "@/lib/services/sentinel";
+import {
+  standardiseAndSummariseJobs,
+  type EnrichedJob,
+} from "@/lib/services/extractor";
 
 export interface SentinelResultItem extends HuntResult {
   isDirect: boolean;
   company: string | null;
+  /** Nomenclature: "Company: Role". */
+  displayName?: string;
+  /** Claude‑generated 3‑bullet summary of the job. */
+  summary?: string | null;
 }
 
 /**
@@ -148,28 +154,24 @@ export async function POST(req: NextRequest) {
       roles: body.roles,
     };
 
-    const dorkQueries = generateDorkQueries(filters);
-    const queryStrings = dorkQueries.map((d) => d.query);
+    // TheirStack Jobs API – primary source of opportunities
+    const theirStackResults = await searchTheirStackJobs(filters);
+    const rawResults = [...theirStackResults];
+    const baselineResults = dedupeTagAndFilter(rawResults, experience);
 
-    // Run dork hunt and Google Jobs in parallel (one layer deeper: individual listings with company)
-    const [organicResults, googleJobsResults] = await Promise.all([
-      executeHunt(queryStrings),
-      fetchGoogleJobs(filters),
-    ]);
-    const rawResults = [...organicResults, ...googleJobsResults];
-    const results = dedupeTagAndFilter(rawResults, experience);
-    const resultsByCompany = groupByCompany(results);
+    // Opportunity Intelligence – standardisation & AI summarisation
+    const enrichedResults = await standardiseAndSummariseJobs(baselineResults);
+    const typedResults = enrichedResults as (SentinelResultItem & EnrichedJob)[];
+    const resultsByCompany = groupByCompany(typedResults);
 
     return NextResponse.json({
-      results,
+      results: typedResults,
       resultsByCompany,
-      dorkQueries,
       meta: {
-        queriesCount: dorkQueries.length,
+        provider: "theirstack",
         totalBeforeDedupe: rawResults.length,
-        totalAfterDedupe: results.length,
-        directCount: results.filter((r) => r.isDirect).length,
-        fromGoogleJobs: googleJobsResults.length,
+        totalAfterDedupe: typedResults.length,
+        directCount: typedResults.filter((r) => r.isDirect).length,
       },
     });
   } catch (e: unknown) {

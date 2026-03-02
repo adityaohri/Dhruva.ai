@@ -49,6 +49,10 @@ type OpportunityResult = {
   source: string;
   isDirect: boolean;
   company?: string | null;
+  /** Nomenclature from extractor: "Company: Role". */
+  displayName?: string;
+  /** Claude‑generated 3‑bullet job summary. */
+  summary?: string | null;
 };
 
 export type OpportunityFilters = {
@@ -118,7 +122,7 @@ function OpportunityCard({ r }: { r: OpportunityResult }) {
   return (
     <div className="flex flex-col rounded-2xl border border-[#E5E7EB] bg-white p-5 shadow-none transition-shadow hover:shadow-sm">
       <h3 className="font-semibold text-[#3C2A6A] line-clamp-2">
-        {r.title || "Job listing"}
+        {r.displayName || "Job listing"}
       </h3>
       {r.company && (
         <p className="mt-1.5 text-sm font-medium text-[#3C2A6A]/90">
@@ -138,9 +142,9 @@ function OpportunityCard({ r }: { r: OpportunityResult }) {
           </span>
         )}
       </div>
-      {r.snippet && (
+      {(r.summary || r.snippet) && (
         <p className="mt-3 line-clamp-2 flex-1 text-xs text-slate-600">
-          {r.snippet}
+          {r.summary || r.snippet}
         </p>
       )}
       <a
