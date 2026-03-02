@@ -59,10 +59,37 @@ function experienceSegment(filters: SentinelFilters): string {
   return (filters.experience || "").trim() || "0-2 years";
 }
 
-// Legacy function kept so older test routes compile; no longer used by the
-// main Opportunity Intelligence flow.
-export function generateDorkQueries(_filters: SentinelFilters): DorkQuery[] {
-  return [];
+/**
+ * Generates targeted dork queries for ATS and top‑tier career sites.
+ *
+ * 1) (site:boards.greenhouse.io OR site:lever.co OR site:myworkdayjobs.com) India [Job Role]
+ * 2) (site:jobs.mckinsey.com OR site:careers.google.com) [Job Role]
+ */
+export function generateDorkQueries(filters: SentinelFilters): DorkQuery[] {
+  const roles = rolesSegment(filters);
+  const location = (filters.location || "India").trim() || "India";
+  const roleSegment = roles || filters.jobType || "jobs";
+
+  const queries: DorkQuery[] = [];
+
+  // 1. ATS Query: Greenhouse, Lever, Workday – focused on India + role.
+  queries.push({
+    type: "ats",
+    query:
+      `(site:boards.greenhouse.io OR site:lever.co OR site:myworkdayjobs.com) ` +
+      `${location} ${roleSegment}`.trim(),
+  });
+
+  // 2. Tier‑1 career sites (McKinsey, Google)
+  const tierOneSites = ["site:jobs.mckinsey.com", "site:careers.google.com"].join(
+    " OR "
+  );
+  queries.push({
+    type: "direct_company",
+    query: `(${tierOneSites}) ${roleSegment}`.trim(),
+  });
+
+  return queries;
 }
 
 export interface HuntResult {

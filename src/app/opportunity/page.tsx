@@ -53,6 +53,10 @@ type OpportunityResult = {
   displayName?: string;
   /** Claude‑generated 3‑bullet job summary. */
   summary?: string | null;
+  /** Prestige score from backend (higher = more sought after). */
+  prestige_score?: number;
+  /** Original index from backend result list, used for recency sort. */
+  originalIndex?: number;
 };
 
 export type OpportunityFilters = {
@@ -172,6 +176,7 @@ export default function OpportunityPage() {
   const [loadingStatusIndex, setLoadingStatusIndex] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [hasCompletedOnboarding, setHasCompletedOnboarding] = useState(false);
+  const [sortMode, setSortMode] = useState<"prestige" | "recency">("prestige");
 
   const updateFilter = useCallback(<K extends keyof OpportunityFilters>(
     key: K,
@@ -225,7 +230,12 @@ export default function OpportunityPage() {
         setResults([]);
         return;
       }
-      setResults(data.results || []);
+      const baseResults: OpportunityResult[] = data.results || [];
+      const withIndex = baseResults.map((r, idx) => ({
+        ...r,
+        originalIndex: idx,
+      }));
+      setResults(withIndex);
       setResultsByCompany(data.resultsByCompany || {});
       setHasCompletedOnboarding(true);
     } catch (e) {
@@ -441,19 +451,45 @@ export default function OpportunityPage() {
     );
   }
 
+  const sortedResults = [...results].sort((a, b) => {
+    if (sortMode === "prestige") {
+      const pa = a.prestige_score ?? 0;
+      const pb = b.prestige_score ?? 0;
+      if (pb !== pa) return pb - pa;
+    }
+    const ia = a.originalIndex ?? 0;
+    const ib = b.originalIndex ?? 0;
+    return ia - ib;
+  });
+
   return (
     <div className="space-y-6" style={{ backgroundColor: CREAM }}>
       <div className="flex flex-wrap items-center justify-between gap-4">
         <h1 className="font-serif text-2xl font-semibold text-[#3C2A6A]">
           Opportunity Intelligence
         </h1>
-        <button
-          type="button"
-          onClick={resetFilters}
-          className="rounded-full border border-[#3C2A6A]/30 bg-white px-5 py-2 text-sm font-medium text-[#3C2A6A] hover:bg-[#3C2A6A]/5"
-        >
-          Reset filters
-        </button>
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex items-center gap-2 text-xs text-slate-600">
+            <span className="font-medium text-[#3C2A6A]">Sort by</span>
+            <select
+              value={sortMode}
+              onChange={(e) =>
+                setSortMode(e.target.value === "recency" ? "recency" : "prestige")
+              }
+              className="rounded-full border border-[#E5E7EB] bg-white px-3 py-1 text-xs text-[#3C2A6A] focus:border-[#3C2A6A]/60 focus:outline-none"
+            >
+              <option value="prestige">Most Sought After</option>
+              <option value="recency">Recency</option>
+            </select>
+          </div>
+          <button
+            type="button"
+            onClick={resetFilters}
+            className="rounded-full border border-[#3C2A6A]/30 bg-white px-5 py-2 text-sm font-medium text-[#3C2A6A] hover:bg-[#3C2A6A]/5"
+          >
+            Reset filters
+          </button>
+        </div>
       </div>
 
       {error && (
@@ -519,7 +555,7 @@ export default function OpportunityPage() {
               All opportunities
             </h2>
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {results.map((r, i) => (
+              {sortedResults.map((r, i) => (
                 <OpportunityCard key={`${r.url}-${i}`} r={r} />
               ))}
             </div>

@@ -19,6 +19,8 @@ export interface SentinelResultItem extends HuntResult {
   displayName?: string;
   /** Claude‑generated 3‑bullet summary of the job. */
   summary?: string | null;
+   /** Prestige score for sorting (higher = more sought after). */
+  prestige_score?: number;
 }
 
 /**
@@ -124,6 +126,30 @@ function groupByCompany(results: SentinelResultItem[]): Record<string, SentinelR
   return map;
 }
 
+function prestigeScore(company: string | null | undefined): number {
+  if (!company) return 50;
+  const c = company.toLowerCase();
+
+  // Tier 1 (95‑100)
+  if (c.includes("mckinsey")) return 100;
+  if (c.includes("boston consulting group") || c === "bcg") return 99;
+  if (c.includes("bain")) return 98;
+  if (c.includes("google")) return 97;
+  if (c.includes("apple")) return 96;
+  if (c.includes("goldman sachs")) return 95;
+
+  // Tier 2 (80‑94)
+  if (c.includes("zs associates") || c === "zs") return 90;
+  if (c.includes("deloitte")) return 89;
+  if (c.includes("kpmg")) return 88;
+  if (c.includes("ernst & young") || c === "ey") return 87;
+  if (c.includes("zomato")) return 86;
+  if (c.includes("swiggy")) return 85;
+
+  // Default baseline
+  return 50;
+}
+
 /**
  * POST /api/discovery/sentinel
  * Body: { industry, jobType, experience, location?, pay?, companies?, roles? }
@@ -169,7 +195,10 @@ export async function POST(req: NextRequest) {
 
     // Opportunity Intelligence – standardisation & AI summarisation
     const enrichedResults = await standardiseAndSummariseJobs(baselineResults);
-    const typedResults = enrichedResults as (SentinelResultItem & EnrichedJob)[];
+    const typedResults = enrichedResults.map((r) => ({
+      ...(r as SentinelResultItem & EnrichedJob),
+      prestige_score: prestigeScore(r.company ?? null),
+    }));
     const resultsByCompany = groupByCompany(typedResults);
 
     return NextResponse.json({
