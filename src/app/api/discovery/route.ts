@@ -39,13 +39,14 @@ const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
 const SCRAPINGDOG_API_KEY = process.env.SCRAPINGDOG_API_KEY;
 const PDL_API_KEY = process.env.PDL_API_KEY;
 
-/** "fiber" | "scrapingdog" – which discovery backend to use. Set via env for separate deployments. */
-function getDiscoveryProvider(): "fiber" | "scrapingdog" {
-  const env = process.env.DISCOVERY_PROVIDER?.toLowerCase();
-  if (env === "scrapingdog" || env === "scraping_dog") return "scrapingdog";
-  if (env === "fiber") return "fiber";
-  if (SCRAPINGDOG_API_KEY && !FIBER_API_KEY) return "scrapingdog";
-  return "fiber";
+/** Discovery backend selection.
+ *
+ * Fiber is fully disabled now (account out of credits). We always route
+ * discovery via Scrapingdog for LinkedIn profile discovery, and then rely
+ * on People Data Labs (PDL) for enrichment in the gap-analysis phase.
+ */
+function getDiscoveryProvider(): "scrapingdog" {
+  return "scrapingdog";
 }
 
 const TECH_KEYWORDS = [
