@@ -882,7 +882,7 @@ async function pdlPersonSearch(
     throw new Error("PDL_API_KEY is not configured.");
   }
 
-  const url = "https://api.peopledatalabs.com/v5/person/search";
+  const baseUrl = "https://api.peopledatalabs.com/v5/person/search";
 
   const must: any[] = [];
   const role = targetRole.trim();
@@ -907,18 +907,18 @@ async function pdlPersonSearch(
     },
   };
 
-  const body = {
-    api_key: PDL_API_KEY,
-    size,
-    query: esQuery,
-  };
+  const params = new URLSearchParams();
+  params.set("api_key", PDL_API_KEY);
 
-  const resp = await fetch(url, {
+  const resp = await fetch(`${baseUrl}?${params.toString()}`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
     },
-    body: JSON.stringify(body),
+    body: JSON.stringify({
+      size,
+      query: esQuery,
+    }),
     cache: "no-store",
   });
 
