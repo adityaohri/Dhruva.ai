@@ -691,10 +691,12 @@ function findGoldenStep(
   for (let i = 0; i < exps.length - 1; i++) {
     const current = exps[i];
     const prev = exps[i + 1];
-    const roleMatch = current.title
+    const currentTitle = typeof current.title === "string" ? current.title : String(current.title ?? "");
+    const currentCompany = typeof current.company === "string" ? current.company : String(current.company ?? "");
+    const roleMatch = currentTitle
       .toLowerCase()
       .includes(targetRole.toLowerCase());
-    const companyMatch = current.company
+    const companyMatch = currentCompany
       .toLowerCase()
       .includes(targetCompany.toLowerCase());
     if (roleMatch && companyMatch) {
@@ -895,6 +897,8 @@ async function pdlPersonSearch(
   if (company) {
     baseMust.push({ match_phrase: { job_company_name: company } });
   }
+  // Always prefer India-based profiles
+  baseMust.push({ term: { location_country: "india" } });
 
   // Build search passes:
   // 1) If industry is provided: strict pass with industry filters
@@ -1022,6 +1026,30 @@ export async function POST(req: NextRequest) {
     similarCompanies = [];
     similarPublicProfiles = [];
 
+    const normalizeLinkedInUrl = (raw: any): string | null => {
+      let url: string | null =
+        raw.linkedin_url ||
+        raw.linkedin ||
+        raw.profile_url ||
+        null;
+
+      if (!url && Array.isArray(raw.profiles)) {
+        const li = raw.profiles.find(
+          (p: any) =>
+            p &&
+            (p.network === "linkedin" ||
+              p.network === "LinkedIn")
+        );
+        if (li?.url) url = li.url;
+      }
+
+      if (!url || typeof url !== "string") return null;
+      const trimmed = url.trim();
+      if (!trimmed) return null;
+      if (/^https?:\/\//i.test(trimmed)) return trimmed;
+      return `https://${trimmed.replace(/^\/+/, "")}`;
+    };
+
     targetPublicProfiles = rawResults.slice(0, 15).map((raw: any) => {
       const full_name =
         raw.full_name || raw.name || raw.display_name || "Unknown";
@@ -1034,11 +1062,7 @@ export async function POST(req: NextRequest) {
         raw.job_company_name ||
         raw.job_company?.name ||
         null;
-      const linkedin_url =
-        raw.linkedin_url ||
-        raw.linkedin ||
-        raw.profile_url ||
-        null;
+      const linkedin_url = normalizeLinkedInUrl(raw);
       return {
         full_name,
         current_title,
