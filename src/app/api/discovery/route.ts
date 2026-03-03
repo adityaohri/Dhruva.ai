@@ -209,11 +209,12 @@ async function enrichUserProfile(
 }
 
 function mapPdlRecordToSuccessProfile(data: any): SuccessProfile {
-  const full_name: string =
+  const full_nameRaw: string =
     data.full_name ||
     data.name ||
     data.linkedin_full_name ||
     "Unknown";
+  const full_name = toTitleCase(String(full_nameRaw));
 
   const current_occupation: string =
     data.job_title ||
@@ -308,6 +309,17 @@ function mapPdlRecordToSuccessProfile(data: any): SuccessProfile {
 }
 
 // PDL is now the sole backend for discovery and enrichment.
+
+function toTitleCase(input: string): string {
+  const s = input.trim();
+  if (!s) return s;
+  return s
+    .split(/\s+/)
+    .map((w) =>
+      w.length ? w[0].toUpperCase() + w.slice(1).toLowerCase() : w
+    )
+    .join(" ");
+}
 
 function getLinkedInUrl(raw: any): string | null {
   return (
@@ -1050,18 +1062,32 @@ export async function POST(req: NextRequest) {
       return `https://${trimmed.replace(/^\/+/, "")}`;
     };
 
-    targetPublicProfiles = rawResults.slice(0, 15).map((raw: any) => {
-      const full_name =
+    // Prefer 500+ connections for visible target profiles as well
+    const MIN_CONNECTIONS = 500;
+    const highCredForList = rawResults.filter(
+      (r) => getFollowerCount(r) >= MIN_CONNECTIONS
+    );
+    const listSource = highCredForList.length ? highCredForList : rawResults;
+
+    targetPublicProfiles = listSource.slice(0, 15).map((raw: any) => {
+      const full_name_raw =
         raw.full_name || raw.name || raw.display_name || "Unknown";
-      const current_title =
+      const full_name = toTitleCase(String(full_name_raw));
+      const current_title_raw =
         raw.job_title ||
         raw.job_title_role ||
         raw.job_title_sub_role ||
         null;
-      const current_company =
+      const current_title = current_title_raw
+        ? toTitleCase(String(current_title_raw))
+        : null;
+      const company_raw =
         raw.job_company_name ||
         raw.job_company?.name ||
         null;
+      const current_company = company_raw
+        ? correctCompanyNameTypo(String(company_raw))
+        : null;
       const linkedin_url = normalizeLinkedInUrl(raw);
       return {
         full_name,
@@ -1088,7 +1114,14 @@ export async function POST(req: NextRequest) {
 
     // ---- Gap analysis phase ----
 
-    const profiles: SuccessProfile[] = rawResults.map((raw: any) =>
+    // Prefer high-credibility profiles (500+ LinkedIn connections) for gap analysis.
+    const MIN_CONNECTIONS = 500;
+    const highCredRaw = rawResults.filter(
+      (r) => getFollowerCount(r) >= MIN_CONNECTIONS
+    );
+    const effectiveRaw = highCredRaw.length ? highCredRaw : rawResults;
+
+    const profiles: SuccessProfile[] = effectiveRaw.map((raw: any) =>
       mapPdlRecordToSuccessProfile(raw)
     );
 
