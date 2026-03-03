@@ -33,6 +33,10 @@ type DiscoveryResult = {
 
 const cache = new Map<string, DiscoveryResult>();
 
+// Minimum LinkedIn connections we require to treat a profile as
+// high-credibility for discovery and gap analysis.
+const MIN_CONNECTIONS = 500;
+
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
 const PDL_API_KEY = process.env.PDL_API_KEY;
@@ -1062,8 +1066,6 @@ export async function POST(req: NextRequest) {
       return `https://${trimmed.replace(/^\/+/, "")}`;
     };
 
-    // Prefer 500+ connections for visible target profiles as well
-    const MIN_CONNECTIONS = 500;
     const highCredForList = rawResults.filter(
       (r) => getFollowerCount(r) >= MIN_CONNECTIONS
     );
@@ -1114,8 +1116,6 @@ export async function POST(req: NextRequest) {
 
     // ---- Gap analysis phase ----
 
-    // Prefer high-credibility profiles (500+ LinkedIn connections) for gap analysis.
-    const MIN_CONNECTIONS = 500;
     const highCredRaw = rawResults.filter(
       (r) => getFollowerCount(r) >= MIN_CONNECTIONS
     );
