@@ -36,7 +36,7 @@ const cache = new Map<string, DiscoveryResult>();
 // Minimum LinkedIn connections we require to treat a profile as
 // high-credibility for discovery and gap analysis.
 const MIN_CONNECTIONS = 500;
-const MIN_PROFILES = 15;
+const MIN_PROFILES = 9;
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
