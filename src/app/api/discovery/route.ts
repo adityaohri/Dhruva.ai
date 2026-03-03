@@ -37,6 +37,7 @@ const FIBER_API_KEY = process.env.FIBER_API_KEY;
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
 const SCRAPINGDOG_API_KEY = process.env.SCRAPINGDOG_API_KEY;
+const PDL_API_KEY = process.env.PDL_API_KEY;
 
 /** "fiber" | "scrapingdog" – which discovery backend to use. Set via env for separate deployments. */
 function getDiscoveryProvider(): "fiber" | "scrapingdog" {
@@ -145,6 +146,139 @@ async function fiberPersonSearch(
   );
 
   return results as any[];
+}
+
+async function enrichUserProfile(
+  profileUrl: string
+): Promise<SuccessProfile | null> {
+  if (!PDL_API_KEY || !profileUrl) return null;
+
+  const endpoint = new URL("https://api.peopledatalabs.com/v5/person/enrich");
+  endpoint.searchParams.set("api_key", PDL_API_KEY);
+  endpoint.searchParams.set("profile", profileUrl);
+
+  try {
+    const resp = await fetch(endpoint.toString(), {
+      method: "GET",
+      headers: {
+        Accept: "application/json",
+      },
+      cache: "no-store",
+    });
+
+    if (resp.status === 404) {
+      return null;
+    }
+    if (!resp.ok) {
+      const text = await resp.text().catch(() => "");
+      console.warn(
+        "[discovery] PDL enrich error",
+        resp.status,
+        text ? text.slice(0, 200) : ""
+      );
+      return null;
+    }
+
+    const data = (await resp.json()) as any;
+
+    const full_name: string =
+      data.full_name ||
+      data.name ||
+      data.linkedin_full_name ||
+      "Unknown";
+
+    const current_occupation: string =
+      data.job_title ||
+      data.job_title_role ||
+      data.job_title_sub_role ||
+      data.job_company_name ||
+      "";
+
+    const experienceRaw: any[] = Array.isArray(data.experience)
+      ? data.experience
+      : [];
+    const experience_history: ExperienceEntry[] = experienceRaw
+      .map((exp) => {
+        const title =
+          exp.title ||
+          exp.job_title ||
+          "";
+        const company =
+          exp.company ||
+          exp.company_name ||
+          exp.employer ||
+          "";
+        if (!title && !company) return null;
+        return {
+          title,
+          company,
+          start_date:
+            exp.start_date ||
+            exp.start ||
+            exp.start_date_iso ||
+            null,
+          end_date:
+            exp.end_date ||
+            exp.end ||
+            exp.end_date_iso ||
+            null,
+          description:
+            exp.summary ||
+            exp.description ||
+            null,
+        } as ExperienceEntry;
+      })
+      .filter((e): e is ExperienceEntry => e !== null);
+
+    const skillsRaw =
+      data.skills ||
+      data.skill_keywords ||
+      data.skill_tags ||
+      [];
+    const skills: string[] = Array.isArray(skillsRaw)
+      ? skillsRaw
+          .map((s) =>
+            typeof s === "string"
+              ? s
+              : s?.name || s?.skill || String(s)
+          )
+          .map((s) => s.trim())
+          .filter(Boolean)
+      : [];
+
+    const educationRaw: any[] = Array.isArray(data.education)
+      ? data.education
+      : Array.isArray(data.educations)
+        ? data.educations
+        : [];
+    const education: string[] = [];
+    for (const ed of educationRaw) {
+      if (typeof ed === "string") {
+        education.push(ed);
+      } else if (ed && typeof ed === "object") {
+        const name =
+          ed.school ||
+          ed.school_name ||
+          ed.education_degree ||
+          ed.degree ||
+          "";
+        if (name) education.push(name);
+      }
+    }
+
+    return {
+      full_name,
+      current_occupation:
+        current_occupation ||
+        (experience_history[0]?.title ?? "Unknown"),
+      experience_history,
+      skills,
+      education,
+    };
+  } catch (e) {
+    console.warn("[discovery] PDL enrich exception:", e);
+    return null;
+  }
 }
 
 // ---------- Scrapingdog discovery (alternative to Fiber) ----------
@@ -1129,12 +1263,42 @@ export async function POST(req: NextRequest) {
 
     // ---- Gap analysis phase ----
 
-    const profiles =
+    const baseProfiles: SuccessProfile[] =
       discoveryProvider === "scrapingdog"
         ? rawResults.map((r: any) =>
             mapScrapingdogProfile(r, r._linkedinUrl || "")
           )
         : rawResults.map(mapFiberProfile);
+
+    let profiles: SuccessProfile[] = baseProfiles;
+
+    // If People Data Labs is configured, enrich benchmark profiles using
+    // their LinkedIn URLs and use that enriched data for pattern building.
+    if (PDL_API_KEY) {
+      const profileUrls: string[] =
+        discoveryProvider === "scrapingdog"
+          ? rawResults
+              .map((r: any) => r._linkedinUrl || "")
+              .filter(Boolean)
+          : rawResults
+              .map((raw: any) => getLinkedInUrl(raw) || "")
+              .filter(Boolean);
+
+      const uniqueUrls = Array.from(new Set(profileUrls)).slice(0, 20);
+
+      const enriched = await Promise.all(
+        uniqueUrls.map((url) => enrichUserProfile(url))
+      );
+
+      const enrichedProfiles = enriched.filter(
+        (p): p is SuccessProfile => p !== null
+      );
+
+      if (enrichedProfiles.length > 0) {
+        profiles = enrichedProfiles;
+      }
+    }
+
     const pattern = deriveSuccessPattern(
       profiles,
       correctedRole || "professional",
