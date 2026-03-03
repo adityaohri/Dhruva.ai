@@ -33,21 +33,11 @@ type DiscoveryResult = {
 
 const cache = new Map<string, DiscoveryResult>();
 
-const FIBER_API_KEY = process.env.FIBER_API_KEY;
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
-const SCRAPINGDOG_API_KEY = process.env.SCRAPINGDOG_API_KEY;
 const PDL_API_KEY = process.env.PDL_API_KEY;
 
-/** Discovery backend selection.
- *
- * Fiber is fully disabled now (account out of credits). We always route
- * discovery via Scrapingdog for LinkedIn profile discovery, and then rely
- * on People Data Labs (PDL) for enrichment in the gap-analysis phase.
- */
-function getDiscoveryProvider(): "scrapingdog" {
-  return "scrapingdog";
-}
+// Discovery now relies solely on People Data Labs (PDL) APIs.
 
 const TECH_KEYWORDS = [
   "python",
@@ -75,80 +65,6 @@ function estimateFiberCost(numResults: number): number {
   return numResults; // adjust if you know the exact credit model
 }
 
-async function fiberPersonSearch(
-  targetRole: string,
-  targetCompany?: string,
-  targetIndustry?: string,
-  pageSize: number = 15
-): Promise<any[]> {
-  if (!FIBER_API_KEY) {
-    throw new Error("FIBER_API_KEY is not configured.");
-  }
-
-  const url = "https://api.fiber.ai/v1/people-search";
-
-  const company = targetCompany?.trim();
-  const industry =
-    targetIndustry?.trim() ||
-    (company ? inferIndustryFromCompany(company) : undefined);
-  const keywords = [targetRole.trim()].filter(Boolean);
-  if (industry) keywords.push(industry);
-
-  const body: Record<string, unknown> = {
-    apiKey: FIBER_API_KEY,
-    searchParams: {
-      getDetailedWorkExperience: true,
-      country3LetterCode: { anyOf: ["IND"] },
-      keywords: { containsAny: keywords },
-    },
-    pageSize,
-    cursor: null,
-    prospectExclusionListIDs: [],
-    companyExclusionListIDs: [],
-  };
-
-  if (company) {
-    (body as any).currentCompanies = [{ name: company }];
-  }
-
-  const resp = await fetch(url, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(body),
-    cache: "no-store",
-  });
-
-  if (!resp.ok) {
-    const text = await resp.text();
-    throw new Error(`Fiber AI error ${resp.status}: ${text}`);
-  }
-
-  const data = await resp.json();
-
-  // According to Fiber's OpenAPI spec, the people-search response
-  // shape is: { output: { data: [ ...profiles ] } }
-  // We also keep some defensive fallbacks for future changes.
-  const results =
-    (Array.isArray(data) && data) ||
-    data.output?.data ||
-    data.profiles ||
-    data.results ||
-    data.data ||
-    [];
-
-  console.log(
-    "[discovery] Fiber AI returned",
-    results.length,
-    "results (estimated cost ~",
-    estimateFiberCost(results.length),
-    "credits)"
-  );
-
-  return results as any[];
-}
-
 async function enrichUserProfile(
   profileUrl: string
 ): Promise<SuccessProfile | null> {
@@ -159,6 +75,11 @@ async function enrichUserProfile(
   endpoint.searchParams.set("profile", profileUrl);
 
   try {
+    console.log(
+      "[discovery] Calling PDL person/enrich for",
+      profileUrl
+    );
+
     const resp = await fetch(endpoint.toString(), {
       method: "GET",
       headers: {
@@ -166,6 +87,11 @@ async function enrichUserProfile(
       },
       cache: "no-store",
     });
+
+    console.log(
+      "[discovery] PDL person/enrich status",
+      resp.status
+    );
 
     if (resp.status === 404) {
       return null;
@@ -282,293 +208,7 @@ async function enrichUserProfile(
   }
 }
 
-// ---------- Scrapingdog discovery (alternative to Fiber) ----------
-
-const SCRAPINGDOG_GOOGLE = "https://api.scrapingdog.com/google";
-const SCRAPINGDOG_PROFILE = "https://api.scrapingdog.com/profile";
-
-async function scrapingdogGoogleSearch(
-  apiKey: string,
-  query: string,
-  results: number = 30,
-  page: number = 0
-): Promise<{ link: string }[]> {
-  const params = new URLSearchParams({
-    api_key: apiKey,
-    query,
-    results: String(results),
-    country: "in",
-    page: String(page),
-  });
-  const url = `${SCRAPINGDOG_GOOGLE}/?${params.toString()}`;
-  const resp = await fetch(url, { cache: "no-store" });
-  if (!resp.ok) throw new Error(`Scrapingdog Google error ${resp.status}`);
-  const data = (await resp.json()) as { organic_data?: { link?: string }[] };
-  const list = data.organic_data || [];
-  return list
-    .filter((r) => r && typeof r.link === "string")
-    .map((r) => ({ link: r.link! }));
-}
-
-function parseLinkedInProfileIdsFromGoogle(entries: { link: string }[]): string[] {
-  const seen = new Set<string>();
-  const ids: string[] = [];
-  const re = /linkedin\.com\/in\/([^/?]+)/i;
-  for (const { link } of entries) {
-    const m = link.match(re);
-    if (m && m[1]) {
-      const id = m[1].trim();
-      if (!seen.has(id)) {
-        seen.add(id);
-        ids.push(id);
-      }
-    }
-  }
-  return ids;
-}
-
-async function scrapingdogGetProfile(
-  apiKey: string,
-  profileId: string
-): Promise<any | null> {
-  const params = new URLSearchParams({
-    api_key: apiKey,
-    type: "profile",
-    id: profileId,
-  });
-  const url = `${SCRAPINGDOG_PROFILE}/?${params.toString()}`;
-  const resp = await fetch(url, { cache: "no-store" });
-  if (!resp.ok) return null;
-  const data = await resp.json();
-  if (data && typeof data === "object") return data;
-  return null;
-}
-
-function tenureAtCompanyYears(
-  raw: any,
-  targetCompany: string
-): number | null {
-  const normTarget = normaliseCompanyName(targetCompany);
-  const experiencesRaw =
-    raw.experience ||
-    raw.experiences ||
-    raw.positions ||
-    raw.employment_history ||
-    [];
-  if (!Array.isArray(experiencesRaw)) return null;
-  for (const exp of experiencesRaw) {
-    let company = "";
-    if (typeof exp.company === "string") company = exp.company;
-    else if (exp.company?.name) company = exp.company.name;
-    else if (exp.companyName) company = exp.companyName;
-    if (!company || !normaliseCompanyName(company).includes(normTarget))
-      continue;
-    const start =
-      exp.start_date || exp.starts_at || exp.startDate || exp.start_date_iso;
-    if (!start) continue;
-    const startDate = new Date(start);
-    if (Number.isNaN(startDate.getTime())) continue;
-    const end =
-      exp.end_date || exp.ends_at || exp.endDate || exp.end_date_iso || null;
-    const endDate = end ? new Date(end) : new Date();
-    if (Number.isNaN(endDate.getTime())) continue;
-    const years =
-      (endDate.getTime() - startDate.getTime()) /
-      (1000 * 60 * 60 * 24 * 365.25);
-    return Math.max(0, years);
-  }
-  return null;
-}
-
-function scrapingdogHasJobDescriptions(raw: any): boolean {
-  const experiencesRaw =
-    raw.experience ||
-    raw.experiences ||
-    raw.positions ||
-    raw.employment_history ||
-    [];
-  if (!Array.isArray(experiencesRaw)) return false;
-  for (const exp of experiencesRaw) {
-    const desc =
-      exp.description ||
-      exp.summary ||
-      exp.responsibilities ||
-      exp.details;
-    if (typeof desc === "string" && desc.trim().length >= 20) return true;
-  }
-  return false;
-}
-
-function mapScrapingdogProfile(raw: any, linkedinUrl: string): any {
-  const full_name =
-    raw.full_name ||
-    raw.name ||
-    (raw.firstName && raw.lastName
-      ? `${raw.firstName} ${raw.lastName}`.trim()
-      : null) ||
-    (typeof raw.headline === "string" ? raw.headline.split(" at ")[0]?.trim() : null) ||
-    "Unknown";
-  const headline =
-    raw.headline ||
-    raw.current_title ||
-    raw.title ||
-    raw.current_position ||
-    "";
-  const experiencesRaw =
-    raw.experience ||
-    raw.experiences ||
-    raw.positions ||
-    raw.employment_history ||
-    [];
-  const experience_history: ExperienceEntry[] = [];
-  for (const exp of experiencesRaw) {
-    const title = exp.title || exp.role || exp.position || "";
-    let company = "";
-    if (typeof exp.company === "string") company = exp.company;
-    else if (exp.company?.name) company = exp.company.name;
-    else if (exp.companyName) company = exp.companyName;
-    if (!title && !company) continue;
-    experience_history.push({
-      title,
-      company,
-      start_date: exp.start_date || exp.starts_at || exp.startDate || null,
-      end_date: exp.end_date || exp.ends_at || exp.endDate || null,
-      description:
-        exp.description || exp.summary || exp.responsibilities || null,
-    });
-  }
-  const skillsRaw = raw.skills || raw.skill_endorsements || raw.endorsements || [];
-  const skills = Array.isArray(skillsRaw)
-    ? skillsRaw.map((s) => (typeof s === "string" ? s : s?.name || s?.skill || String(s))).filter(Boolean)
-    : [];
-  const educationRaw = raw.education || raw.education_history || [];
-  const education: string[] = [];
-  for (const ed of educationRaw) {
-    if (typeof ed === "string") education.push(ed);
-    else if (ed?.school || ed?.schoolName) education.push(ed.school || ed.schoolName);
-    else if (ed?.degree) education.push(ed.degree);
-  }
-  const current_occupation =
-    headline ||
-    (experience_history.length ? experience_history[0].title : "Unknown");
-  return {
-    full_name,
-    current_occupation,
-    experience_history,
-    skills,
-    education,
-    url: linkedinUrl,
-    linkedin_url: linkedinUrl,
-  };
-}
-
-async function scrapingdogDiscovery(
-  targetRole: string,
-  targetCompany: string,
-  targetIndustry?: string
-): Promise<{
-  rawResults: any[];
-  targetPublicProfiles: { full_name: string; current_title: string | null; current_company: string | null; linkedin_url: string | null }[];
-  similarPublicProfiles: { full_name: string; current_title: string | null; current_company: string | null; linkedin_url: string | null }[];
-  companiesSearched: string[];
-  similarCompanies: string[];
-}> {
-  const apiKey = SCRAPINGDOG_API_KEY;
-  if (!apiKey) throw new Error("SCRAPINGDOG_API_KEY is not configured.");
-
-  const role = targetRole.trim() || "professional";
-  const company = (targetCompany || "").trim();
-  const industry = (targetIndustry || "").trim();
-
-  let linkedInQuery: string;
-  if (company) {
-    linkedInQuery = `site:linkedin.com/in ${role} ${company}`;
-  } else {
-    linkedInQuery = industry
-      ? `site:linkedin.com/in ${role} ${industry}`
-      : `site:linkedin.com/in ${role}`;
-  }
-
-  const emptyResponse = {
-    rawResults: [],
-    targetPublicProfiles: [],
-    similarPublicProfiles: [],
-    companiesSearched: company ? [company] : industry ? [`Industry: ${industry}`] : [],
-    similarCompanies: [],
-  };
-
-  let profileIds: string[] = [];
-  try {
-    const googleResults = await scrapingdogGoogleSearch(apiKey, linkedInQuery, 30, 0);
-    profileIds = parseLinkedInProfileIdsFromGoogle(googleResults);
-  } catch (e) {
-    console.warn("[discovery] Scrapingdog Google search failed:", e);
-  }
-
-  if (company) {
-    try {
-      const careersQuery = `${company} careers ${role}`;
-      await scrapingdogGoogleSearch(apiKey, careersQuery, 10, 0);
-    } catch {
-      // optional: careers page URLs can be logged or stored
-    }
-  }
-
-  if (profileIds.length === 0 && company && industry) {
-    linkedInQuery = `site:linkedin.com/in ${role} ${industry}`;
-    try {
-      const fallback = await scrapingdogGoogleSearch(apiKey, linkedInQuery, 30, 0);
-      profileIds = parseLinkedInProfileIdsFromGoogle(fallback);
-    } catch {
-      // ignore
-    }
-  }
-
-  const rawResults: any[] = [];
-  const limit = 30;
-  for (let i = 0; i < Math.min(profileIds.length, limit); i++) {
-    const url = `https://www.linkedin.com/in/${profileIds[i]}/`;
-    const profile = await scrapingdogGetProfile(apiKey, profileIds[i]);
-    if (!profile) {
-      // Scrapingdog LinkedIn profile API often fails (blocked/rate-limited); still show the link from Google
-      rawResults.push({
-        _linkedinUrl: url,
-        full_name: profileIds[i].replace(/-/g, " ") || "LinkedIn profile",
-      });
-      continue;
-    }
-    const tenure = company ? tenureAtCompanyYears(profile, company) : null;
-    if (company && tenure !== null && tenure < 1) continue;
-    if (!scrapingdogHasJobDescriptions(profile)) continue;
-    rawResults.push({ ...profile, _linkedinUrl: url });
-  }
-
-  const normCompany = company ? normaliseCompanyName(company) : "";
-  const ranked = [...rawResults].sort((a, b) => {
-    const aTenure = company ? tenureAtCompanyYears(a, company) ?? 0 : 0;
-    const bTenure = company ? tenureAtCompanyYears(b, company) ?? 0 : 0;
-    return bTenure - aTenure;
-  });
-
-  const targetPublicProfiles = ranked.slice(0, 15).map((raw: any) => {
-    const mapped = mapScrapingdogProfile(raw, raw._linkedinUrl || "");
-    const firstExp = mapped.experience_history?.[0];
-    return {
-      full_name: mapped.full_name,
-      current_title: mapped.current_occupation || null,
-      current_company: firstExp?.company ?? null,
-      linkedin_url: mapped.linkedin_url || null,
-    };
-  });
-
-  return {
-    rawResults: ranked,
-    targetPublicProfiles,
-    similarPublicProfiles: [],
-    companiesSearched: company ? [company] : industry ? [`Industry: ${industry}`] : [],
-    similarCompanies: [],
-  };
-}
+// PDL is now the sole backend for discovery and enrichment.
 
 function getLinkedInUrl(raw: any): string | null {
   return (
@@ -1133,6 +773,79 @@ function normaliseGapAnalysis(raw: any): Record<string, unknown> {
   return out;
 }
 
+async function pdlPersonSearch(
+  targetRole: string,
+  targetCompany?: string,
+  targetIndustry?: string,
+  size: number = 30
+): Promise<any[]> {
+  if (!PDL_API_KEY) {
+    throw new Error("PDL_API_KEY is not configured.");
+  }
+
+  const url = "https://api.peopledatalabs.com/v5/person/search";
+
+  const must: any[] = [];
+  const role = targetRole.trim();
+  const company = targetCompany?.trim();
+  const industry = targetIndustry?.trim();
+
+  if (role) {
+    must.push({ match_phrase: { job_title: role } });
+  }
+  if (company) {
+    must.push({ match_phrase: { job_company_name: company } });
+  }
+  if (industry) {
+    must.push({ match_phrase: { job_industry: industry } });
+  }
+
+  const esQuery = {
+    query: {
+      bool: {
+        must,
+      },
+    },
+  };
+
+  const body = {
+    api_key: PDL_API_KEY,
+    size,
+    query: esQuery,
+  };
+
+  const resp = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+    cache: "no-store",
+  });
+
+  if (!resp.ok) {
+    const text = await resp.text().catch(() => "");
+    throw new Error(
+      `PDL person/search error ${resp.status}: ${text?.slice(0, 200)}`
+    );
+  }
+
+  const data = await resp.json();
+  const results =
+    (Array.isArray(data) && data) ||
+    data.data ||
+    data.results ||
+    [];
+
+  console.log(
+    "[discovery] PDL person/search returned",
+    Array.isArray(results) ? results.length : 0,
+    "results"
+  );
+
+  return Array.isArray(results) ? results : [];
+}
+
 export async function POST(req: NextRequest) {
   const { targetRole, targetCompany, targetIndustry, phase } = await req.json();
 
@@ -1150,7 +863,6 @@ export async function POST(req: NextRequest) {
   }
 
   const mode = (phase as "fiber" | "gap" | undefined) ?? "fiber";
-  const discoveryProvider = getDiscoveryProvider();
 
   try {
     const companyInput = targetCompany?.trim() ?? "";
@@ -1162,96 +874,51 @@ export async function POST(req: NextRequest) {
       targetIndustry?.trim() ||
       (correctedCompany ? inferIndustryFromCompany(correctedCompany) : undefined);
 
-    let rawResults: any[];
+    let rawResults: any[] = [];
     let targetPublicProfiles: { full_name: string; current_title: string | null; current_company: string | null; linkedin_url: string | null }[];
     let similarPublicProfiles: { full_name: string; current_title: string | null; current_company: string | null; linkedin_url: string | null }[];
     let companiesSearched: string[];
     let similarCompanies: string[];
 
-    if (discoveryProvider === "scrapingdog") {
-      const sd = await scrapingdogDiscovery(
-        correctedRole || "professional",
-        correctedCompany || "",
-        resolvedIndustry || ""
-      );
-      rawResults = sd.rawResults;
-      targetPublicProfiles = sd.targetPublicProfiles;
-      similarPublicProfiles = sd.similarPublicProfiles;
-      companiesSearched = sd.companiesSearched;
-      similarCompanies = sd.similarCompanies;
-    } else {
-      rawResults = await fiberPersonSearch(
-        correctedRole || "professional",
-        correctedCompany || undefined,
-        resolvedIndustry || undefined
-      );
+    rawResults = await pdlPersonSearch(
+      correctedRole || "professional",
+      correctedCompany || undefined,
+      resolvedIndustry || undefined
+    );
 
-      if (correctedCompany) {
-        rawResults = rawResults.filter((raw) =>
-          isExactCompanyMatch(getCurrentCompanyName(raw), correctedCompany)
-        );
-      }
+    similarCompanies = [];
+    similarPublicProfiles = [];
 
-      const targetResults = rankFiberResults(
-        rawResults,
-        correctedRole || "professional",
-        correctedCompany || ""
-      );
+    targetPublicProfiles = rawResults.slice(0, 15).map((raw: any) => {
+      const full_name =
+        raw.full_name || raw.name || raw.display_name || "Unknown";
+      const current_title =
+        raw.job_title ||
+        raw.job_title_role ||
+        raw.job_title_sub_role ||
+        null;
+      const current_company =
+        raw.job_company_name ||
+        raw.job_company?.name ||
+        null;
+      const linkedin_url =
+        raw.linkedin_url ||
+        raw.linkedin ||
+        raw.profile_url ||
+        null;
+      return {
+        full_name,
+        current_title,
+        current_company,
+        linkedin_url,
+      };
+    });
 
-      similarCompanies = [];
-      let similarResults: any[] = [];
-
-      if (correctedCompany && targetResults.length < 8) {
-        const peers = await suggestPeerCompanies(
-          correctedRole || "professional",
-          correctedCompany,
-          resolvedIndustry || undefined
-        );
-        for (const peer of peers) {
-          similarCompanies.push(peer);
-          const more = await fiberPersonSearch(
-            correctedRole || "professional",
-            peer,
-            resolvedIndustry || undefined
-          );
-          rawResults = rawResults.concat(more);
-          const rankedMore = rankFiberResults(
-            more,
-            correctedRole || "professional",
-            peer
-          );
-          similarResults = similarResults.concat(rankedMore);
-        }
-      }
-
-      targetPublicProfiles = targetResults.map((raw: any) => {
-        const mapped = mapFiberProfile(raw);
-        const firstExp = mapped.experience_history[0];
-        return {
-          full_name: mapped.full_name,
-          current_title: mapped.current_occupation || null,
-          current_company: firstExp?.company ?? null,
-          linkedin_url: getLinkedInUrl(raw),
-        };
-      });
-
-      similarPublicProfiles = similarResults.map((raw: any) => {
-        const mapped = mapFiberProfile(raw);
-        const firstExp = mapped.experience_history[0];
-        return {
-          full_name: mapped.full_name,
-          current_title: mapped.current_occupation || null,
-          current_company: firstExp?.company ?? null,
-          linkedin_url: getLinkedInUrl(raw),
-        };
-      });
-
-      companiesSearched = correctedCompany
-        ? [targetCompany?.trim() || correctedCompany]
-        : resolvedIndustry
-          ? [`Industry: ${resolvedIndustry}`]
-          : [];
-    }
+    companiesSearched = correctedCompany
+      ? [targetCompany?.trim() || correctedCompany]
+      : resolvedIndustry
+        ? [`Industry: ${resolvedIndustry}`]
+        : [];
 
     if (mode === "fiber") {
       return NextResponse.json({
@@ -1264,47 +931,9 @@ export async function POST(req: NextRequest) {
 
     // ---- Gap analysis phase ----
 
-    const baseProfiles: SuccessProfile[] =
-      discoveryProvider === "scrapingdog"
-        ? rawResults.map((r: any) =>
-            mapScrapingdogProfile(r, r._linkedinUrl || "")
-          )
-        : rawResults.map(mapFiberProfile);
-
-    let profiles: SuccessProfile[] = baseProfiles;
-
-    // PDL-first enrichment: for each discovered profile, try People Data Labs.
-    // If PDL returns nothing, fall back to the Scrapingdog/Fiber-mapped profile.
-    if (PDL_API_KEY && rawResults.length && baseProfiles.length) {
-      const combined: SuccessProfile[] = [];
-      const limit = Math.min(rawResults.length, baseProfiles.length, 20);
-
-      for (let i = 0; i < limit; i++) {
-        const raw = rawResults[i];
-        const base = baseProfiles[i];
-        if (!base) continue;
-
-        const url =
-          discoveryProvider === "scrapingdog"
-            ? raw?._linkedinUrl || ""
-            : getLinkedInUrl(raw) || "";
-
-        let enriched: SuccessProfile | null = null;
-        if (url) {
-          try {
-            enriched = await enrichUserProfile(url);
-          } catch {
-            // PDL failure for this profile; fall back to base.
-          }
-        }
-
-        combined.push(enriched ?? base);
-      }
-
-      if (combined.length > 0) {
-        profiles = combined;
-      }
-    }
+    const profiles: SuccessProfile[] = rawResults.map((raw: any) =>
+      mapPdlRecordToSuccessProfile(raw)
+    );
 
     const pattern = deriveSuccessPattern(
       profiles,
