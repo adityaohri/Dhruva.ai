@@ -930,7 +930,18 @@ async function pdlPersonSearch(
     passes.push({ must: withIndustry, label: "role+company+industry" });
   }
 
+  // Preferred: target exact role at the target company
   passes.push({ must: baseMust, label: "role+company" });
+
+  // Fallback: if we still don't have enough data, look at
+  // other roles at the same company (same company, India-only).
+  if (company) {
+    const companyOnlyMust = [
+      { term: { location_country: "india" } },
+      { match_phrase: { job_company_name: company } },
+    ];
+    passes.push({ must: companyOnlyMust, label: "company-only" });
+  }
 
   const params = new URLSearchParams();
   params.set("api_key", PDL_API_KEY);
