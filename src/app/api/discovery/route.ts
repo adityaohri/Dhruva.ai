@@ -884,68 +884,99 @@ async function pdlPersonSearch(
 
   const baseUrl = "https://api.peopledatalabs.com/v5/person/search";
 
-  const must: any[] = [];
+  const baseMust: any[] = [];
   const role = targetRole.trim();
   const company = targetCompany?.trim();
   const industry = targetIndustry?.trim();
 
   if (role) {
-    must.push({ match_phrase: { job_title: role } });
+    baseMust.push({ match_phrase: { job_title: role } });
   }
   if (company) {
-    must.push({ match_phrase: { job_company_name: company } });
-  }
-  if (industry) {
-    // Use valid PDL fields: overall person industry and/or company industry
-    must.push({ match_phrase: { industry: industry } });
-    // Optional extra signal on current company industry
-    must.push({ match_phrase: { job_company_industry: industry } });
+    baseMust.push({ match_phrase: { job_company_name: company } });
   }
 
-  const esQuery = {
-    query: {
-      bool: {
-        must,
-      },
-    },
-  };
+  // Build search passes:
+  // 1) If industry is provided: strict pass with industry filters
+  // 2) Always: relaxed pass with only role/company filters
+  const passes: { must: any[]; label: string }[] = [];
+
+  if (industry) {
+    const withIndustry = [
+      ...baseMust,
+      { match_phrase: { industry: industry } },
+      { match_phrase: { job_company_industry: industry } },
+    ];
+    passes.push({ must: withIndustry, label: "role+company+industry" });
+  }
+
+  passes.push({ must: baseMust, label: "role+company" });
 
   const params = new URLSearchParams();
   params.set("api_key", PDL_API_KEY);
 
-  const resp = await fetch(`${baseUrl}?${params.toString()}`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      size,
-      query: esQuery,
-    }),
-    cache: "no-store",
-  });
+  for (const pass of passes) {
+    const esQuery = {
+      query: {
+        bool: {
+          must: pass.must,
+        },
+      },
+    };
 
-  if (!resp.ok) {
+    const resp = await fetch(`${baseUrl}?${params.toString()}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        size,
+        query: esQuery,
+      }),
+      cache: "no-store",
+    });
+
     const text = await resp.text().catch(() => "");
-    throw new Error(
-      `PDL person/search error ${resp.status}: ${text?.slice(0, 200)}`
+
+    if (resp.status === 404) {
+      console.log(
+        "[discovery] PDL person/search 404 for pass",
+        pass.label,
+        "- no records found"
+      );
+      // Try next, more relaxed pass if available
+      continue;
+    }
+
+    if (!resp.ok) {
+      throw new Error(
+        `PDL person/search error ${resp.status}: ${text?.slice(0, 200)}`
+      );
+    }
+
+    const data = text ? JSON.parse(text) : {};
+    const results =
+      (Array.isArray(data) && data) ||
+      data.data ||
+      data.results ||
+      [];
+
+    console.log(
+      "[discovery] PDL person/search returned",
+      Array.isArray(results) ? results.length : 0,
+      "results for pass",
+      pass.label
     );
+
+    if (Array.isArray(results) && results.length > 0) {
+      return results;
+    }
   }
 
-  const data = await resp.json();
-  const results =
-    (Array.isArray(data) && data) ||
-    data.data ||
-    data.results ||
-    [];
-
   console.log(
-    "[discovery] PDL person/search returned",
-    Array.isArray(results) ? results.length : 0,
-    "results"
+    "[discovery] PDL person/search yielded no results after all passes"
   );
-
-  return Array.isArray(results) ? results : [];
+  return [];
 }
 
 export async function POST(req: NextRequest) {
