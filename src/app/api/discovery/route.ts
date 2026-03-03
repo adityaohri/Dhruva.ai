@@ -896,7 +896,10 @@ async function pdlPersonSearch(
     must.push({ match_phrase: { job_company_name: company } });
   }
   if (industry) {
-    must.push({ match_phrase: { job_industry: industry } });
+    // Use valid PDL fields: overall person industry and/or company industry
+    must.push({ match_phrase: { industry: industry } });
+    // Optional extra signal on current company industry
+    must.push({ match_phrase: { job_company_industry: industry } });
   }
 
   const esQuery = {
