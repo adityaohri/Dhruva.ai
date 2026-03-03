@@ -36,6 +36,7 @@ const cache = new Map<string, DiscoveryResult>();
 // Minimum LinkedIn connections we require to treat a profile as
 // high-credibility for discovery and gap analysis.
 const MIN_CONNECTIONS = 500;
+const MIN_PROFILES = 15;
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
@@ -1049,6 +1050,26 @@ export async function POST(req: NextRequest) {
       correctedCompany || undefined,
       resolvedIndustry || undefined
     );
+
+    // If we still have fewer than MIN_PROFILES and a target company,
+    // expand the cohort to similar roles at peer companies.
+    if (correctedCompany && rawResults.length < MIN_PROFILES) {
+      const peers = await suggestPeerCompanies(
+        correctedRole || "professional",
+        correctedCompany,
+        resolvedIndustry || undefined
+      );
+
+      for (const peer of peers) {
+        const peerResults = await pdlPersonSearch(
+          correctedRole || "professional",
+          peer,
+          resolvedIndustry || undefined
+        );
+        rawResults = rawResults.concat(peerResults);
+        if (rawResults.length >= MIN_PROFILES) break;
+      }
+    }
 
     similarCompanies = [];
     similarPublicProfiles = [];
