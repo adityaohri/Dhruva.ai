@@ -1273,30 +1273,36 @@ export async function POST(req: NextRequest) {
 
     let profiles: SuccessProfile[] = baseProfiles;
 
-    // If People Data Labs is configured, enrich benchmark profiles using
-    // their LinkedIn URLs and use that enriched data for pattern building.
-    if (PDL_API_KEY) {
-      const profileUrls: string[] =
-        discoveryProvider === "scrapingdog"
-          ? rawResults
-              .map((r: any) => r._linkedinUrl || "")
-              .filter(Boolean)
-          : rawResults
-              .map((raw: any) => getLinkedInUrl(raw) || "")
-              .filter(Boolean);
+    // PDL-first enrichment: for each discovered profile, try People Data Labs.
+    // If PDL returns nothing, fall back to the Scrapingdog/Fiber-mapped profile.
+    if (PDL_API_KEY && rawResults.length && baseProfiles.length) {
+      const combined: SuccessProfile[] = [];
+      const limit = Math.min(rawResults.length, baseProfiles.length, 20);
 
-      const uniqueUrls = Array.from(new Set(profileUrls)).slice(0, 20);
+      for (let i = 0; i < limit; i++) {
+        const raw = rawResults[i];
+        const base = baseProfiles[i];
+        if (!base) continue;
 
-      const enriched = await Promise.all(
-        uniqueUrls.map((url) => enrichUserProfile(url))
-      );
+        const url =
+          discoveryProvider === "scrapingdog"
+            ? raw?._linkedinUrl || ""
+            : getLinkedInUrl(raw) || "";
 
-      const enrichedProfiles = enriched.filter(
-        (p): p is SuccessProfile => p !== null
-      );
+        let enriched: SuccessProfile | null = null;
+        if (url) {
+          try {
+            enriched = await enrichUserProfile(url);
+          } catch {
+            // PDL failure for this profile; fall back to base.
+          }
+        }
 
-      if (enrichedProfiles.length > 0) {
-        profiles = enrichedProfiles;
+        combined.push(enriched ?? base);
+      }
+
+      if (combined.length > 0) {
+        profiles = combined;
       }
     }
 
