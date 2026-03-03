@@ -208,6 +208,105 @@ async function enrichUserProfile(
   }
 }
 
+function mapPdlRecordToSuccessProfile(data: any): SuccessProfile {
+  const full_name: string =
+    data.full_name ||
+    data.name ||
+    data.linkedin_full_name ||
+    "Unknown";
+
+  const current_occupation: string =
+    data.job_title ||
+    data.job_title_role ||
+    data.job_title_sub_role ||
+    data.job_company_name ||
+    "";
+
+  const experienceRaw: any[] = Array.isArray(data.experience)
+    ? data.experience
+    : Array.isArray(data.experiences)
+      ? data.experiences
+      : [];
+  const experience_history: ExperienceEntry[] = experienceRaw
+    .map((exp) => {
+      const title =
+        exp.title ||
+        exp.job_title ||
+        "";
+      const company =
+        exp.company ||
+        exp.company_name ||
+        exp.employer ||
+        "";
+      if (!title && !company) return null;
+      return {
+        title,
+        company,
+        start_date:
+          exp.start_date ||
+          exp.start ||
+          exp.start_date_iso ||
+          null,
+        end_date:
+          exp.end_date ||
+          exp.end ||
+          exp.end_date_iso ||
+          null,
+        description:
+          exp.summary ||
+          exp.description ||
+          null,
+      } as ExperienceEntry;
+    })
+    .filter((e): e is ExperienceEntry => e !== null);
+
+  const skillsRaw =
+    data.skills ||
+    data.skill_keywords ||
+    data.skill_tags ||
+    [];
+  const skills: string[] = Array.isArray(skillsRaw)
+    ? skillsRaw
+        .map((s) =>
+          typeof s === "string"
+            ? s
+            : s?.name || s?.skill || String(s)
+        )
+        .map((s) => s.trim())
+        .filter(Boolean)
+    : [];
+
+  const educationRaw: any[] = Array.isArray(data.education)
+    ? data.education
+    : Array.isArray(data.educations)
+      ? data.educations
+      : [];
+  const education: string[] = [];
+  for (const ed of educationRaw) {
+    if (typeof ed === "string") {
+      education.push(ed);
+    } else if (ed && typeof ed === "object") {
+      const name =
+        ed.school ||
+        ed.school_name ||
+        ed.education_degree ||
+        ed.degree ||
+        "";
+      if (name) education.push(name);
+    }
+  }
+
+  return {
+    full_name,
+    current_occupation:
+      current_occupation ||
+      (experience_history[0]?.title ?? "Unknown"),
+    experience_history,
+    skills,
+    education,
+  };
+}
+
 // PDL is now the sole backend for discovery and enrichment.
 
 function getLinkedInUrl(raw: any): string | null {
