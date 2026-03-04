@@ -543,16 +543,6 @@ export default function OpportunityPage() {
         ? bp.highest_degree.trim()
         : null;
 
-    const summaryParts: string[] = [];
-    if (skillsSnippet) summaryParts.push(`Skills: ${skillsSnippet}`);
-    if (companySnippet) summaryParts.push(`Experience: ${companySnippet}`);
-    if (degreeSnippet) summaryParts.push(`Education: ${degreeSnippet}`);
-
-    const summaryText =
-      summaryParts.length > 0
-        ? summaryParts.join(" · ")
-        : "We will benchmark roles against your uploaded CV profile.";
-
     return (
       <div
         className="flex min-h-[calc(100vh-8rem)] flex-col items-center justify-center px-4 py-12"
@@ -560,19 +550,45 @@ export default function OpportunityPage() {
       >
         <div className="w-full max-w-2xl space-y-6">
           <div className="rounded-2xl border border-white bg-white p-6 text-[#3C2A6A] shadow-sm">
-            <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-[#3C2A6A]/80">
+            <h3 className="text-sm font-semibold text-[#3C2A6A]">
+              Executive summary
+            </h3>
+            <div className="mt-2 space-y-1 text-sm">
+              {skillsSnippet && (
+                <p>
+                  <span className="font-semibold text-[#3C2A6A]">Skills: </span>
+                  <span className="text-[#3C2A6A]">{skillsSnippet}</span>
+                </p>
+              )}
+              {companySnippet && (
+                <p>
+                  <span className="font-semibold text-[#3C2A6A]">
+                    Experience:{" "}
+                  </span>
+                  <span className="text-[#3C2A6A]">{companySnippet}</span>
+                </p>
+              )}
+              {degreeSnippet && (
+                <p>
+                  <span className="font-semibold text-[#3C2A6A]">
+                    Education:{" "}
+                  </span>
+                  <span className="text-[#3C2A6A]">{degreeSnippet}</span>
+                </p>
+              )}
+              {!skillsSnippet && !companySnippet && !degreeSnippet && (
+                <p className="text-[#3C2A6A]">
+                  We will benchmark roles against your uploaded CV profile.
+                </p>
+              )}
+            </div>
+            <p className="mt-4 text-[11px] font-medium uppercase tracking-[0.18em] text-[#3C2A6A]/80">
               Identity confirmation
             </p>
-            <p className="mt-2 text-xs text-slate-500">
+            <p className="mt-1 text-xs text-slate-500">
               {benchmarkLoading
                 ? "Pulling your benchmarking attributes from your uploaded CV..."
                 : line}
-            </p>
-            <h3 className="mt-4 text-sm font-semibold text-[#3C2A6A]">
-              Executive summary
-            </h3>
-            <p className="mt-1 text-sm text-[#3C2A6A]">
-              {summaryText}
             </p>
             {benchmarkError && (
               <p className="mt-2 text-xs text-red-600">
