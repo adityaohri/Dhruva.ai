@@ -229,8 +229,9 @@ export async function POST(req: NextRequest) {
           (row as any).projects,
           (row as any).others,
         ]
-          .filter(Boolean)
-          .map((s: string) => s.trim());
+          .filter((v) => v != null && v !== "")
+          .map((s: any) => String(s).trim())
+          .filter(Boolean);
         const experience = experienceParts.join(" | ");
         const education = (row as any).university ?? "";
         userProfileForMatch = {
