@@ -523,6 +523,36 @@ export default function OpportunityPage() {
         ? `Benchmarking using your uploaded CV: ${parts.join(" | ")}`
         : "Benchmarking using your uploaded CV from your uploaded history.";
 
+    const skillsSnippet =
+      typeof bp?.top_skills === "string" && bp.top_skills.trim()
+        ? bp.top_skills
+            .split(/[,|]/)
+            .map((s: string) => s.trim())
+            .filter(Boolean)
+            .slice(0, 4)
+            .join(", ")
+        : null;
+
+    const companySnippet =
+      typeof bp?.latest_company === "string" && bp.latest_company.trim()
+        ? bp.latest_company.split(/[,|]/)[0]?.trim()
+        : null;
+
+    const degreeSnippet =
+      typeof bp?.highest_degree === "string" && bp.highest_degree.trim()
+        ? bp.highest_degree.trim()
+        : null;
+
+    const summaryParts: string[] = [];
+    if (skillsSnippet) summaryParts.push(`Skills: ${skillsSnippet}`);
+    if (companySnippet) summaryParts.push(`Experience: ${companySnippet}`);
+    if (degreeSnippet) summaryParts.push(`Education: ${degreeSnippet}`);
+
+    const summaryText =
+      summaryParts.length > 0
+        ? summaryParts.join(" · ")
+        : "We will benchmark roles against your uploaded CV profile.";
+
     return (
       <div
         className="flex min-h-[calc(100vh-8rem)] flex-col items-center justify-center px-4 py-12"
@@ -533,10 +563,16 @@ export default function OpportunityPage() {
             <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-[#3C2A6A]/80">
               Identity confirmation
             </p>
-            <p className="mt-3 text-sm text-[#3C2A6A]">
+            <p className="mt-2 text-xs text-slate-500">
               {benchmarkLoading
                 ? "Pulling your benchmarking attributes from your uploaded CV..."
                 : line}
+            </p>
+            <h3 className="mt-4 text-sm font-semibold text-[#3C2A6A]">
+              Executive summary
+            </h3>
+            <p className="mt-1 text-sm text-[#3C2A6A]">
+              {summaryText}
             </p>
             {benchmarkError && (
               <p className="mt-2 text-xs text-red-600">
