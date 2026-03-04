@@ -12,13 +12,6 @@ import {
   standardiseAndSummariseJobs,
   type EnrichedJob,
 } from "@/lib/services/extractor";
-import {
-  calculateMatchScore,
-  type JobData,
-  type UserProfile,
-} from "@/lib/services/analyst";
-import { createClient } from "@/lib/supabase/server";
-
 export interface SentinelResultItem extends HuntResult {
   isDirect: boolean;
   company: string | null;
@@ -207,87 +200,15 @@ export async function POST(req: NextRequest) {
     const rawResults = [...organicResults, ...googleJobsResults];
     const baselineResults = dedupeTagAndFilter(rawResults, experience);
 
-    // Opportunity Intelligence – standardisation & AI summarisation
+    // Opportunity Intelligence – standardisation & AI summarisation (match on demand via /api/discovery/match)
     const enrichedResults = await standardiseAndSummariseJobs(baselineResults);
 
-    // Load current user's saved profile (for CV-to-JD matching)
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    let userProfileForMatch: UserProfile | null = null;
-    if (user) {
-      const { data: row } = await supabase
-        .from("user_profiles")
-        .select("skills, internships, leadership_positions, projects, others, university")
-        .eq("user_id", user.id)
-        .maybeSingle();
-      if (row) {
-        const skills = (row as any).skills ?? "";
-        const experienceParts = [
-          (row as any).internships,
-          (row as any).leadership_positions,
-          (row as any).projects,
-          (row as any).others,
-        ]
-          .filter((v) => v != null && v !== "")
-          .map((s: any) => String(s).trim())
-          .filter(Boolean);
-        const experience = experienceParts.join(" | ");
-        const education = (row as any).university ?? "";
-        userProfileForMatch = {
-          skills: skills ?? "",
-          experience,
-          education,
-        };
-      }
-    }
-
-    const typedResults: SentinelResultItem[] = [];
-    for (const r of enrichedResults as (SentinelResultItem & EnrichedJob)[]) {
-      let match_score: number | undefined;
-      let match_band: "Strong" | "Good" | "Moderate" | "Stretch" | undefined;
-      let match_strengths: string[] | undefined;
-      let match_gaps: string[] | undefined;
-      let match_action_item: string | undefined;
-
-      if (userProfileForMatch) {
-        const jobData: JobData = {
-          title: r.displayName || r.title,
-          company: r.company,
-          location: undefined,
-          description: r.summary || r.snippet,
-          seniorityHint: filters.experience,
-          requiredSkills: [],
-          niceToHaveSkills: [],
-          source: r.source,
-          url: r.url,
-        };
-        try {
-          const analysis = await calculateMatchScore(jobData, userProfileForMatch);
-          if (analysis) {
-            match_score = analysis.score;
-            match_band = analysis.band;
-            match_strengths = analysis.strengths;
-            match_gaps = analysis.gaps;
-            match_action_item = analysis.actionItem;
-          }
-        } catch (e) {
-          console.warn("[sentinel] match analyst failed for job", r.url, e);
-        }
-      }
-
-      typedResults.push({
-        ...(r as SentinelResultItem & EnrichedJob),
-        prestige_score: prestigeScore(r.company ?? null),
-        match_score,
-        match_band,
-        match_strengths,
-        match_gaps,
-        match_action_item,
-      });
-    }
+    const typedResults: SentinelResultItem[] = (
+      enrichedResults as (SentinelResultItem & EnrichedJob)[]
+    ).map((r) => ({
+      ...(r as SentinelResultItem & EnrichedJob),
+      prestige_score: prestigeScore(r.company ?? null),
+    }));
     const resultsByCompany = groupByCompany(typedResults);
 
     return NextResponse.json({

@@ -67,6 +67,14 @@ type OpportunityResult = {
   match_action_item?: string;
 };
 
+type LazyMatch = {
+  score: number;
+  band: "Strong" | "Good" | "Moderate" | "Stretch";
+  strengths: string[];
+  gaps: string[];
+  actionItem: string;
+};
+
 export type OpportunityFilters = {
   industry: string;
   jobType: string;
@@ -130,24 +138,43 @@ function getSourceBadge(url: string): string {
   }
 }
 
-function OpportunityCard({ r }: { r: OpportunityResult }) {
+function OpportunityCard({
+  r,
+  matchData,
+  loadingMatch,
+  onCheckMatch,
+}: {
+  r: OpportunityResult;
+  matchData?: LazyMatch | null;
+  loadingMatch?: boolean;
+  onCheckMatch?: () => void;
+}) {
   const score =
-    typeof r.match_score === "number"
-      ? Math.round(Math.max(0, Math.min(100, r.match_score)))
-      : null;
+    matchData != null
+      ? Math.round(Math.max(0, Math.min(100, matchData.score)))
+      : typeof r.match_score === "number"
+        ? Math.round(Math.max(0, Math.min(100, r.match_score)))
+        : null;
 
   const band: OpportunityResult["match_band"] | null =
-    r.match_band && score !== null
-      ? r.match_band
-      : score !== null
-        ? score >= 80
-          ? "Strong"
-          : score >= 65
-            ? "Good"
-            : score >= 50
-              ? "Moderate"
-              : "Stretch"
-        : null;
+    matchData != null
+      ? matchData.band
+      : r.match_band && score !== null
+        ? r.match_band
+        : score !== null
+          ? score >= 80
+            ? "Strong"
+            : score >= 65
+              ? "Good"
+              : score >= 50
+                ? "Moderate"
+                : "Stretch"
+          : null;
+
+  const strengths = matchData?.strengths ?? r.match_strengths;
+  const gaps = matchData?.gaps ?? r.match_gaps;
+  const actionItem = matchData?.actionItem ?? r.match_action_item;
+  const hasMatchDetails = Boolean(strengths?.length || gaps?.length || actionItem);
 
   let bandColor =
     "border-slate-300 text-slate-600 bg-white";
@@ -205,38 +232,48 @@ function OpportunityCard({ r }: { r: OpportunityResult }) {
           {r.summary || r.snippet}
         </p>
       )}
-      {(r.match_strengths?.length || r.match_gaps?.length || r.match_action_item) && (
+      {hasMatchDetails && (
         <div className="mt-3 border-t border-dashed border-slate-200 pt-3 text-xs text-slate-700 space-y-1.5">
-          {r.match_strengths && r.match_strengths.length > 0 && (
+          {strengths?.length ? (
             <p>
               <span className="font-semibold text-[#3C2A6A]">Strengths: </span>
-              <span>{r.match_strengths.slice(0, 2).join("; ")}</span>
+              <span>{strengths.slice(0, 2).join("; ")}</span>
             </p>
-          )}
-          {r.match_gaps && r.match_gaps.length > 0 && (
+          ) : null}
+          {gaps?.length ? (
             <p>
               <span className="font-semibold text-[#3C2A6A]">Gaps: </span>
-              <span>{r.match_gaps.slice(0, 2).join("; ")}</span>
+              <span>{gaps.slice(0, 2).join("; ")}</span>
             </p>
-          )}
-          {r.match_action_item && (
+          ) : null}
+          {actionItem ? (
             <p>
-              <span className="font-semibold text-[#3C2A6A]">
-                Action:
-              </span>{" "}
-              <span>{r.match_action_item}</span>
+              <span className="font-semibold text-[#3C2A6A]">Action: </span>
+              <span>{actionItem}</span>
             </p>
-          )}
+          ) : null}
         </div>
       )}
-      <a
-        href={r.url}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="mt-4 inline-flex w-full justify-center rounded-full bg-[#3C2A6A] py-2.5 text-sm font-medium text-[#FDFBF1] hover:bg-[#4a347f]"
-      >
-        Apply now
-      </a>
+      <div className="mt-4 flex flex-col gap-2">
+        {onCheckMatch && matchData == null ? (
+          <button
+            type="button"
+            onClick={onCheckMatch}
+            disabled={loadingMatch}
+            className="inline-flex w-full justify-center rounded-full border-2 border-[#3C2A6A] bg-white py-2.5 text-sm font-medium text-[#3C2A6A] hover:bg-[#3C2A6A]/5 disabled:opacity-60"
+          >
+            {loadingMatch ? "Checking…" : "Check Profile Match"}
+          </button>
+        ) : null}
+        <a
+          href={r.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex w-full justify-center rounded-full bg-[#3C2A6A] py-2.5 text-sm font-medium text-[#FDFBF1] hover:bg-[#4a347f]"
+        >
+          Apply now
+        </a>
+      </div>
     </div>
   );
 }
@@ -257,6 +294,8 @@ export default function OpportunityPage() {
   const [sortMode, setSortMode] = useState<"match" | "prestige" | "recency">(
     "match"
   );
+  const [matchByUrl, setMatchByUrl] = useState<Record<string, LazyMatch>>({});
+  const [loadingMatchUrl, setLoadingMatchUrl] = useState<string | null>(null);
   const [benchmarkProfile, setBenchmarkProfile] = useState<{
     top_skills?: string | null;
     latest_company?: string | null;
@@ -375,6 +414,7 @@ export default function OpportunityPage() {
       }));
       setResults(withIndex);
       setResultsByCompany(data.resultsByCompany || {});
+      setMatchByUrl({});
     } catch (e) {
       clearInterval(progressInterval);
       clearInterval(statusInterval);
@@ -387,12 +427,55 @@ export default function OpportunityPage() {
     }
   }, [filters]);
 
+  const fetchMatchForJob = useCallback(
+    async (job: OpportunityResult) => {
+      setLoadingMatchUrl(job.url);
+      try {
+        const res = await fetch("/api/discovery/match", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            job: {
+              title: job.displayName || job.title,
+              company: job.company,
+              description: job.summary || job.snippet,
+              url: job.url,
+              source: job.source,
+              seniorityHint: filters.experience,
+            },
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          setError(data.error || "Match check failed");
+          return;
+        }
+        setMatchByUrl((prev) => ({
+          ...prev,
+          [job.url]: {
+            score: data.score,
+            band: data.band,
+            strengths: data.strengths ?? [],
+            gaps: data.gaps ?? [],
+            actionItem: data.actionItem ?? "",
+          },
+        }));
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Check failed");
+      } finally {
+        setLoadingMatchUrl(null);
+      }
+    },
+    [filters.experience]
+  );
+
   const resetFilters = useCallback(() => {
     setFilters(initialFilters);
     setOnboardingStep(1);
     setFlowStep("filters");
     setResults([]);
     setResultsByCompany({});
+    setMatchByUrl({});
     setError(null);
     try {
       localStorage.removeItem(STORAGE_KEY);
@@ -725,10 +808,8 @@ export default function OpportunityPage() {
 
   const sortedResults = [...results].sort((a, b) => {
     if (sortMode === "match") {
-      const ma =
-        typeof a.match_score === "number" ? a.match_score : -1;
-      const mb =
-        typeof b.match_score === "number" ? b.match_score : -1;
+      const ma = matchByUrl[a.url]?.score ?? a.match_score ?? -1;
+      const mb = matchByUrl[b.url]?.score ?? b.match_score ?? -1;
       if (mb !== ma) return mb - ma;
     } else if (sortMode === "prestige") {
       const pa = a.prestige_score ?? 0;
@@ -811,7 +892,13 @@ export default function OpportunityPage() {
                     </h3>
                     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                       {companyResults.map((r, i) => (
-                        <OpportunityCard key={`${r.url}-${i}`} r={r} />
+                        <OpportunityCard
+                          key={`${r.url}-${i}`}
+                          r={r}
+                          matchData={matchByUrl[r.url]}
+                          loadingMatch={loadingMatchUrl === r.url}
+                          onCheckMatch={() => fetchMatchForJob(r)}
+                        />
                       ))}
                     </div>
                   </div>
@@ -826,7 +913,13 @@ export default function OpportunityPage() {
                   </h3>
                   <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                     {resultsByCompany["Other"].map((r, i) => (
-                      <OpportunityCard key={`${r.url}-${i}`} r={r} />
+                      <OpportunityCard
+                        key={`${r.url}-${i}`}
+                        r={r}
+                        matchData={matchByUrl[r.url]}
+                        loadingMatch={loadingMatchUrl === r.url}
+                        onCheckMatch={() => fetchMatchForJob(r)}
+                      />
                     ))}
                   </div>
                 </div>
@@ -841,7 +934,13 @@ export default function OpportunityPage() {
             </h2>
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {sortedResults.map((r, i) => (
-                <OpportunityCard key={`${r.url}-${i}`} r={r} />
+                <OpportunityCard
+                  key={`${r.url}-${i}`}
+                  r={r}
+                  matchData={matchByUrl[r.url]}
+                  loadingMatch={loadingMatchUrl === r.url}
+                  onCheckMatch={() => fetchMatchForJob(r)}
+                />
               ))}
             </div>
           </div>
