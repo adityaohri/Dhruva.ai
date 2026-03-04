@@ -69,18 +69,41 @@ export function generateDorkQueries(filters: SentinelFilters): DorkQuery[] {
   const roles = rolesSegment(filters);
   const location = (filters.location || "India").trim() || "India";
   const roleSegment = roles || filters.jobType || "jobs";
+  const industry = (filters.industry || "").toLowerCase();
 
   const queries: DorkQuery[] = [];
 
-  // 1. ATS Query: Greenhouse, Lever, Workday – focused on India + role.
+  // Base ATS pattern: Greenhouse + Lever + Workday – deep search for role in India.
   queries.push({
     type: "ats",
     query:
       `(site:boards.greenhouse.io OR site:lever.co OR site:myworkdayjobs.com) ` +
-      `${location} ${roleSegment}`.trim(),
+      `${location} "${roleSegment}"`.trim(),
   });
 
-  // 2. Tier‑1 career sites (McKinsey, Google)
+  // For Consulting, run recursive deep search with multiple specialised patterns.
+  if (industry.includes("consulting")) {
+    // 1) Greenhouse / Lever consulting roles in India
+    queries.push({
+      type: "ats",
+      query:
+        `(site:boards.greenhouse.io OR site:lever.co) India "Consulting"`.trim(),
+    });
+
+    // 2) Workday consulting roles in India
+    queries.push({
+      type: "ats",
+      query: `site:myworkdayjobs.com India "Consulting"`.trim(),
+    });
+
+    // 3) Explicit internships for consulting in India
+    queries.push({
+      type: "linkedin",
+      query: `intitle:"Internship" "Consulting" India`.trim(),
+    });
+  }
+
+  // Tier‑1 career sites (McKinsey, Google) using the role segment.
   const tierOneSites = ["site:jobs.mckinsey.com", "site:careers.google.com"].join(
     " OR "
   );
@@ -197,7 +220,8 @@ async function fetchOneQuery(
     q,
     api_key: apiKey,
     gl,
-    num: "10",
+    // Ask SerpApi for the maximum volume to capture as many listings as possible.
+    num: "100",
   });
   const url = `${SERPAPI_BASE}?${params.toString()}`;
   const resp = await fetch(url, { cache: "no-store" });
