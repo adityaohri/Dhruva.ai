@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
   generateDorkQueries,
+  generateSocialSignalQueries,
   executeHunt,
   fetchGoogleJobs,
   isDirectUrl,
@@ -195,7 +196,8 @@ export async function POST(req: NextRequest) {
     };
 
     const dorkQueries = generateDorkQueries(filters);
-    const queryStrings = dorkQueries.map((d) => d.query);
+    const socialQueries = generateSocialSignalQueries(filters);
+    const queryStrings = [...dorkQueries, ...socialQueries].map((d) => d.query);
 
     // Run dork hunt and Google Jobs in parallel (one layer deeper: individual listings with company)
     const [organicResults, googleJobsResults] = await Promise.all([
@@ -293,7 +295,7 @@ export async function POST(req: NextRequest) {
       resultsByCompany,
       meta: {
         provider: "serpapi",
-        queriesCount: dorkQueries.length,
+        queriesCount: dorkQueries.length + socialQueries.length,
         totalBeforeDedupe: rawResults.length,
         totalAfterDedupe: typedResults.length,
         directCount: typedResults.filter((r) => r.isDirect).length,

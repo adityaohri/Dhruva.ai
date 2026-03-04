@@ -11,6 +11,8 @@ export type RawJob = {
   snippet: string;
   source: string;
   company?: string | null;
+  /** Optional: name of hiring manager / recruiter for social posts. */
+  contact_person?: string | null;
 };
 
 export type EnrichedJob = RawJob & {
@@ -389,6 +391,99 @@ async function aiExtractCompanyFromContext(
   }
 }
 
+type SocialSignalMetadata = {
+  company?: string | null;
+  role?: string | null;
+  contact_person?: string | null;
+};
+
+function isLinkedInPostUrl(url: string | undefined): boolean {
+  if (!url) return false;
+  try {
+    const u = new URL(url);
+    const host = u.hostname.toLowerCase();
+    const path = u.pathname.toLowerCase();
+    return host.includes("linkedin.com") && path.includes("/posts");
+  } catch {
+    return false;
+  }
+}
+
+async function aiExtractSocialSignalMetadata(
+  params: { url?: string; title?: string; snippet?: string }
+): Promise<SocialSignalMetadata | null> {
+  const client = getAnthropicClient();
+  if (!client) return null;
+
+  const { url, title, snippet } = params;
+  const pieces = [
+    url ? `URL: ${url}` : "",
+    title ? `TITLE: ${title}` : "",
+    snippet ? `POST_TEXT: ${snippet}` : "",
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+  if (!pieces) return null;
+
+  const prompt = [
+    "You are a normalisation layer for LinkedIn hiring posts.",
+    "Read the post carefully and extract:",
+    "- company: the hiring company name (string or null).",
+    "- role: the concise role title being hired for, e.g. \"Strategy Consulting Intern\" (string or null).",
+    "- contact_person: the full name of the hiring manager or recruiter mentioned as the contact person (string or null).",
+    "",
+    "Return ONLY a compact JSON object with exactly these keys: company, role, contact_person.",
+    "If you are unsure about a field, set it to null.",
+    "",
+    "Examples of contact_person cues: \"reach out to Priya Sharma\", \"contact Ankit for referrals\", \"DM me\" (use the post author's name when explicit).",
+    "",
+    "Now extract the fields from this LinkedIn post:",
+    "",
+    pieces,
+  ].join("\n");
+
+  try {
+    const completion = await client.messages.create({
+      model: "claude-sonnet-4-6",
+      max_tokens: 200,
+      temperature: 0.1,
+      messages: [
+        {
+          role: "user",
+          content: prompt,
+        },
+      ],
+    });
+
+    const textPart = completion.content.find(
+      (c) => c.type === "text"
+    ) as { type: "text"; text: string } | undefined;
+    const raw = textPart?.text?.trim();
+    if (!raw) return null;
+
+    try {
+      const parsed = JSON.parse(raw) as SocialSignalMetadata;
+      return {
+        company:
+          typeof parsed.company === "string"
+            ? parsed.company.trim() || null
+            : null,
+        role:
+          typeof parsed.role === "string" ? parsed.role.trim() || null : null,
+        contact_person:
+          typeof parsed.contact_person === "string"
+            ? parsed.contact_person.trim() || null
+            : null,
+      };
+    } catch {
+      return null;
+    }
+  } catch (e) {
+    console.warn("[extractor] aiExtractSocialSignalMetadata failed:", e);
+    return null;
+  }
+}
+
 function isPlaceholderCompanyName(name: string): boolean {
   const lower = name.toLowerCase().trim();
   if (!lower) return true;
@@ -531,7 +626,36 @@ function extractCompanyFromSnippetIntro(snippet: string | undefined): string | n
 export async function standardiseAndSummariseJob(raw: RawJob): Promise<EnrichedJob> {
   const url = raw.url as string | undefined;
   const snippet = raw.snippet as string | undefined;
+  const title = (raw.title ?? "").toString();
+
+  const isLinkedInPost = isLinkedInPostUrl(url);
+  let contact_person: string | null = raw.contact_person ?? null;
+  let socialRole: string | null = null;
+  let socialCompany: string | null = null;
+
+  if (isLinkedInPost) {
+    const socialMeta = await aiExtractSocialSignalMetadata({
+      url,
+      title,
+      snippet,
+    });
+    if (socialMeta) {
+      if (socialMeta.contact_person) {
+        contact_person = socialMeta.contact_person;
+      }
+      if (socialMeta.role) {
+        socialRole = socialMeta.role;
+      }
+      if (socialMeta.company) {
+        socialCompany = socialMeta.company;
+      }
+    }
+  }
+
   let rawCompany = (raw.company ?? "").toString().trim();
+  if (socialCompany) {
+    rawCompany = socialCompany;
+  }
   if (rawCompany && isPlaceholderCompanyName(rawCompany)) {
     rawCompany = "";
   }
@@ -575,7 +699,11 @@ export async function standardiseAndSummariseJob(raw: RawJob): Promise<EnrichedJ
     company = "Unknown Company";
   }
 
-  const displayName = normalizeJobTitle((raw.title ?? "").toString(), company);
+  const effectiveTitleForNormalisation = socialRole ?? title;
+  const displayName = normalizeJobTitle(
+    effectiveTitleForNormalisation,
+    company
+  );
 
   let htmlPreview = "";
   if (url) {
@@ -588,7 +716,7 @@ export async function standardiseAndSummariseJob(raw: RawJob): Promise<EnrichedJ
   }
 
   const summaryFeed = [
-    `TITLE: ${raw.title ?? ""}`,
+    `TITLE: ${title}`,
     `COMPANY: ${company}`,
     snippet ? `SNIPPET:\n${snippet}` : "",
     htmlPreview ? `HTML:\n${htmlPreview}` : "",
@@ -603,6 +731,7 @@ export async function standardiseAndSummariseJob(raw: RawJob): Promise<EnrichedJ
     company,
     displayName,
     summary: summary ?? null,
+    contact_person,
   };
 }
 

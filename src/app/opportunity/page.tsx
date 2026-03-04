@@ -254,7 +254,9 @@ export default function OpportunityPage() {
   const [loadingProgress, setLoadingProgress] = useState(0);
   const [loadingStatusIndex, setLoadingStatusIndex] = useState(0);
   const [error, setError] = useState<string | null>(null);
-  const [sortMode, setSortMode] = useState<"prestige" | "recency">("prestige");
+  const [sortMode, setSortMode] = useState<"match" | "prestige" | "recency">(
+    "match"
+  );
   const [benchmarkProfile, setBenchmarkProfile] = useState<{
     top_skills?: string | null;
     latest_company?: string | null;
@@ -722,7 +724,13 @@ export default function OpportunityPage() {
   }
 
   const sortedResults = [...results].sort((a, b) => {
-    if (sortMode === "prestige") {
+    if (sortMode === "match") {
+      const ma =
+        typeof a.match_score === "number" ? a.match_score : -1;
+      const mb =
+        typeof b.match_score === "number" ? b.match_score : -1;
+      if (mb !== ma) return mb - ma;
+    } else if (sortMode === "prestige") {
       const pa = a.prestige_score ?? 0;
       const pb = b.prestige_score ?? 0;
       if (pb !== pa) return pb - pa;
@@ -744,10 +752,17 @@ export default function OpportunityPage() {
             <select
               value={sortMode}
               onChange={(e) =>
-                setSortMode(e.target.value === "recency" ? "recency" : "prestige")
+                setSortMode(
+                  e.target.value === "recency"
+                    ? "recency"
+                    : e.target.value === "match"
+                      ? "match"
+                      : "prestige"
+                )
               }
               className="rounded-full border border-[#E5E7EB] bg-white px-3 py-1 text-xs text-[#3C2A6A] focus:border-[#3C2A6A]/60 focus:outline-none"
             >
+              <option value="match">Best Fit (Match Score)</option>
               <option value="prestige">Most Sought After</option>
               <option value="recency">Recency</option>
             </select>

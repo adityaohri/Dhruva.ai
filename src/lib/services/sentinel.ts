@@ -60,50 +60,44 @@ function experienceSegment(filters: SentinelFilters): string {
 }
 
 /**
- * Generates targeted dork queries for ATS and top‑tier career sites.
- *
- * 1) (site:boards.greenhouse.io OR site:lever.co OR site:myworkdayjobs.com) India [Job Role]
- * 2) (site:jobs.mckinsey.com OR site:careers.google.com) [Job Role]
+ * Recursive Meta-Search: for Consulting in India, returns exactly 5 dork patterns
+ * run in parallel. For other industries, returns the standard ATS + tier-one set.
+ */
+const META_SEARCH_CONSULTING_INDIA: DorkQuery[] = [
+  { type: "ats", query: 'site:boards.greenhouse.io "Consulting" India' },
+  { type: "ats", query: 'site:lever.co "Consulting" India' },
+  { type: "ats", query: 'site:myworkdayjobs.com "Consulting" India' },
+  {
+    type: "linkedin",
+    query: 'intitle:"Internship" "Consulting" "India"',
+  },
+  {
+    type: "ats",
+    query:
+      '(site:boards.greenhouse.io OR site:lever.co OR site:myworkdayjobs.com) "Consulting" India',
+  },
+];
+
+/**
+ * Generates targeted dork queries. For Consulting, uses the 5-pattern Recursive Meta-Search;
+ * otherwise ATS + tier-one career sites.
  */
 export function generateDorkQueries(filters: SentinelFilters): DorkQuery[] {
   const roles = rolesSegment(filters);
-  const location = (filters.location || "India").trim() || "India";
   const roleSegment = roles || filters.jobType || "jobs";
   const industry = (filters.industry || "").toLowerCase();
 
-  const queries: DorkQuery[] = [];
+  if (industry.includes("consulting")) {
+    return [...META_SEARCH_CONSULTING_INDIA];
+  }
 
-  // Base ATS pattern: Greenhouse + Lever + Workday – deep search for role in India.
+  const queries: DorkQuery[] = [];
   queries.push({
     type: "ats",
     query:
       `(site:boards.greenhouse.io OR site:lever.co OR site:myworkdayjobs.com) ` +
-      `${location} "${roleSegment}"`.trim(),
+      `${(filters.location || "India").trim() || "India"} "${roleSegment}"`.trim(),
   });
-
-  // For Consulting, run recursive deep search with multiple specialised patterns.
-  if (industry.includes("consulting")) {
-    // 1) Greenhouse / Lever consulting roles in India
-    queries.push({
-      type: "ats",
-      query:
-        `(site:boards.greenhouse.io OR site:lever.co) India "Consulting"`.trim(),
-    });
-
-    // 2) Workday consulting roles in India
-    queries.push({
-      type: "ats",
-      query: `site:myworkdayjobs.com India "Consulting"`.trim(),
-    });
-
-    // 3) Explicit internships for consulting in India
-    queries.push({
-      type: "linkedin",
-      query: `intitle:"Internship" "Consulting" India`.trim(),
-    });
-  }
-
-  // Tier‑1 career sites (McKinsey, Google) using the role segment.
   const tierOneSites = ["site:jobs.mckinsey.com", "site:careers.google.com"].join(
     " OR "
   );
@@ -111,8 +105,33 @@ export function generateDorkQueries(filters: SentinelFilters): DorkQuery[] {
     type: "direct_company",
     query: `(${tierOneSites}) ${roleSegment}`.trim(),
   });
-
   return queries;
+}
+
+/**
+ * Social Signal patterns (LinkedIn posts) for live hiring intent and referrals.
+ * These run alongside direct-to-source checks in the Sentinel route.
+ */
+export function generateSocialSignalQueries(
+  filters: SentinelFilters
+): DorkQuery[] {
+  const role = rolesSegment(filters) || filters.jobType || "role";
+  const location = (filters.location || "India").trim() || "India";
+
+  return [
+    {
+      type: "linkedin",
+      query: `"hiring" "${role}" "${location}" site:linkedin.com/posts after:2026-02-01`,
+    },
+    {
+      type: "linkedin",
+      query: `"we are looking for" "${role}" "${location}" site:linkedin.com`,
+    },
+    {
+      type: "linkedin",
+      query: `"referral" "open roles" "${location}" site:linkedin.com`,
+    },
+  ];
 }
 
 export interface HuntResult {
@@ -255,9 +274,36 @@ async function fetchOneQuery(
     });
 }
 
+/** Normalize URL for deduplication: strip fragment and trailing slash, lowercase. */
+function normalizeUrlForDedupe(url: string): string {
+  try {
+    const u = url.trim();
+    const hash = u.indexOf("#");
+    const withoutHash = hash >= 0 ? u.slice(0, hash) : u;
+    return withoutHash.replace(/\/+$/, "").toLowerCase();
+  } catch {
+    return url.toLowerCase();
+  }
+}
+
+/** Merge multiple hunt result arrays and remove duplicates by URL (first occurrence wins). */
+function mergeAndDedupeByUrl(arrays: HuntResult[][]): HuntResult[] {
+  const seen = new Set<string>();
+  const out: HuntResult[] = [];
+  for (const arr of arrays) {
+    for (const r of arr) {
+      const key = normalizeUrlForDedupe(r.url);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(r);
+    }
+  }
+  return out;
+}
+
 /**
  * Execute dork hunt via SerpApi Google Search (queries run in parallel).
- * Returns a flat array of results: { title, url, snippet, source }.
+ * Merges results from all calls and removes duplicate URLs. Returns merged list.
  */
 export async function executeHunt(
   queries: string[],
@@ -271,7 +317,7 @@ export async function executeHunt(
 
   const batches = queries.map((q) => fetchOneQuery(q, apiKey, gl));
   const arrays = await Promise.all(batches);
-  return arrays.flat();
+  return mergeAndDedupeByUrl(arrays);
 }
 
 /** Google Jobs API response job entry. */
