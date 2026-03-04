@@ -205,19 +205,42 @@ export default function OpportunityPage() {
     const supabase = createSupabaseClient();
     (async () => {
       try {
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+
+        if (!user) {
+          setBenchmarkError("Please log in to confirm your profile.");
+          setBenchmarkProfile(null);
+          return;
+        }
+
         const { data, error } = await supabase
           .from("user_profiles")
-          .select("top_skills, latest_company, highest_degree")
+          .select("skills, internships, university")
+          .eq("user_id", user.id)
           .maybeSingle();
+
         if (error) {
-          setBenchmarkError(error.message);
+          setBenchmarkError(
+            "We couldn't load your saved CV details. You can still run the hunt or update your profile."
+          );
           setBenchmarkProfile(null);
+        } else if (data) {
+          setBenchmarkProfile({
+            top_skills: (data as any).skills ?? null,
+            latest_company: (data as any).internships ?? null,
+            highest_degree: (data as any).university ?? null,
+          });
         } else {
-          setBenchmarkProfile(data as any);
+          setBenchmarkError(
+            "No saved CV found. You can still run the hunt or update your profile."
+          );
+          setBenchmarkProfile(null);
         }
       } catch (e) {
         setBenchmarkError(
-          e instanceof Error ? e.message : "Failed to load profile."
+          "Failed to load your profile. You can still run the hunt or update your profile."
         );
         setBenchmarkProfile(null);
       } finally {
@@ -506,19 +529,21 @@ export default function OpportunityPage() {
         style={{ backgroundColor: CREAM }}
       >
         <div className="w-full max-w-2xl space-y-6">
-          <div className="rounded-2xl bg-[#3C2A6A] p-6 text-[#FDFBF1]">
-            <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-[#D1C4FF]">
+          <div className="rounded-2xl border border-white bg-white p-6 text-[#3C2A6A] shadow-sm">
+            <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-[#3C2A6A]/80">
               Identity confirmation
             </p>
-            <p className="mt-3 text-sm">
-              {benchmarkLoading ? "Pulling your benchmarking attributes from your uploaded CV..." : line}
+            <p className="mt-3 text-sm text-[#3C2A6A]">
+              {benchmarkLoading
+                ? "Pulling your benchmarking attributes from your uploaded CV..."
+                : line}
             </p>
             {benchmarkError && (
-              <p className="mt-2 text-xs text-red-100">
+              <p className="mt-2 text-xs text-red-600">
                 {benchmarkError}
               </p>
             )}
-            <p className="mt-4 text-[11px] text-[#E5DFFF]">
+            <p className="mt-4 text-[11px] text-slate-500">
               Benchmarking grounded in your verified history for maximum match accuracy.
             </p>
           </div>
