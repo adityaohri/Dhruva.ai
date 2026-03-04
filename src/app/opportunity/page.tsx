@@ -514,20 +514,38 @@ export default function OpportunityPage() {
 
   if (flowStep === "confirm_profile") {
     const bp = benchmarkProfile as any | null;
-    const skillsSnippet =
-      typeof bp?.top_skills === "string" && bp.top_skills.trim()
-        ? bp.top_skills
-            .split(/[,|]/)
-            .map((s: string) => s.trim())
-            .filter(Boolean)
-            .slice(0, 4)
-            .join(", ")
-        : null;
+    // Normalise skills snippet (supports string or array) – include all skills
+    let skillsSnippet: string | null = null;
+    if (Array.isArray(bp?.top_skills)) {
+      skillsSnippet = (bp.top_skills as any[])
+        .map((s) => String(s).trim())
+        .filter(Boolean)
+        .join(", ");
+    } else if (typeof bp?.top_skills === "string" && bp.top_skills.trim()) {
+      skillsSnippet = bp.top_skills
+        .split(/[,|]/)
+        .map((s: string) => s.trim())
+        .filter(Boolean)
+        .join(", ");
+    }
 
-    const companySnippet =
-      typeof bp?.latest_company === "string" && bp.latest_company.trim()
-        ? bp.latest_company.split(/[,|]/)[0]?.trim()
-        : null;
+    // Normalise experience snippet (supports string or array) – include all titles
+    let companySnippet: string | null = null;
+    if (Array.isArray(bp?.latest_company)) {
+      companySnippet = (bp.latest_company as any[])
+        .map((s) => String(s).trim())
+        .filter(Boolean)
+        .join(", ");
+    } else if (
+      typeof bp?.latest_company === "string" &&
+      bp.latest_company.trim()
+    ) {
+      companySnippet = bp.latest_company
+        .split(/[,|]/)
+        .map((s: string) => s.trim())
+        .filter(Boolean)
+        .join(", ");
+    }
 
     const degreeSnippet =
       typeof bp?.highest_degree === "string" && bp.highest_degree.trim()
