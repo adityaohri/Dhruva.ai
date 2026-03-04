@@ -514,15 +514,6 @@ export default function OpportunityPage() {
 
   if (flowStep === "confirm_profile") {
     const bp = benchmarkProfile as any | null;
-    const parts: string[] = [];
-    if (bp?.top_skills) parts.push(bp.top_skills as string);
-    if (bp?.latest_company) parts.push(bp.latest_company as string);
-    if (bp?.highest_degree) parts.push(bp.highest_degree as string);
-    const line =
-      parts.length > 0
-        ? `Benchmarking using your uploaded CV: ${parts.join(" | ")}`
-        : "Benchmarking using your uploaded CV from your uploaded history.";
-
     const skillsSnippet =
       typeof bp?.top_skills === "string" && bp.top_skills.trim()
         ? bp.top_skills
@@ -542,6 +533,18 @@ export default function OpportunityPage() {
       typeof bp?.highest_degree === "string" && bp.highest_degree.trim()
         ? bp.highest_degree.trim()
         : null;
+
+    const activeSections: string[] = [];
+    if (skillsSnippet) activeSections.push("Skills");
+    if (companySnippet) activeSections.push("Internships / Experience");
+    if (degreeSnippet) activeSections.push("Education");
+
+    const confirmLine =
+      activeSections.length > 0
+        ? `We will use the ${activeSections.join(
+            ", "
+          )} section${activeSections.length > 1 ? "s" : ""} from your uploaded CV to power Opportunity Intelligence.`
+        : "We will use your uploaded CV to power Opportunity Intelligence.";
 
     return (
       <div
@@ -588,7 +591,7 @@ export default function OpportunityPage() {
             <p className="mt-1 text-xs text-slate-500">
               {benchmarkLoading
                 ? "Pulling your benchmarking attributes from your uploaded CV..."
-                : line}
+                : confirmLine}
             </p>
             {benchmarkError && (
               <p className="mt-2 text-xs text-red-600">
