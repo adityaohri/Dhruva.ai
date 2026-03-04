@@ -1,11 +1,13 @@
 "use client";
 
 import { useState, useCallback, useEffect } from "react";
-
+import Link from "next/link";
+import { createClient as createSupabaseClient } from "@/lib/supabase/client";
 const CREAM = "#FDFBF1";
 const PURPLE = "#3C2A6A";
 
-type Step = 1 | 2;
+type OnboardingStep = 1 | 2;
+type FlowStep = "filters" | "confirm_profile" | "results";
 
 const INDUSTRIES = [
   "Consulting",
@@ -164,7 +166,8 @@ function OpportunityCard({ r }: { r: OpportunityResult }) {
 }
 
 export default function OpportunityPage() {
-  const [step, setStep] = useState<Step>(1);
+  const [onboardingStep, setOnboardingStep] = useState<OnboardingStep>(1);
+  const [flowStep, setFlowStep] = useState<FlowStep>("filters");
   const [filters, setFilters] = useState<OpportunityFilters>(initialFilters);
   const [results, setResults] = useState<OpportunityResult[]>([]);
   const [resultsByCompany, setResultsByCompany] = useState<Record<string, OpportunityResult[]>>({});
@@ -175,8 +178,14 @@ export default function OpportunityPage() {
   const [loadingProgress, setLoadingProgress] = useState(0);
   const [loadingStatusIndex, setLoadingStatusIndex] = useState(0);
   const [error, setError] = useState<string | null>(null);
-  const [hasCompletedOnboarding, setHasCompletedOnboarding] = useState(false);
   const [sortMode, setSortMode] = useState<"prestige" | "recency">("prestige");
+  const [benchmarkProfile, setBenchmarkProfile] = useState<{
+    top_skills?: string | null;
+    latest_company?: string | null;
+    highest_degree?: string | null;
+  } | null>(null);
+  const [benchmarkLoading, setBenchmarkLoading] = useState(false);
+  const [benchmarkError, setBenchmarkError] = useState<string | null>(null);
 
   const updateFilter = useCallback(<K extends keyof OpportunityFilters>(
     key: K,
@@ -188,6 +197,34 @@ export default function OpportunityPage() {
       return next;
     });
   }, []);
+
+  useEffect(() => {
+    if (flowStep !== "confirm_profile") return;
+    setBenchmarkError(null);
+    setBenchmarkLoading(true);
+    const supabase = createSupabaseClient();
+    (async () => {
+      try {
+        const { data, error } = await supabase
+          .from("user_profiles")
+          .select("top_skills, latest_company, highest_degree")
+          .maybeSingle();
+        if (error) {
+          setBenchmarkError(error.message);
+          setBenchmarkProfile(null);
+        } else {
+          setBenchmarkProfile(data as any);
+        }
+      } catch (e) {
+        setBenchmarkError(
+          e instanceof Error ? e.message : "Failed to load profile."
+        );
+        setBenchmarkProfile(null);
+      } finally {
+        setBenchmarkLoading(false);
+      }
+    })();
+  }, [flowStep]);
 
   const runHunt = useCallback(async () => {
     setError(null);
@@ -237,7 +274,6 @@ export default function OpportunityPage() {
       }));
       setResults(withIndex);
       setResultsByCompany(data.resultsByCompany || {});
-      setHasCompletedOnboarding(true);
     } catch (e) {
       clearInterval(progressInterval);
       clearInterval(statusInterval);
@@ -252,11 +288,11 @@ export default function OpportunityPage() {
 
   const resetFilters = useCallback(() => {
     setFilters(initialFilters);
-    setStep(1);
+    setOnboardingStep(1);
+    setFlowStep("filters");
     setResults([]);
     setResultsByCompany({});
     setError(null);
-    setHasCompletedOnboarding(false);
     try {
       localStorage.removeItem(STORAGE_KEY);
     } catch {}
@@ -289,7 +325,7 @@ export default function OpportunityPage() {
     );
   }
 
-  if (!hasCompletedOnboarding && !results.length) {
+  if (flowStep === "filters") {
     return (
       <div
         className="flex min-h-[calc(100vh-8rem)] flex-col items-center justify-center px-4 py-12"
@@ -297,10 +333,12 @@ export default function OpportunityPage() {
       >
         <div className="w-full max-w-2xl">
           <p className="text-center font-serif text-2xl font-semibold text-[#3C2A6A] sm:text-3xl">
-            {step === 1 ? "What are you looking for?" : "Add more details (optional)"}
+            {onboardingStep === 1
+              ? "What are you looking for?"
+              : "Add more details (optional)"}
           </p>
 
-          {step === 1 && (
+          {onboardingStep === 1 && (
             <div className="mt-10 space-y-10">
               <div>
                 <p className="mb-3 text-[11px] font-medium uppercase tracking-[0.18em] text-[#3C2A6A]/80">
@@ -368,7 +406,7 @@ export default function OpportunityPage() {
               <div className="flex justify-center pt-4">
                 <button
                   type="button"
-                  onClick={() => setStep(2)}
+                  onClick={() => setOnboardingStep(2)}
                   disabled={!canProceedFromStep1}
                   className="rounded-full bg-[#3C2A6A] px-8 py-3 text-sm font-medium text-[#FDFBF1] transition-opacity disabled:opacity-40 hover:bg-[#4a347f]"
                 >
@@ -378,7 +416,7 @@ export default function OpportunityPage() {
             </div>
           )}
 
-          {step === 2 && (
+          {onboardingStep === 2 && (
             <div className="mt-10 space-y-6">
               <div>
                 <label className="mb-1.5 block text-[11px] font-medium uppercase tracking-[0.18em] text-[#3C2A6A]/80">
@@ -431,14 +469,14 @@ export default function OpportunityPage() {
               <div className="flex flex-wrap gap-3 pt-4">
                 <button
                   type="button"
-                  onClick={runHunt}
+                  onClick={() => setFlowStep("confirm_profile")}
                   className="rounded-full bg-[#3C2A6A] px-8 py-3 text-sm font-medium text-[#FDFBF1] hover:bg-[#4a347f]"
                 >
                   Start Hunt
                 </button>
                 <button
                   type="button"
-                  onClick={runHunt}
+                  onClick={() => setFlowStep("confirm_profile")}
                   className="rounded-full border border-[#3C2A6A]/30 bg-white px-8 py-3 text-sm font-medium text-[#3C2A6A] hover:bg-[#3C2A6A]/5"
                 >
                   Skip & start hunt
@@ -446,6 +484,64 @@ export default function OpportunityPage() {
               </div>
             </div>
           )}
+        </div>
+      </div>
+    );
+  }
+
+  if (flowStep === "confirm_profile") {
+    const bp = benchmarkProfile as any | null;
+    const parts: string[] = [];
+    if (bp?.top_skills) parts.push(bp.top_skills as string);
+    if (bp?.latest_company) parts.push(bp.latest_company as string);
+    if (bp?.highest_degree) parts.push(bp.highest_degree as string);
+    const line =
+      parts.length > 0
+        ? `Benchmarking using your uploaded CV: ${parts.join(" | ")}`
+        : "Benchmarking using your uploaded CV from your uploaded history.";
+
+    return (
+      <div
+        className="flex min-h-[calc(100vh-8rem)] flex-col items-center justify-center px-4 py-12"
+        style={{ backgroundColor: CREAM }}
+      >
+        <div className="w-full max-w-2xl space-y-6">
+          <div className="rounded-2xl bg-[#3C2A6A] p-6 text-[#FDFBF1]">
+            <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-[#D1C4FF]">
+              Identity confirmation
+            </p>
+            <p className="mt-3 text-sm">
+              {benchmarkLoading ? "Pulling your benchmarking attributes from your uploaded CV..." : line}
+            </p>
+            {benchmarkError && (
+              <p className="mt-2 text-xs text-red-100">
+                {benchmarkError}
+              </p>
+            )}
+            <p className="mt-4 text-[11px] text-[#E5DFFF]">
+              Benchmarking grounded in your verified history for maximum match accuracy.
+            </p>
+          </div>
+
+          <div className="flex flex-wrap gap-3 pt-2">
+            <button
+              type="button"
+              onClick={async () => {
+                await runHunt();
+                setFlowStep("results");
+              }}
+              className="rounded-full bg-[#3C2A6A] px-8 py-3 text-sm font-medium text-[#FDFBF1] hover:bg-[#4a347f]"
+              disabled={benchmarkLoading}
+            >
+              Confirm &amp; Start Hunt
+            </button>
+            <Link
+              href="/dashboard"
+              className="rounded-full border border-[#3C2A6A]/30 bg-white px-8 py-3 text-sm font-medium text-[#3C2A6A] hover:bg-[#3C2A6A]/5"
+            >
+              Update Profile
+            </Link>
+          </div>
         </div>
       </div>
     );
@@ -498,7 +594,7 @@ export default function OpportunityPage() {
         </div>
       )}
 
-      {results.length === 0 && !loading && hasCompletedOnboarding && (
+      {results.length === 0 && !loading && flowStep === "results" && (
         <div className="rounded-2xl border border-[#E5E7EB] bg-white/80 px-6 py-10 text-center">
           <p className="font-serif text-lg text-[#3C2A6A]">No opportunities found for this search.</p>
           <p className="mt-2 text-sm text-slate-600">Try resetting filters or changing industry / role.</p>
