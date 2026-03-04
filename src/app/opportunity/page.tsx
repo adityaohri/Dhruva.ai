@@ -59,6 +59,12 @@ type OpportunityResult = {
   prestige_score?: number;
   /** Original index from backend result list, used for recency sort. */
   originalIndex?: number;
+   /** CV-to-JD match analysis. */
+  match_score?: number;
+  match_band?: "Strong" | "Good" | "Moderate" | "Stretch";
+  match_strengths?: string[];
+  match_gaps?: string[];
+  match_action_item?: string;
 };
 
 export type OpportunityFilters = {
@@ -125,19 +131,65 @@ function getSourceBadge(url: string): string {
 }
 
 function OpportunityCard({ r }: { r: OpportunityResult }) {
+  const score =
+    typeof r.match_score === "number"
+      ? Math.round(Math.max(0, Math.min(100, r.match_score)))
+      : null;
+
+  const band: OpportunityResult["match_band"] | null =
+    r.match_band && score !== null
+      ? r.match_band
+      : score !== null
+        ? score >= 80
+          ? "Strong"
+          : score >= 65
+            ? "Good"
+            : score >= 50
+              ? "Moderate"
+              : "Stretch"
+        : null;
+
+  let bandColor =
+    "border-slate-300 text-slate-600 bg-white";
+  if (band === "Strong") {
+    bandColor = "border-emerald-500 text-emerald-800 bg-emerald-50";
+  } else if (band === "Good") {
+    bandColor = "border-sky-500 text-sky-800 bg-sky-50";
+  } else if (band === "Moderate") {
+    bandColor = "border-amber-500 text-amber-800 bg-amber-50";
+  } else if (band === "Stretch") {
+    bandColor = "border-rose-500 text-rose-800 bg-rose-50";
+  }
+
   return (
     <div className="flex flex-col rounded-2xl border border-[#E5E7EB] bg-white p-5 shadow-none transition-shadow hover:shadow-sm">
-      <h3 className="font-semibold text-[#3C2A6A] line-clamp-2">
-        {r.displayName || "Job listing"}
-      </h3>
-      {r.company && (
-        <p className="mt-1.5 text-sm font-medium text-[#3C2A6A]/90">
-          {r.company}
-        </p>
-      )}
-      <p className="mt-1 text-xs text-slate-500 line-clamp-1">
-        {getSourceBadge(r.url)}
-      </p>
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex-1">
+          <h3 className="font-semibold text-[#3C2A6A] line-clamp-2">
+            {r.displayName || "Job listing"}
+          </h3>
+          {r.company && (
+            <p className="mt-1.5 text-sm font-medium text-[#3C2A6A]/90">
+              {r.company}
+            </p>
+          )}
+          <p className="mt-1 text-xs text-slate-500 line-clamp-1">
+            {getSourceBadge(r.url)}
+          </p>
+        </div>
+        {score !== null && band && (
+          <div className="flex flex-col items-center gap-1">
+            <div
+              className={`flex h-12 w-12 items-center justify-center rounded-full border-2 text-xs font-semibold ${bandColor}`}
+            >
+              {score}
+            </div>
+            <span className="text-[10px] font-medium text-slate-600">
+              {band}
+            </span>
+          </div>
+        )}
+      </div>
       <div className="mt-2 flex flex-wrap gap-1.5">
         <span className="rounded-md bg-[#3C2A6A]/10 px-2 py-0.5 text-[10px] font-medium text-[#3C2A6A]">
           {getSourceBadge(r.url)}
@@ -152,6 +204,30 @@ function OpportunityCard({ r }: { r: OpportunityResult }) {
         <p className="mt-3 line-clamp-2 flex-1 text-xs text-slate-600">
           {r.summary || r.snippet}
         </p>
+      )}
+      {(r.match_strengths?.length || r.match_gaps?.length || r.match_action_item) && (
+        <div className="mt-3 border-t border-dashed border-slate-200 pt-3 text-xs text-slate-700 space-y-1.5">
+          {r.match_strengths && r.match_strengths.length > 0 && (
+            <p>
+              <span className="font-semibold text-[#3C2A6A]">Strengths: </span>
+              <span>{r.match_strengths.slice(0, 2).join("; ")}</span>
+            </p>
+          )}
+          {r.match_gaps && r.match_gaps.length > 0 && (
+            <p>
+              <span className="font-semibold text-[#3C2A6A]">Gaps: </span>
+              <span>{r.match_gaps.slice(0, 2).join("; ")}</span>
+            </p>
+          )}
+          {r.match_action_item && (
+            <p>
+              <span className="font-semibold text-[#3C2A6A]">
+                Action:
+              </span>{" "}
+              <span>{r.match_action_item}</span>
+            </p>
+          )}
+        </div>
       )}
       <a
         href={r.url}
