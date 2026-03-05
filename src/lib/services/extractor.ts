@@ -309,6 +309,56 @@ export async function generateJobSummary(description: string): Promise<string | 
   }
 }
 
+/**
+ * Given raw HTML of a job posting, extract a clean, readable job description.
+ * Used by the Serp Query Engine's deep fetch pipeline before match scoring.
+ */
+export async function extractCleanJobDescription(
+  html: string
+): Promise<string | null> {
+  const client = getAnthropicClient();
+  if (!client) return null;
+
+  const trimmed = html.replace(/\s+/g, " ").slice(0, 12_000);
+  if (!trimmed) return null;
+
+  try {
+    const completion = await client.messages.create({
+      model: "claude-sonnet-4-6",
+      max_tokens: 400,
+      temperature: 0.2,
+      system: [
+        "You are an expert at cleaning and extracting job descriptions from raw HTML.",
+        "Given the raw HTML of a job posting, return ONLY the main job description text.",
+        "Exclude navigation, headers, footers, cookie banners, unrelated marketing copy, and site chrome.",
+        "Keep bullet points and section structure, but output as plain text with newlines.",
+        "Do not add any commentary, headings, or labels of your own.",
+      ].join(" "),
+      messages: [
+        {
+          role: "user",
+          content: [
+            "Extract the clean job description from the following HTML.",
+            "",
+            "RAW_HTML:",
+            trimmed,
+          ].join("\n"),
+        },
+      ],
+    });
+
+    const textPart = completion.content.find(
+      (c) => c.type === "text"
+    ) as { type: "text"; text: string } | undefined;
+
+    const desc = textPart?.text?.trim() ?? "";
+    return desc || null;
+  } catch (e) {
+    console.warn("[extractor] extractCleanJobDescription failed:", e);
+    return null;
+  }
+}
+
 function guessCompanyFromDomain(url: string | undefined): string | null {
   if (!url) return null;
   try {

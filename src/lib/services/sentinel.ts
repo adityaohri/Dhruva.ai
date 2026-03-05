@@ -1,3 +1,13 @@
+import {
+  buildQueryPlan,
+  type UserFilters,
+  type SerpQuery,
+  type RawJobResult,
+  type EnrichedJobResult as SerpEnrichedJobResult,
+  deepFetchJob,
+  deduplicateJobs,
+} from "@/lib/serpQueryEngine";
+
 /**
  * Sentinel: job hunting service.
  * Initially used Google dorks via SerpApi; now powered by TheirStack Jobs API.
@@ -229,6 +239,10 @@ export function extractBrandFromUrl(rawUrl: string): string | null {
 
 const SERPAPI_BASE = "https://serpapi.com/search";
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Legacy Google web search helpers (kept for backwards compatibility)
+// ─────────────────────────────────────────────────────────────────────────────
+
 async function fetchOneQuery(
   q: string,
   apiKey: string,
@@ -382,4 +396,200 @@ export async function fetchGoogleJobs(
   } catch {
     return [];
   }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// New Serp Query Engine integration
+// ─────────────────────────────────────────────────────────────────────────────
+
+const INDUSTRY_MAP: Record<string, "Consulting" | "Technology" | "Finance" | "Marketing" | "Operations" | "Product" | "Data & Analytics" | "Other"> =
+  {
+    Consulting: "Consulting",
+    Technology: "Technology",
+    Finance: "Finance",
+    Marketing: "Marketing",
+    Operations: "Operations",
+    Product: "Product",
+    "Data & Analytics": "Data & Analytics",
+    Other: "Other",
+  };
+
+const JOB_TYPE_MAP: Record<string, "Internship" | "Full-time" | "Part-time" | "Contract" | "Freelance"> = {
+  Internship: "Internship",
+  "Full-time": "Full-time",
+  "Part-time": "Part-time",
+  Contract: "Contract",
+  Freelance: "Freelance",
+};
+
+const EXPERIENCE_MAP_SENTINEL: Record<string, "Fresher" | "0-1 years" | "1-2 years" | "2-5 years" | "5+ years"> = {
+  Fresher: "Fresher",
+  "0-1 years": "0-1 years",
+  "1-2 years": "1-2 years",
+  "2-5 years": "2-5 years",
+  "5+ years": "5+ years",
+};
+
+function mapToUserFilters(filters: SentinelFilters): UserFilters {
+  const role = rolesSegment(filters) || filters.jobType || "Role";
+  const industryKey = INDUSTRY_MAP[filters.industry] ?? "Other";
+  const jobTypeKey = JOB_TYPE_MAP[filters.jobType] as
+    | "Internship"
+    | "Full-time"
+    | "Part-time"
+    | "Contract"
+    | "Freelance"
+    | undefined;
+  const experienceKey =
+    EXPERIENCE_MAP_SENTINEL[filters.experience] ?? "0-1 years";
+  const location = (filters.location || "India").trim() || "India";
+  const remoteOk = /remote/i.test(location);
+
+  return {
+    role,
+    industries: [industryKey],
+    jobTypes: jobTypeKey ? [jobTypeKey] : [],
+    experience: experienceKey,
+    locations: [location],
+    remoteOk,
+  };
+}
+
+async function serpApiCall(params: Record<string, string | number | boolean>) {
+  const apiKey = process.env.SERPAPI_API_KEY;
+  if (!apiKey) {
+    throw new Error("SERPAPI_API_KEY is not set.");
+  }
+  const searchParams = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    searchParams.set(key, String(value));
+  }
+  searchParams.set("api_key", apiKey);
+  const url = `${SERPAPI_BASE}?${searchParams.toString()}`;
+  const resp = await fetch(url, { cache: "no-store" });
+  if (!resp.ok) {
+    throw new Error(`SerpApi error ${resp.status}`);
+  }
+  return resp.json();
+}
+
+function toRawJobFromGoogleJobs(entry: any): RawJobResult | null {
+  const apply_options = (entry.apply_options || [])
+    .map((o: any) => (o?.link ? { link: String(o.link) } : null))
+    .filter(Boolean) as { link: string }[];
+  const company_name = entry.company_name || entry.company || "";
+  const title = entry.title || "";
+  if (!title || !company_name) return null;
+  return {
+    job_id: entry.job_id,
+    title: String(title),
+    company_name: String(company_name),
+    location: String(entry.location || ""),
+    description: entry.description ? String(entry.description) : "",
+    apply_options,
+    detected_extensions: entry.detected_extensions ?? {},
+    source: "google_jobs",
+  };
+}
+
+function toRawJobFromGoogleWeb(result: any): RawJobResult | null {
+  const link = result.link || result.url;
+  if (!link) return null;
+  const title = result.title || "";
+  const snippet = result.snippet || result.description || "";
+  const brand = extractBrandFromUrl(link) ?? "";
+  const company_name = brand || "";
+  if (!title) return null;
+  return {
+    title: String(title),
+    company_name: company_name || "Unknown Company",
+    location: "",
+    description: String(snippet || ""),
+    apply_options: [{ link: String(link) }],
+    detected_extensions: {},
+    source: "google_web",
+  };
+}
+
+/**
+ * Execute Serp Query Engine buckets (A–D) in parallel and return unified HuntResults.
+ */
+export async function runSerpQueryEngine(
+  filters: SentinelFilters
+): Promise<HuntResult[]> {
+  const userFilters = mapToUserFilters(filters);
+  const plan = buildQueryPlan(userFilters);
+  const queries = plan.queries.filter(
+    (q) =>
+      (q.bucket === "A" ||
+        q.bucket === "B" ||
+        q.bucket === "C" ||
+        q.bucket === "D") &&
+      (q.engine === "google_jobs" || q.engine === "google")
+  );
+
+  const enrichedByBucket: SerpEnrichedJobResult[] = [];
+
+  await Promise.all(
+    queries.map(async (q: SerpQuery) => {
+      try {
+        const resp = await serpApiCall({
+          engine: q.engine,
+          ...q.params,
+        });
+
+        if (q.engine === "google_jobs") {
+          const jobs = (resp?.jobs_results || []) as any[];
+          const rawJobs: RawJobResult[] = jobs
+            .map((entry) => toRawJobFromGoogleJobs(entry))
+            .filter((j): j is RawJobResult => j != null);
+          const enrichedJobs = await Promise.all(
+            rawJobs.map((job) => deepFetchJob(job, q.bucket, serpApiCall))
+          );
+          enrichedByBucket.push(...enrichedJobs);
+        } else if (q.engine === "google") {
+          const results = (resp?.organic_results || []) as any[];
+          const rawJobs: RawJobResult[] = results
+            .map((r) => toRawJobFromGoogleWeb(r))
+            .filter((j): j is RawJobResult => j != null);
+          const enrichedJobs = await Promise.all(
+            rawJobs.map((job) => deepFetchJob(job, q.bucket, serpApiCall))
+          );
+          enrichedByBucket.push(...enrichedJobs);
+        }
+      } catch (err) {
+        console.warn(
+          "[sentinel] Serp query failed for bucket",
+          q.bucket,
+          q.bucketLabel,
+          err
+        );
+      }
+    })
+  );
+
+  const deduped: SerpEnrichedJobResult[] = deduplicateJobs(enrichedByBucket);
+
+  // Map EnrichedJobResult into the legacy HuntResult shape used by the rest of Sentinel.
+  const huntResults: HuntResult[] = deduped.map((job) => {
+    const applyUrl =
+      job.applyUrl ||
+      job.apply_options?.[0]?.link ||
+      "";
+    const brand = extractBrandFromUrl(applyUrl);
+    const snippet =
+      job.fullDescription?.slice(0, 1200) ||
+      job.description?.slice(0, 400) ||
+      "";
+    const source = job.source || job.bucket;
+    return {
+      title: job.title || "Job",
+      url: applyUrl || "",
+      snippet,
+      source: String(source),
+      company: job.company_name?.trim() || brand || null,
+    };
+  }).filter((r) => r.url);
+
+  return huntResults;
 }

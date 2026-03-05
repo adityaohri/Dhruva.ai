@@ -4,6 +4,7 @@ import {
   generateSocialSignalQueries,
   executeHunt,
   fetchGoogleJobs,
+  runSerpQueryEngine,
   isDirectUrl,
   type SentinelFilters,
   type HuntResult,
@@ -188,16 +189,8 @@ export async function POST(req: NextRequest) {
       roles: body.roles,
     };
 
-    const dorkQueries = generateDorkQueries(filters);
-    const socialQueries = generateSocialSignalQueries(filters);
-    const queryStrings = [...dorkQueries, ...socialQueries].map((d) => d.query);
-
-    // Run dork hunt and Google Jobs in parallel (one layer deeper: individual listings with company)
-    const [organicResults, googleJobsResults] = await Promise.all([
-      executeHunt(queryStrings),
-      fetchGoogleJobs(filters),
-    ]);
-    const rawResults = [...organicResults, ...googleJobsResults];
+    // Use Serp Query Engine (buckets A–D) with two-step deep fetch.
+    const rawResults = await runSerpQueryEngine(filters);
     const baselineResults = dedupeTagAndFilter(rawResults, experience);
 
     // Opportunity Intelligence – standardisation & AI summarisation (match on demand via /api/discovery/match)
@@ -216,7 +209,7 @@ export async function POST(req: NextRequest) {
       resultsByCompany,
       meta: {
         provider: "serpapi",
-        queriesCount: dorkQueries.length + socialQueries.length,
+        queriesCount: undefined,
         totalBeforeDedupe: rawResults.length,
         totalAfterDedupe: typedResults.length,
         directCount: typedResults.filter((r) => r.isDirect).length,
