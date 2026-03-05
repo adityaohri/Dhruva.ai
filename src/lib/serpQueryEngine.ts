@@ -614,16 +614,16 @@ function buildBucketD(filters: UserFilters): SerpQuery[] {
     });
   }
 
-  // Naukri direct (Google can partially index it via Google Jobs despite block)
+// Naukri direct (Google indexes some individual job pages; filter out category pages)
   queries.push({
     bucket: "D",
-    bucketLabel: "Naukri Direct (Google)",
-    engine: "google_jobs",
+    bucketLabel: "Naukri Direct",
+    engine: "google",
     params: {
-      q: `"${filters.role}" "${expModifiers[0]}" India site:naukri.com`,
-      location: "India",
+      q: `"${filters.role}" "${expModifiers[0]}" India site:naukri.com -"job vacancies" -"openings in" -"jobs in"`,
       gl: "in",
       hl: "en",
+      num: 20,
     },
     priority: 1,
     rationale:
@@ -640,7 +640,7 @@ function buildBucketD(filters: UserFilters): SerpQuery[] {
       bucketLabel: "Internshala (Fresher/Intern)",
       engine: "google",
       params: {
-        q: `"${filters.role}" India site:internshala.com`,
+        q: `"${filters.role}" India site:internshala.com/jobs/detail`,
         gl: "in",
         hl: "en",
         num: 20,

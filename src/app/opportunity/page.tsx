@@ -1160,7 +1160,32 @@ export default function OpportunityPage() {
                 className="rounded-2xl border border-[#E5E7EB] bg-white p-4"
               >
                 <p className="text-sm font-semibold text-[#3C2A6A]">
-                  {r.displayName || r.title}
+                  {(() => {
+                    const company = resolveCompany(r);
+                    const rawTitle = (r.title ?? "").trim();
+                    const isPersonPost = /['']s\s+post$/i.test(rawTitle);
+                    if (isPersonPost) {
+                      const personName = rawTitle
+                        .replace(/['']s\s+post$/i, "")
+                        .trim();
+                      if (
+                        company &&
+                        company.toLowerCase() !== "unknown company"
+                      ) {
+                        return `${personName} · ${company}`;
+                      }
+                      return personName || "Hiring Signal";
+                    }
+                    if (
+                      company &&
+                      company.toLowerCase() !== "unknown company"
+                    ) {
+                      return company;
+                    }
+                    const cleaned =
+                      rawTitle.replace(/^unknown company:\s*/i, "").trim();
+                    return cleaned || "Hiring Signal";
+                  })()}
                 </p>
                 <p className="mt-1 text-xs text-slate-600 line-clamp-3">
                   {r.snippet}
@@ -1204,59 +1229,81 @@ export default function OpportunityPage() {
                 key={`${r.url}-${i}`}
                 className="rounded-2xl border border-[#E5E7EB] bg-white p-4"
               >
-                <p className="text-sm font-semibold text-[#3C2A6A]">
-                  {r.company || r.displayName || r.title}
-                </p>
-                <p className="mt-1 text-xs text-slate-600 line-clamp-3">
-                  {r.snippet}
-                </p>
-                <div className="mt-3 flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    onClick={() => fetchPeopleForCompany(r.company || "")}
-                    disabled={!r.company || loadingPeopleCompany === r.company}
-                    className="rounded-full bg-[#3C2A6A] px-3 py-1 text-xs font-medium text-[#FDFBF1] disabled:opacity-60"
-                  >
-                    {loadingPeopleCompany === r.company
-                      ? "Loading people…"
-                      : "People to Reach Out to"}
-                  </button>
-                  <a
-                    href={r.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="rounded-full border border-[#3C2A6A]/40 px-3 py-1 text-xs font-medium text-[#3C2A6A]"
-                  >
-                    View Signal
-                  </a>
-                </div>
-                {r.company && peopleByCompany[r.company]?.length ? (
-                  <ul className="mt-3 space-y-1 text-xs text-slate-700">
-                    {peopleByCompany[r.company].map((p, idx) => (
-                      <li key={`${r.company}-${idx}`}>
-                        <span className="font-semibold">
-                          {p.full_name || "Contact"}
-                        </span>
-                        {p.job_title && (
-                          <span className="text-slate-600">
-                            {" "}
-                            — {p.job_title}
-                          </span>
+                {(() => {
+                  const company = resolveCompany(r);
+                  const rawTitle = (r.title ?? "").trim();
+                  const heading =
+                    company && company.toLowerCase() !== "unknown company"
+                      ? company
+                      : rawTitle.replace(/^unknown company:\s*/i, "").trim() ||
+                        "Signal";
+                  const resolvedRadarCompany = (company || "").trim();
+                  return (
+                    <>
+                      <p className="text-sm font-semibold text-[#3C2A6A]">
+                        {heading}
+                      </p>
+                      <p className="mt-1 text-xs text-slate-600 line-clamp-3">
+                        {r.snippet}
+                      </p>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            fetchPeopleForCompany(resolvedRadarCompany)
+                          }
+                          disabled={
+                            !resolvedRadarCompany ||
+                            loadingPeopleCompany === resolvedRadarCompany
+                          }
+                          className="rounded-full bg-[#3C2A6A] px-3 py-1 text-xs font-medium text-[#FDFBF1] disabled:opacity-60"
+                        >
+                          {loadingPeopleCompany === resolvedRadarCompany
+                            ? "Loading people…"
+                            : "People to Reach Out to"}
+                        </button>
+                        <a
+                          href={r.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="rounded-full border border-[#3C2A6A]/40 px-3 py-1 text-xs font-medium text-[#3C2A6A]"
+                        >
+                          View Signal
+                        </a>
+                      </div>
+                      {resolvedRadarCompany &&
+                        peopleByCompany[resolvedRadarCompany]?.length && (
+                          <ul className="mt-3 space-y-1 text-xs text-slate-700">
+                            {peopleByCompany[resolvedRadarCompany].map(
+                              (p, idx) => (
+                                <li key={`${resolvedRadarCompany}-${idx}`}>
+                                  <span className="font-semibold">
+                                    {p.full_name || "Contact"}
+                                  </span>
+                                  {p.job_title && (
+                                    <span className="text-slate-600">
+                                      {" "}
+                                      — {p.job_title}
+                                    </span>
+                                  )}
+                                  {p.linkedin_url && (
+                                    <a
+                                      href={p.linkedin_url}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="ml-2 text-[11px] font-medium text-[#0A66C2]"
+                                    >
+                                      LinkedIn
+                                    </a>
+                                  )}
+                                </li>
+                              )
+                            )}
+                          </ul>
                         )}
-                        {p.linkedin_url && (
-                          <a
-                            href={p.linkedin_url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="ml-2 text-[11px] font-medium text-[#0A66C2]"
-                          >
-                            LinkedIn
-                          </a>
-                        )}
-                      </li>
-                    ))}
-                  </ul>
-                ) : null}
+                    </>
+                  );
+                })()}
               </div>
             ))}
           </div>
