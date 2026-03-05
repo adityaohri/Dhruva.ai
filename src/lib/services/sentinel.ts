@@ -508,18 +508,29 @@ function isJunkResult(job: any, userRole: string): boolean {
   }
 
   // Condition 5 — Zero semantic overlap with userRole
+  // Only apply if description is long enough to be meaningful
   const roleTokens = String(userRole || "")
     .toLowerCase()
     .split(/[^a-z0-9]+/i)
     .filter((t) => t.length > 3);
-  if (roleTokens.length > 0) {
+  if (roleTokens.length > 0 && desc.length > 80) {
     const titleText = lowerTitle;
-    const descText = desc.slice(0, 200);
+    const descText = desc.slice(0, 500);
     const overlap = roleTokens.some(
       (tok) => titleText.includes(tok) || descText.includes(tok)
     );
+    // Only discard if NONE of the tokens appear AND title looks completely unrelated
+    // Do not discard if title contains any word longer than 4 chars from the description
     if (!overlap) {
-      return true;
+      const descWords = descText
+        .split(/\s+/)
+        .map((w) => w.toLowerCase())
+        .filter((w) => w.length > 4);
+      const titleWords = lowerTitle
+        .split(/\s+/)
+        .filter((w) => w.length > 4);
+      const crossOverlap = titleWords.some((w) => descWords.includes(w));
+      if (!crossOverlap) return true;
     }
   }
 
@@ -784,13 +795,22 @@ async function fetchOneQuery(
     .filter((r) => r.link)
     .map((r) => {
       const url = r.link!;
-      const brand = extractBrandFromUrl(url);
-      return {
+      const rawJob = {
         title: r.title ?? "",
+        company_name: "Unknown Company",
+        location: "",
+        description: r.snippet ?? "",
+        apply_options: [{ link: url }],
+        detected_extensions: {},
+        via: undefined,
+      };
+      const normalised = normaliseJob(rawJob, "D", q.slice(0, 50));
+      return {
+        title: normalised.jobTitle,
         url,
-        snippet: r.snippet ?? "",
+        snippet: normalised.description,
         source,
-        company: brand ?? null,
+        company: normalised.companyName,
       } as HuntResult;
     });
 }
@@ -1010,13 +1030,23 @@ export async function fetchGoogleJobs(
           options[0]?.link ??
           job.related_links?.[0]?.link;
         if (!applyLink) return null;
-        const brand = extractBrandFromUrl(applyLink);
+        // Run through normalisation so extractCompanyName fires
+        const rawJob = {
+          title: job.title ?? "",
+          company_name: job.company_name ?? "Unknown Company",
+          location: "",
+          description: job.description ?? "",
+          apply_options: applyLink ? [{ link: applyLink }] : [],
+          detected_extensions: {},
+          via: undefined,
+        };
+        const normalised = normaliseJob(rawJob, "D", rolesSegment(filters));
         return {
-          title: job.title ?? "Job",
+          title: normalised.jobTitle,
           url: applyLink,
-          snippet: job.description ?? "",
+          snippet: normalised.description,
           source: "Google Jobs",
-          company: job.company_name?.trim() ?? brand ?? null,
+          company: normalised.companyName,
         } as HuntResult;
       })
       .filter((r): r is HuntResult => r != null);
