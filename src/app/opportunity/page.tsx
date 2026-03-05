@@ -196,12 +196,28 @@ function OpportunityCard({
       <div className="flex items-start justify-between gap-3">
         <div className="flex-1">
           <h3 className="font-semibold text-[#3C2A6A] line-clamp-2">
-            {r.displayName
-              ? r.displayName
-              : r.company && r.company !== "Company"
-                ? `${r.company}: ${r.title}`
-                : r.title || "Job listing"}
+            {(() => {
+              if (r.displayName) return r.displayName;
+              const company = (r.company ?? "").trim();
+              const rawTitle = (r.title ?? "").trim();
+              if (!company && rawTitle) return rawTitle;
+              if (!company && !rawTitle) return "Job listing";
+
+              let role = rawTitle;
+              const lowerCompany = company.toLowerCase();
+              const lowerTitle = rawTitle.toLowerCase();
+              if (lowerTitle.startsWith(lowerCompany)) {
+                role = rawTitle.slice(company.length).replace(/^[:\-–—|,\s]+/, "");
+              }
+              const cleanedRole = role || "Role";
+              return `${company || "Unknown Company"}: ${cleanedRole}`;
+            })()}
           </h3>
+          {r.company && (
+            <p className="mt-1.5 text-sm font-medium text-[#3C2A6A]/90">
+              {r.company}
+            </p>
+          )}
           <p className="mt-1 text-xs text-slate-500 line-clamp-1">
             {getSourceBadge(r.url)}
           </p>

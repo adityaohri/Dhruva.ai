@@ -3,15 +3,14 @@ import {
   type UserFilters,
   type SerpQuery,
   type RawJobResult,
-  type EnrichedJobResult,
+  type EnrichedJobResult as SerpEnrichedJobResult,
   deepFetchJob,
   deduplicateJobs,
 } from "@/lib/serpQueryEngine";
 
 /**
- * Sentinel: normalisation and job hunting service.
- * This file is responsible for turning raw SerpApi results into clean,
- * typed NormalisedJob objects and legacy HuntResults.
+ * Sentinel: job hunting service.
+ * Initially used Google dorks via SerpApi; now powered by TheirStack Jobs API.
  */
 
 export interface SentinelFilters {
@@ -24,543 +23,6 @@ export interface SentinelFilters {
   pay?: string;
   companies?: string[];
   roles?: string[];
-}
-
-/**
- * Normalised representation of a job result coming from SerpApi,
- * suitable for storage, matching and display.
- */
-export interface NormalisedJob {
-  jobId: string;
-  companyName: string;
-  jobTitle: string;
-  location: string;
-  source: string;
-  description: string;
-  fullDescription?: string;
-  salary?: string;
-  postedAt?: string;
-  scheduleType?: string;
-  applyUrl: string;
-  bucket: "A" | "B" | "C" | "D" | "E";
-  isJunk: boolean;
-  normalisedAt: string;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  rawData: any;
-}
-
-const INVALID_COMPANY_NAMES = new Set([
-  "unknown company",
-  "unknown",
-  "n/a",
-  "",
-]);
-
-function isGenericPlaceholder(str: string): boolean {
-  const PLACEHOLDERS = [
-    "unknown company",
-    "unknown",
-    "n/a",
-    "na",
-    "company",
-    "jobs",
-    "careers",
-    "hiring",
-    "role",
-    "position",
-  ];
-  return PLACEHOLDERS.includes(str.toLowerCase().trim());
-}
-
-const ATS_DOMAINS = [
-  "myworkdayjobs.com",
-  "greenhouse.io",
-  "lever.co",
-  "smartrecruiters.com",
-  "ashbyhq.com",
-  "jobvite.com",
-  "icims.com",
-  "taleo.net",
-  "successfactors.com",
-];
-
-const PLATFORM_NAMES = [
-  "linkedin",
-  "naukri",
-  "indeed",
-  "glassdoor",
-  "monster",
-  "shine",
-  "foundit",
-  "internshala",
-  "iimjobs",
-  "ziprecruiter",
-  "company website",
-  "direct",
-];
-
-const JUNK_TITLES = [
-  "role",
-  "job",
-  "position",
-  "vacancy",
-  "opening",
-  "hire these fine folks",
-  "early",
-  "students",
-  "unknown",
-];
-
-const BPO_KEYWORDS = [
-  "bpo",
-  "voice process",
-  "call centre",
-  "call center",
-  "night shift",
-  "inbound calls",
-  "outbound calls",
-  "telecaller",
-  "data entry operator",
-  "back office executive",
-  "domestic bpo",
-];
-
-const LOCATION_WORDS = [
-  "bangalore",
-  "mumbai",
-  "delhi",
-  "hyderabad",
-  "pune",
-  "chennai",
-  "india",
-  "remote",
-  "hybrid",
-];
-
-const SENIORITY_WORDS = [
-  "senior",
-  "junior",
-  "lead",
-  "principal",
-  "staff",
-  "associate",
-  "director",
-  "manager",
-  "head",
-];
-
-const TITLE_LOWERCASE_WORDS = new Set([
-  "a",
-  "an",
-  "the",
-  "of",
-  "in",
-  "at",
-  "for",
-  "on",
-  "to",
-  "with",
-  "by",
-]);
-
-const PLATFORM_DISPLAY_NAMES: Record<string, string> = {
-  linkedin: "LinkedIn",
-  naukri: "Naukri",
-  indeed: "Indeed",
-  glassdoor: "Glassdoor",
-  monster: "Monster",
-  foundit: "Foundit",
-  shine: "Shine",
-  internshala: "Internshala",
-  iimjobs: "IIMJobs",
-  "company website": "Direct",
-  direct: "Direct",
-  "bcg direct": "BCG Direct",
-  ziprecruiter: "ZipRecruiter",
-  jobs: "Direct",
-  job: "Direct",
-};
-
-function toTitleCase(value: string): string {
-  const words = value.toLowerCase().split(/\s+/).filter(Boolean);
-  if (words.length === 0) return "";
-  return words
-    .map((word, idx) => {
-      if (idx > 0 && TITLE_LOWERCASE_WORDS.has(word)) {
-        return word;
-      }
-      return word.charAt(0).toUpperCase() + word.slice(1);
-    })
-    .join(" ");
-}
-
-function capitaliseWord(value: string): string {
-  const lower = value.toLowerCase();
-  return lower.charAt(0).toUpperCase() + lower.slice(1);
-}
-
-/**
- * Best-effort extraction of company name from a raw Serp job object.
- */
-function extractCompanyName(job: any): string {
-  // Step 1 — job.company_name field
-  const rawCompany =
-    job?.company_name != null ? String(job.company_name).trim() : "";
-  if (rawCompany && !isGenericPlaceholder(rawCompany)) {
-    return rawCompany;
-  }
-
-  // Helper to get brand from host/path
-  const fromApplyLink = (): string | null => {
-    const link =
-      job?.apply_options?.[0]?.link ??
-      job?.apply_options?.[0]?.url ??
-      job?.url ??
-      "";
-    if (!link || typeof link !== "string") return null;
-    try {
-      const u = new URL(link);
-      const host = u.hostname.toLowerCase();
-      const pathname = u.pathname || "";
-      const atsDomain = ATS_DOMAINS.find((d) => host.includes(d));
-
-      const normaliseBrand = (slug: string): string | null => {
-        const clean = slug.replace(/[_-]+/g, " ").trim();
-        if (!clean) return null;
-        return toTitleCase(clean);
-      };
-
-      if (atsDomain) {
-        // For ATS domains: PATHNAME first, then SUBDOMAIN.
-        const pathSeg = pathname.replace(/^\/+/, "").split("/")[0] || "";
-        if (pathSeg) {
-          const brand = normaliseBrand(pathSeg);
-          if (brand && !isGenericPlaceholder(brand)) return brand;
-        }
-        // Subdomain-based brand
-        const hostParts = host.split(".");
-        const sub = hostParts[0] || "";
-        if (atsDomain.includes("myworkdayjobs.com")) {
-          let name = sub.replace(/^wd\d*$/i, "").trim();
-          if (!name && hostParts.length > 2) {
-            name = hostParts[hostParts.length - 3]; // e.g. kpmg from kpmg.wd3.myworkdayjobs.com
-          }
-          if (name) {
-            const brand = normaliseBrand(name);
-            if (brand && !isGenericPlaceholder(brand)) return brand;
-          }
-        } else if (sub && sub !== "www" && sub !== "boards") {
-          const brand = normaliseBrand(sub);
-          if (brand && !isGenericPlaceholder(brand)) return brand;
-        }
-      }
-
-      // Standard domains: strip careers./jobs./www. and use root
-      let rootHost = host.replace(/^(www\.|careers\.|jobs\.)/, "");
-      const root = rootHost.split(".")[0] || "";
-      if (root) {
-        const brand = normaliseBrand(root);
-        if (brand && !isGenericPlaceholder(brand)) return brand;
-      }
-    } catch {
-      // ignore URL parse errors
-    }
-    return null;
-  };
-
-  const fromLink = fromApplyLink();
-  if (fromLink) return fromLink;
-
-  // NEW Step 2a — parse @ symbol from title
-  if (job?.title) {
-    const titleStr = String(job.title);
-    const atSymbolMatch = titleStr.match(/\s@\s(.+)$/);
-    if (atSymbolMatch && atSymbolMatch[1]) {
-      const candidate = atSymbolMatch[1].trim();
-      if (candidate && !isGenericPlaceholder(candidate)) {
-        return candidate;
-      }
-    }
-  }
-
-  // NEW Step 2b — parse "Unknown Company: X" pattern from title
-  if (job?.title) {
-    const titleStr = String(job.title);
-    const colonMatch = titleStr.match(/^unknown company:\s*(.+)$/i);
-    if (colonMatch && colonMatch[1]) {
-      const candidate = colonMatch[1].trim();
-      const JOB_TITLE_WORDS = [
-        "engineer",
-        "analyst",
-        "manager",
-        "developer",
-        "designer",
-        "consultant",
-        "associate",
-        "director",
-        "specialist",
-        "officer",
-        "executive",
-        "lead",
-        "head",
-        "intern",
-        "architect",
-        "scientist",
-        "apprentice",
-        "trainee",
-        "graduate",
-      ];
-      const lowerCandidate = candidate.toLowerCase();
-      const looksLikeJobTitle = JOB_TITLE_WORDS.some((w) =>
-        lowerCandidate.includes(w)
-      );
-
-      // Naukri-style pattern: "Role - Location - Company - Experience"
-      const parts = candidate
-        .split("-")
-        .map((p) => p.trim())
-        .filter(Boolean);
-      if (parts.length > 1) {
-        const experienceRe =
-          /(year|yrs|experience|vacanc|0\s*to|\d+\s*(to|-)\s*\d+)/i;
-        for (let i = parts.length - 1; i >= 0; i--) {
-          const part = parts[i];
-          const lp = part.toLowerCase();
-          if (!part) continue;
-          if (isGenericPlaceholder(part)) continue;
-          if (LOCATION_WORDS.includes(lp)) continue;
-          if (experienceRe.test(lp)) continue;
-          if (JOB_TITLE_WORDS.some((w) => lp.includes(w))) continue;
-          return part;
-        }
-      }
-
-      // Simple "Unknown Company: Ema" pattern
-      if (!looksLikeJobTitle && candidate.length < 40) {
-        if (!isGenericPlaceholder(candidate)) {
-          return candidate;
-        }
-      }
-    }
-  }
-
-  // NEW Step 2c — parse "in India - CompanyName" pattern
-  if (job?.title) {
-    const titleStr = String(job.title);
-    const inIndiaMatch = titleStr.match(/in india\s*-\s*.+?-\s*(.+)$/i);
-    if (inIndiaMatch && inIndiaMatch[1]) {
-      const candidate = inIndiaMatch[1].trim();
-      if (candidate.length > 1 && !isGenericPlaceholder(candidate)) {
-        return candidate;
-      }
-    }
-  }
-
-  // Step 3 — Parse from job.title using " at "
-  if (job?.title) {
-    const title = String(job.title);
-    const m = title.match(/ at (.+)$/i);
-    if (m && m[1]) {
-      const company = m[1].trim();
-      if (company && !isGenericPlaceholder(company)) return company;
-    }
-  }
-
-  // Step 4 — Parse from job.via
-  if (job?.via) {
-    let via = String(job.via).trim();
-    via = via.replace(/^via\s+/i, "").trim();
-    const lower = via.toLowerCase();
-    if (via && !PLATFORM_NAMES.includes(lower) && !isGenericPlaceholder(via)) {
-      return via;
-    }
-  }
-
-  // Step 5 — Absolute fallback
-  return "Company";
-}
-
-/**
- * Extract and normalise job title from a raw Serp job.
- */
-function extractJobTitle(job: any): string {
-  let title = (job?.title ? String(job.title) : "").trim();
-
-  // Step 1: Remove "Unknown Company: " prefix
-  title = title.replace(/^unknown company:\s*/i, "");
-
-  // Step 1b: Remove " @ CompanyName" suffix
-  title = title.replace(/\s@\s.+$/, "").trim();
-
-  // Step 1c: Remove " - India @ CompanyName" suffix (handles residual patterns)
-  title = title.replace(/\s-\s*india\s@\s.+$/i, "").trim();
-
-  // Step 1d: Remove "(India)" location qualifier
-  title = title.replace(/\s*\(india\)\s*/i, " ").trim();
-
-  // Step 2: Remove " at [Company]" suffix
-  title = title.replace(/ at .+$/i, "");
-
-  // Step 3: Remove " in India[anything]" suffix
-  title = title.replace(/ in india.*/i, "");
-
-  // Step 4: Remove " - [Company]" suffix where [Company] is not a location/seniority word
-  const stripDashSuffix = (value: string, dashChar: string): string => {
-    const re = new RegExp(`\\s${dashChar}\\s(.+)$`);
-    const m = value.match(re);
-    if (!m || !m[1]) return value;
-    const tail = m[1].trim();
-    if (!tail) return value;
-    const firstWord = tail.split(/\s+/)[0].toLowerCase();
-    if (
-      LOCATION_WORDS.includes(firstWord) ||
-      SENIORITY_WORDS.includes(firstWord)
-    ) {
-      return value;
-    }
-    const idx = m.index ?? value.lastIndexOf(` ${dashChar} `);
-    if (idx >= 0) {
-      return value.slice(0, idx).trim();
-    }
-    return value;
-  };
-
-  title = stripDashSuffix(title, "-");
-  // Step 5: Remove " – [anything]" (em dash variant)
-  title = stripDashSuffix(title, "–");
-
-  // Step 6: Apply title case
-  title = toTitleCase(title);
-
-  // Step 7: Trim whitespace
-  title = title.trim();
-
-  // Step 8: Quality check
-  const lower = title.toLowerCase();
-  if (!title || title.length < 3 || JUNK_TITLES.includes(lower)) {
-    return "Open Position";
-  }
-  return title;
-}
-
-/**
- * Extract human-readable source from a raw Serp job.
- */
-function extractSource(job: any): string {
-  if (!job?.via) return "Direct";
-  let via = String(job.via).trim();
-  via = via.replace(/^via\s+/i, "").trim();
-  const lower = via.toLowerCase();
-  if (!lower) return "Direct";
-  const mapped = PLATFORM_DISPLAY_NAMES[lower];
-  if (mapped) return mapped;
-  return capitaliseWord(via);
-}
-
-function djb2Hash(str: string): string {
-  let hash = 5381;
-  for (let i = 0; i < str.length; i++) {
-    // eslint-disable-next-line no-bitwise
-    hash = (hash * 33) ^ str.charCodeAt(i);
-  }
-  // eslint-disable-next-line no-bitwise
-  return (hash >>> 0).toString(36);
-}
-
-/**
- * Generate a stable job identifier from raw Serp job data.
- */
-function generateJobId(job: any): string {
-  const rawId =
-    job?.job_id != null ? String(job.job_id).trim() : "";
-  if (rawId) return rawId;
-  const key = (
-    `${job?.title ?? ""}__${job?.company_name ?? ""}__${job?.location ?? ""}`
-  )
-    .toLowerCase()
-    .trim();
-  return djb2Hash(key);
-}
-
-/**
- * Heuristic classifier to mark junk / irrelevant results.
- */
-function isJunkResult(job: any, userRole: string): boolean {
-  const title = (job?.title ? String(job.title) : "").trim();
-  const lowerTitle = title.toLowerCase();
-
-  // Condition 1 — Junk title
-  if (!title || title.length < 3 || JUNK_TITLES.includes(lowerTitle)) {
-    return true;
-  }
-
-  // Condition 2 — BPO / Call Centre keywords
-  const desc = (job?.description ? String(job.description) : "").toLowerCase();
-  const combined = `${lowerTitle} ${desc}`;
-  if (BPO_KEYWORDS.some((kw) => combined.includes(kw))) {
-    return true;
-  }
-
-  // Condition 3 — Company still unknown
-  const companyName = extractCompanyName(job);
-  if (companyName === "Company") {
-    return true;
-  }
-
-  // Condition 4 — Extremely low salary
-  const salaryRaw =
-    job?.detected_extensions?.salary != null
-      ? String(job.detected_extensions.salary)
-      : "";
-  if (salaryRaw) {
-    const salaryStr = salaryRaw.toLowerCase();
-    const cleaned = salaryStr.replace(/[₹,]/g, " ");
-    const nums = cleaned.match(/\d+/g);
-    if (nums && nums.length > 0) {
-      const numeric = nums.map((n) => Number(n)).filter((n) => !isNaN(n));
-      if (numeric.length > 0) {
-        const max = Math.max(...numeric);
-        let rupees = max;
-        if (salaryStr.includes("lpa") || salaryStr.includes("lakh")) {
-          rupees = max * 100_000;
-        } else if (salaryStr.includes("month")) {
-          rupees = max * 12;
-        }
-        if (rupees < 150_000) {
-          return true;
-        }
-      }
-    }
-  }
-
-  // Condition 5 — Zero semantic overlap with userRole
-  // Only apply if description is long enough to be meaningful
-  const roleTokens = String(userRole || "")
-    .toLowerCase()
-    .split(/[^a-z0-9]+/i)
-    .filter((t) => t.length > 3);
-  if (roleTokens.length > 0 && desc.length > 80) {
-    const titleText = lowerTitle;
-    const descText = desc.slice(0, 500);
-    const overlap = roleTokens.some(
-      (tok) => titleText.includes(tok) || descText.includes(tok)
-    );
-    // Only discard if NONE of the tokens appear AND title looks completely unrelated
-    // Do not discard if title contains any word longer than 4 chars from the description
-    if (!overlap) {
-      const descWords = descText
-        .split(/\s+/)
-        .map((w) => w.toLowerCase())
-        .filter((w) => w.length > 4);
-      const titleWords = lowerTitle
-        .split(/\s+/)
-        .filter((w) => w.length > 4);
-      const crossOverlap = titleWords.some((w) => descWords.includes(w));
-      if (!crossOverlap) return true;
-    }
-  }
-
-  return false;
 }
 
 // Legacy type kept for backwards‑compatibility with older test routes.
@@ -821,144 +283,15 @@ async function fetchOneQuery(
     .filter((r) => r.link)
     .map((r) => {
       const url = r.link!;
-      const rawJob = {
-        title: r.title ?? "",
-        company_name: "Unknown Company",
-        location: "",
-        description: r.snippet ?? "",
-        apply_options: [{ link: url }],
-        detected_extensions: {},
-        via: undefined,
-      };
-      const normalised = normaliseJob(rawJob, "D", q.slice(0, 50));
+      const brand = extractBrandFromUrl(url);
       return {
-        title: normalised.jobTitle,
+        title: r.title ?? "",
         url,
-        snippet: normalised.description,
+        snippet: r.snippet ?? "",
         source,
-        company: normalised.companyName,
+        company: brand ?? null,
       } as HuntResult;
     });
-}
-
-/**
- * Normalise a single raw Serp job into a NormalisedJob instance.
- *
- * @param raw - Raw SerpApi job object.
- * @param bucket - Origin bucket (A–E) from the Serp Query Engine.
- * @param userRole - Target user role, used for light relevance filtering.
- * @returns NormalisedJob instance.
- */
-export function normaliseJob(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  raw: any,
-  bucket: "A" | "B" | "C" | "D" | "E",
-  userRole: string
-): NormalisedJob {
-  const companyName = extractCompanyName(raw);
-  const jobTitle = extractJobTitle(raw);
-  const source = extractSource(raw);
-  const jobId = generateJobId(raw);
-  const isJunk = isJunkResult(raw, userRole);
-
-  const location =
-    raw?.location != null ? String(raw.location).trim() : "India";
-  const description =
-    raw?.description != null
-      ? String(raw.description).trim().slice(0, 500)
-      : "";
-
-  const salary =
-    raw?.detected_extensions?.salary != null
-      ? String(raw.detected_extensions.salary)
-      : undefined;
-  const postedAt =
-    raw?.detected_extensions?.posted_at != null
-      ? String(raw.detected_extensions.posted_at)
-      : undefined;
-  const scheduleType =
-    raw?.detected_extensions?.schedule_type != null
-      ? String(raw.detected_extensions.schedule_type)
-      : undefined;
-
-  const applyUrl =
-    raw?.apply_options?.[0]?.link != null
-      ? String(raw.apply_options[0].link)
-      : "";
-
-  return {
-    jobId,
-    companyName,
-    jobTitle,
-    location,
-    source,
-    description,
-    fullDescription: undefined,
-    salary,
-    postedAt,
-    scheduleType,
-    applyUrl,
-    bucket,
-    isJunk,
-    normalisedAt: new Date().toISOString(),
-    rawData: raw,
-  };
-}
-
-/**
- * Normalise an array of raw Serp jobs for a given bucket and user role.
- *
- * @param raws - Raw SerpApi job array.
- * @param bucket - Origin bucket (A–E) from the Serp Query Engine.
- * @param userRole - Target user role, used for light relevance filtering.
- * @returns Array of NormalisedJob instances.
- */
-export function normaliseBatch(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  raws: any[],
-  bucket: "A" | "B" | "C" | "D" | "E",
-  userRole: string
-): NormalisedJob[] {
-  if (!Array.isArray(raws)) return [];
-  return raws
-    .filter((raw) => raw && typeof raw === "object")
-    .map((raw) => normaliseJob(raw, bucket, userRole));
-}
-
-/**
- * Deduplicate an array of NormalisedJob entries by title+company,
- * preferring richer descriptions and higher-signal buckets.
- *
- * @param jobs - Array of NormalisedJob entries.
- * @returns Deduplicated NormalisedJob array.
- */
-export function deduplicateNormalisedJobs(
-  jobs: NormalisedJob[]
-): NormalisedJob[] {
-  const seen = new Map<string, NormalisedJob>();
-  const bucketRank: Record<NormalisedJob["bucket"], number> = {
-    A: 1,
-    B: 2,
-    C: 3,
-    D: 4,
-    E: 5,
-  };
-
-  for (const job of jobs) {
-    const key = `${job.jobTitle.toLowerCase()}__${job.companyName.toLowerCase()}`;
-    const existing = seen.get(key);
-    if (!existing) {
-      seen.set(key, job);
-      continue;
-    }
-    const existingScore =
-      existing.description.length - bucketRank[existing.bucket];
-    const newScore = job.description.length - bucketRank[job.bucket];
-    if (newScore > existingScore) {
-      seen.set(key, job);
-    }
-  }
-  return Array.from(seen.values());
 }
 
 /** Normalize URL for deduplication: strip fragment and trailing slash, lowercase. */
@@ -1056,23 +389,13 @@ export async function fetchGoogleJobs(
           options[0]?.link ??
           job.related_links?.[0]?.link;
         if (!applyLink) return null;
-        // Run through normalisation so extractCompanyName fires
-        const rawJob = {
-          title: job.title ?? "",
-          company_name: job.company_name ?? "Unknown Company",
-          location: "",
-          description: job.description ?? "",
-          apply_options: applyLink ? [{ link: applyLink }] : [],
-          detected_extensions: {},
-          via: undefined,
-        };
-        const normalised = normaliseJob(rawJob, "D", rolesSegment(filters));
+        const brand = extractBrandFromUrl(applyLink);
         return {
-          title: normalised.jobTitle,
+          title: job.title ?? "Job",
           url: applyLink,
-          snippet: normalised.description,
+          snippet: job.description ?? "",
           source: "Google Jobs",
-          company: normalised.companyName,
+          company: job.company_name?.trim() ?? brand ?? null,
         } as HuntResult;
       })
       .filter((r): r is HuntResult => r != null);
@@ -1157,17 +480,16 @@ async function serpApiCall(params: Record<string, string | number | boolean>) {
 }
 
 function toRawJobFromGoogleJobs(entry: any): RawJobResult | null {
-  const title = entry.title || "";
-  if (!title) return null;
-
   const apply_options = (entry.apply_options || [])
     .map((o: any) => (o?.link ? { link: String(o.link) } : null))
     .filter(Boolean) as { link: string }[];
-
+  const company_name = entry.company_name || entry.company || "";
+  const title = entry.title || "";
+  if (!title || !company_name) return null;
   return {
     job_id: entry.job_id,
     title: String(title),
-    company_name: entry.company_name || entry.company || "Unknown Company",
+    company_name: String(company_name),
     location: String(entry.location || ""),
     description: entry.description ? String(entry.description) : "",
     apply_options,
@@ -1179,15 +501,16 @@ function toRawJobFromGoogleJobs(entry: any): RawJobResult | null {
 function toRawJobFromGoogleWeb(result: any): RawJobResult | null {
   const link = result.link || result.url;
   if (!link) return null;
-
   const title = result.title || "";
+  const snippet = result.snippet || result.description || "";
+  const brand = extractBrandFromUrl(link) ?? "";
+  const company_name = brand || "";
   if (!title) return null;
-
   return {
     title: String(title),
-    company_name: "Unknown Company",
+    company_name: company_name || "Unknown Company",
     location: "",
-    description: String(result.snippet || result.description || ""),
+    description: String(snippet || ""),
     apply_options: [{ link: String(link) }],
     detected_extensions: {},
     source: "google_web",
@@ -1211,7 +534,7 @@ export async function runSerpQueryEngine(
       (q.engine === "google_jobs" || q.engine === "google")
   );
 
-  const enrichedByBucket: EnrichedJobResult[] = [];
+  const enrichedByBucket: SerpEnrichedJobResult[] = [];
 
   await Promise.all(
     queries.map(async (q: SerpQuery) => {
@@ -1251,33 +574,29 @@ export async function runSerpQueryEngine(
     })
   );
 
-  const deduped: EnrichedJobResult[] = deduplicateJobs(enrichedByBucket);
+  const deduped: SerpEnrichedJobResult[] = deduplicateJobs(enrichedByBucket);
 
   // Map EnrichedJobResult into the legacy HuntResult shape used by the rest of Sentinel.
-  const huntResults: HuntResult[] = deduped
-    .map((job) => {
-      const normalised = normaliseJob(
-        job,
-        job.bucket,
-        userFilters.role
-      );
-      const applyUrl =
-        job.applyUrl ||
-        job.apply_options?.[0]?.link ||
-        "";
-      const snippet =
-        normalised.fullDescription?.slice(0, 1200) ||
-        normalised.description;
-      return {
-        title: normalised.jobTitle,
-        url: applyUrl,
-        snippet,
-        source: normalised.source,
-        company: normalised.companyName,
-        bucket: job.bucket,
-      };
-    })
-    .filter((r) => r.url);
+  const huntResults: HuntResult[] = deduped.map((job) => {
+    const applyUrl =
+      job.applyUrl ||
+      job.apply_options?.[0]?.link ||
+      "";
+    const brand = extractBrandFromUrl(applyUrl);
+    const snippet =
+      job.fullDescription?.slice(0, 1200) ||
+      job.description?.slice(0, 400) ||
+      "";
+    const source = job.source || job.bucket;
+    return {
+      title: job.title || "Job",
+      url: applyUrl || "",
+      snippet,
+      source: String(source),
+      company: job.company_name?.trim() || brand || null,
+      bucket: job.bucket,
+    };
+  }).filter((r) => r.url);
 
   return huntResults;
 }
