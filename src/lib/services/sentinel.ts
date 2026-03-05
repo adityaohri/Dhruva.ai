@@ -151,6 +151,12 @@ export interface HuntResult {
   source: string;
   /** Set when source provides it (e.g. Google Jobs). */
   company?: string | null;
+  /**
+   * Origin bucket from the Serp Query Engine, when available:
+   * A = Elite Core, B = ATS Deep-Web, C = Hidden Market,
+   * D = Mass Aggregators, E = Signal Intelligence.
+   */
+  bucket?: "A" | "B" | "C" | "D" | "E";
 }
 
 /** Domains considered "direct" (ATS or company career site) for isDirect tagging. */
@@ -588,6 +594,7 @@ export async function runSerpQueryEngine(
       snippet,
       source: String(source),
       company: job.company_name?.trim() || brand || null,
+      bucket: job.bucket,
     };
   }).filter((r) => r.url);
 

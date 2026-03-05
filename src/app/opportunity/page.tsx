@@ -8,6 +8,7 @@ const PURPLE = "#3C2A6A";
 
 type OnboardingStep = 1 | 2;
 type FlowStep = "filters" | "confirm_profile" | "results";
+type Section = "matches" | "signals" | "radar";
 
 const INDUSTRIES = [
   "Consulting",
@@ -65,6 +66,8 @@ type OpportunityResult = {
   match_strengths?: string[];
   match_gaps?: string[];
   match_action_item?: string;
+  /** Origin bucket from Serp Query Engine, when present. */
+  bucket?: "A" | "B" | "C" | "D" | "E";
 };
 
 type LazyMatch = {
@@ -296,6 +299,21 @@ export default function OpportunityPage() {
   );
   const [matchByUrl, setMatchByUrl] = useState<Record<string, LazyMatch>>({});
   const [loadingMatchUrl, setLoadingMatchUrl] = useState<string | null>(null);
+  const [activeSection, setActiveSection] = useState<Section>("matches");
+  const [peopleByCompany, setPeopleByCompany] = useState<
+    Record<
+      string,
+      {
+        full_name?: string;
+        job_title?: string;
+        job_company_name?: string;
+        linkedin_url?: string;
+      }[]
+    >
+  >({});
+  const [loadingPeopleCompany, setLoadingPeopleCompany] = useState<string | null>(
+    null
+  );
   const [benchmarkProfile, setBenchmarkProfile] = useState<{
     top_skills?: string | null;
     latest_company?: string | null;
@@ -467,6 +485,38 @@ export default function OpportunityPage() {
       }
     },
     [filters.experience]
+  );
+
+  const fetchPeopleForCompany = useCallback(
+    async (company: string) => {
+      if (!company) return;
+      setLoadingPeopleCompany(company);
+      setError(null);
+      try {
+        const res = await fetch("/api/opportunity/people", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ company }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          setError(data.error || "Could not load people for outreach");
+          return;
+        }
+        const people = Array.isArray(data.people) ? data.people : [];
+        setPeopleByCompany((prev) => ({
+          ...prev,
+          [company]: people,
+        }));
+      } catch (e) {
+        setError(
+          e instanceof Error ? e.message : "Could not load people for outreach"
+        );
+      } finally {
+        setLoadingPeopleCompany(null);
+      }
+    },
+    []
   );
 
   const resetFilters = useCallback(() => {
@@ -806,7 +856,33 @@ export default function OpportunityPage() {
     );
   }
 
-  const sortedResults = [...results].sort((a, b) => {
+  const yourMatches = results.filter((r) => {
+    const bucket = r.bucket;
+    if (bucket === "C" || bucket === "E") return false;
+    // Filter out obvious LinkedIn signal posts from matches.
+    try {
+      const host = new URL(r.url).hostname.toLowerCase();
+      if (host.includes("linkedin.com") && r.url.includes("/posts/")) {
+        return false;
+      }
+    } catch {
+      // ignore URL parse errors
+    }
+    return true;
+  });
+
+  const hiringSignals = results.filter((r) => {
+    try {
+      const host = new URL(r.url).hostname.toLowerCase();
+      return host.includes("linkedin.com") && r.url.includes("/posts/");
+    } catch {
+      return false;
+    }
+  });
+
+  const onTheRadar = results.filter((r) => r.bucket === "E");
+
+  const sortedMatches = [...yourMatches].sort((a, b) => {
     if (sortMode === "match") {
       const ma = matchByUrl[a.url]?.score ?? a.match_score ?? -1;
       const mb = matchByUrl[b.url]?.score ?? b.match_score ?? -1;
@@ -858,6 +934,29 @@ export default function OpportunityPage() {
         </div>
       </div>
 
+      {flowStep === "results" && results.length > 0 && (
+        <div className="mt-2 flex gap-4 border-b border-[#E5E7EB] pb-2 text-sm">
+          {[
+            { id: "matches" as Section, label: "Your Matches" },
+            { id: "signals" as Section, label: "Hiring Signals" },
+            { id: "radar" as Section, label: "On The Radar" },
+          ].map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setActiveSection(tab.id)}
+              className={`pb-1 border-b-2 ${
+                activeSection === tab.id
+                  ? "border-[#3C2A6A] text-[#3C2A6A]"
+                  : "border-transparent text-slate-500 hover:text-[#3C2A6A]"
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+      )}
+
       {error && (
         <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
           {error}
@@ -871,7 +970,7 @@ export default function OpportunityPage() {
         </div>
       )}
 
-      {results.length > 0 && (
+      {results.length > 0 && activeSection === "matches" && (
         <>
           {/* By company: one layer deeper than aggregate — individual roles per company */}
           {Object.keys(resultsByCompany).length > 0 && (
@@ -927,13 +1026,13 @@ export default function OpportunityPage() {
             </div>
           )}
 
-          {/* Flat list (all results) */}
+          {/* Flat list (Your Matches) */}
           <div className="mt-8 space-y-4">
             <h2 className="font-serif text-lg font-semibold text-[#3C2A6A]">
-              All opportunities
+              Your Matches
             </h2>
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {sortedResults.map((r, i) => (
+              {sortedMatches.map((r, i) => (
                 <OpportunityCard
                   key={`${r.url}-${i}`}
                   r={r}
@@ -945,6 +1044,121 @@ export default function OpportunityPage() {
             </div>
           </div>
         </>
+      )}
+
+      {results.length > 0 && activeSection === "signals" && (
+        <div className="mt-6 space-y-4">
+          <h2 className="font-serif text-lg font-semibold text-[#3C2A6A]">
+            Hiring Signals
+          </h2>
+          <div className="space-y-3">
+            {hiringSignals.slice(0, 20).map((r, i) => (
+              <div
+                key={`${r.url}-${i}`}
+                className="rounded-2xl border border-[#E5E7EB] bg-white p-4"
+              >
+                <p className="text-sm font-semibold text-[#3C2A6A]">
+                  {r.displayName || r.title}
+                </p>
+                <p className="mt-1 text-xs text-slate-600 line-clamp-3">
+                  {r.snippet}
+                </p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    className="rounded-full bg-[#3C2A6A] px-3 py-1 text-xs font-medium text-[#FDFBF1]"
+                  >
+                    Draft Outreach Message
+                  </button>
+                  <a
+                    href={r.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="rounded-full border border-[#3C2A6A]/40 px-3 py-1 text-xs font-medium text-[#3C2A6A]"
+                  >
+                    View Post
+                  </a>
+                </div>
+              </div>
+            ))}
+            {hiringSignals.length > 20 && (
+              <p className="text-xs text-slate-500">
+                Showing first 20 hiring signals. Narrow your filters to see more
+                targeted posts.
+              </p>
+            )}
+          </div>
+        </div>
+      )}
+
+      {results.length > 0 && activeSection === "radar" && (
+        <div className="mt-6 space-y-4">
+          <h2 className="font-serif text-lg font-semibold text-[#3C2A6A]">
+            On The Radar
+          </h2>
+          <div className="space-y-3">
+            {onTheRadar.map((r, i) => (
+              <div
+                key={`${r.url}-${i}`}
+                className="rounded-2xl border border-[#E5E7EB] bg-white p-4"
+              >
+                <p className="text-sm font-semibold text-[#3C2A6A]">
+                  {r.company || r.displayName || r.title}
+                </p>
+                <p className="mt-1 text-xs text-slate-600 line-clamp-3">
+                  {r.snippet}
+                </p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => fetchPeopleForCompany(r.company || "")}
+                    disabled={!r.company || loadingPeopleCompany === r.company}
+                    className="rounded-full bg-[#3C2A6A] px-3 py-1 text-xs font-medium text-[#FDFBF1] disabled:opacity-60"
+                  >
+                    {loadingPeopleCompany === r.company
+                      ? "Loading people…"
+                      : "People to Reach Out to"}
+                  </button>
+                  <a
+                    href={r.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="rounded-full border border-[#3C2A6A]/40 px-3 py-1 text-xs font-medium text-[#3C2A6A]"
+                  >
+                    View Signal
+                  </a>
+                </div>
+                {r.company && peopleByCompany[r.company]?.length ? (
+                  <ul className="mt-3 space-y-1 text-xs text-slate-700">
+                    {peopleByCompany[r.company].map((p, idx) => (
+                      <li key={`${r.company}-${idx}`}>
+                        <span className="font-semibold">
+                          {p.full_name || "Contact"}
+                        </span>
+                        {p.job_title && (
+                          <span className="text-slate-600">
+                            {" "}
+                            — {p.job_title}
+                          </span>
+                        )}
+                        {p.linkedin_url && (
+                          <a
+                            href={p.linkedin_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="ml-2 text-[11px] font-medium text-[#0A66C2]"
+                          >
+                            LinkedIn
+                          </a>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+              </div>
+            ))}
+          </div>
+        </div>
       )}
     </div>
   );
