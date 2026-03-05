@@ -56,6 +56,22 @@ const INVALID_COMPANY_NAMES = new Set([
   "",
 ]);
 
+function isGenericPlaceholder(str: string): boolean {
+  const PLACEHOLDERS = [
+    "unknown company",
+    "unknown",
+    "n/a",
+    "na",
+    "company",
+    "jobs",
+    "careers",
+    "hiring",
+    "role",
+    "position",
+  ];
+  return PLACEHOLDERS.includes(str.toLowerCase().trim());
+}
+
 const ATS_DOMAINS = [
   "myworkdayjobs.com",
   "greenhouse.io",
@@ -161,6 +177,8 @@ const PLATFORM_DISPLAY_NAMES: Record<string, string> = {
   direct: "Direct",
   "bcg direct": "BCG Direct",
   ziprecruiter: "ZipRecruiter",
+  jobs: "Direct",
+  job: "Direct",
 };
 
 function toTitleCase(value: string): string {
@@ -188,9 +206,8 @@ function extractCompanyName(job: any): string {
   // Step 1 — job.company_name field
   const rawCompany =
     job?.company_name != null ? String(job.company_name).trim() : "";
-  const lowerCompany = rawCompany.toLowerCase();
-  if (!INVALID_COMPANY_NAMES.has(lowerCompany)) {
-    if (rawCompany) return rawCompany;
+  if (rawCompany && !isGenericPlaceholder(rawCompany)) {
+    return rawCompany;
   }
 
   // Helper to get brand from host/path
@@ -218,7 +235,7 @@ function extractCompanyName(job: any): string {
         const pathSeg = pathname.replace(/^\/+/, "").split("/")[0] || "";
         if (pathSeg) {
           const brand = normaliseBrand(pathSeg);
-          if (brand) return brand;
+          if (brand && !isGenericPlaceholder(brand)) return brand;
         }
         // Subdomain-based brand
         const hostParts = host.split(".");
@@ -230,11 +247,11 @@ function extractCompanyName(job: any): string {
           }
           if (name) {
             const brand = normaliseBrand(name);
-            if (brand) return brand;
+            if (brand && !isGenericPlaceholder(brand)) return brand;
           }
         } else if (sub && sub !== "www" && sub !== "boards") {
           const brand = normaliseBrand(sub);
-          if (brand) return brand;
+          if (brand && !isGenericPlaceholder(brand)) return brand;
         }
       }
 
@@ -243,7 +260,7 @@ function extractCompanyName(job: any): string {
       const root = rootHost.split(".")[0] || "";
       if (root) {
         const brand = normaliseBrand(root);
-        if (brand) return brand;
+        if (brand && !isGenericPlaceholder(brand)) return brand;
       }
     } catch {
       // ignore URL parse errors
@@ -254,13 +271,72 @@ function extractCompanyName(job: any): string {
   const fromLink = fromApplyLink();
   if (fromLink) return fromLink;
 
-  // Step 3 — Parse from job.title
+  // NEW Step 2a — parse @ symbol from title
+  if (job?.title) {
+    const titleStr = String(job.title);
+    const atSymbolMatch = titleStr.match(/\s@\s(.+)$/);
+    if (atSymbolMatch && atSymbolMatch[1]) {
+      const candidate = atSymbolMatch[1].trim();
+      if (candidate && !isGenericPlaceholder(candidate)) {
+        return candidate;
+      }
+    }
+  }
+
+  // NEW Step 2b — parse "Unknown Company: X" pattern from title
+  if (job?.title) {
+    const titleStr = String(job.title);
+    const colonMatch = titleStr.match(/^unknown company:\s*(.+)$/i);
+    if (colonMatch && colonMatch[1]) {
+      const candidate = colonMatch[1].trim();
+      const JOB_TITLE_WORDS = [
+        "engineer",
+        "analyst",
+        "manager",
+        "developer",
+        "designer",
+        "consultant",
+        "associate",
+        "director",
+        "specialist",
+        "officer",
+        "executive",
+        "lead",
+        "head",
+        "intern",
+        "architect",
+        "scientist",
+      ];
+      const looksLikeJobTitle = JOB_TITLE_WORDS.some((w) =>
+        candidate.toLowerCase().includes(w)
+      );
+      if (!looksLikeJobTitle && candidate.length < 40) {
+        if (!isGenericPlaceholder(candidate)) {
+          return candidate;
+        }
+      }
+    }
+  }
+
+  // NEW Step 2c — parse "in India - CompanyName" pattern
+  if (job?.title) {
+    const titleStr = String(job.title);
+    const inIndiaMatch = titleStr.match(/in india\s*-\s*.+?-\s*(.+)$/i);
+    if (inIndiaMatch && inIndiaMatch[1]) {
+      const candidate = inIndiaMatch[1].trim();
+      if (candidate.length > 1 && !isGenericPlaceholder(candidate)) {
+        return candidate;
+      }
+    }
+  }
+
+  // Step 3 — Parse from job.title using " at "
   if (job?.title) {
     const title = String(job.title);
     const m = title.match(/ at (.+)$/i);
     if (m && m[1]) {
       const company = m[1].trim();
-      if (company) return company;
+      if (company && !isGenericPlaceholder(company)) return company;
     }
   }
 
@@ -269,7 +345,7 @@ function extractCompanyName(job: any): string {
     let via = String(job.via).trim();
     via = via.replace(/^via\s+/i, "").trim();
     const lower = via.toLowerCase();
-    if (via && !PLATFORM_NAMES.includes(lower)) {
+    if (via && !PLATFORM_NAMES.includes(lower) && !isGenericPlaceholder(via)) {
       return via;
     }
   }
@@ -286,6 +362,15 @@ function extractJobTitle(job: any): string {
 
   // Step 1: Remove "Unknown Company: " prefix
   title = title.replace(/^unknown company:\s*/i, "");
+
+  // Step 1b: Remove " @ CompanyName" suffix
+  title = title.replace(/\s@\s.+$/, "").trim();
+
+  // Step 1c: Remove " - India @ CompanyName" suffix (handles residual patterns)
+  title = title.replace(/\s-\s*india\s@\s.+$/i, "").trim();
+
+  // Step 1d: Remove "(India)" location qualifier
+  title = title.replace(/\s*\(india\)\s*/i, " ").trim();
 
   // Step 2: Remove " at [Company]" suffix
   title = title.replace(/ at .+$/i, "");
