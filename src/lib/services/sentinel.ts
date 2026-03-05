@@ -306,10 +306,36 @@ function extractCompanyName(job: any): string {
         "intern",
         "architect",
         "scientist",
+        "apprentice",
+        "trainee",
+        "graduate",
       ];
+      const lowerCandidate = candidate.toLowerCase();
       const looksLikeJobTitle = JOB_TITLE_WORDS.some((w) =>
-        candidate.toLowerCase().includes(w)
+        lowerCandidate.includes(w)
       );
+
+      // Naukri-style pattern: "Role - Location - Company - Experience"
+      const parts = candidate
+        .split("-")
+        .map((p) => p.trim())
+        .filter(Boolean);
+      if (parts.length > 1) {
+        const experienceRe =
+          /(year|yrs|experience|vacanc|0\s*to|\d+\s*(to|-)\s*\d+)/i;
+        for (let i = parts.length - 1; i >= 0; i--) {
+          const part = parts[i];
+          const lp = part.toLowerCase();
+          if (!part) continue;
+          if (isGenericPlaceholder(part)) continue;
+          if (LOCATION_WORDS.includes(lp)) continue;
+          if (experienceRe.test(lp)) continue;
+          if (JOB_TITLE_WORDS.some((w) => lp.includes(w))) continue;
+          return part;
+        }
+      }
+
+      // Simple "Unknown Company: Ema" pattern
       if (!looksLikeJobTitle && candidate.length < 40) {
         if (!isGenericPlaceholder(candidate)) {
           return candidate;
