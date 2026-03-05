@@ -263,51 +263,117 @@ function getIndustrySectorKeyword(industries: Industry[]): string {
 
 /**
  * BUCKET A — Elite Core
- * Direct scrapes of company career pages for target industry
- * These are highest signal — if a Tier 1 company posts here, it's real
+ * Tier‑1 company career pages via Google Jobs, per industry.
  */
 function buildBucketA(filters: UserFilters): SerpQuery[] {
   const queries: SerpQuery[] = [];
-  const chips = buildChipsParam(filters);
-  const expModifiers = EXPERIENCE_MAP[filters.experience].queryModifiers;
+  const primaryLocation = getPrimaryLocation(filters);
+  const role = filters.role;
+
+  const pushQuery = (q: string, label: string, rationale: string) => {
+    queries.push({
+      bucket: "A",
+      bucketLabel: label,
+      engine: "google_jobs",
+      params: {
+        q,
+        location: primaryLocation,
+        gl: "in",
+        hl: "en",
+      },
+      priority: 1,
+      rationale,
+    });
+  };
 
   for (const industry of filters.industries) {
-    const eliteSites = ELITE_SITES_BY_INDUSTRY[industry] || [];
-
-    // Group into pairs to avoid query length limits
-    for (let i = 0; i < eliteSites.length; i += 2) {
-      const sitePair = eliteSites.slice(i, i + 2).join(" OR ");
-      const primaryLocation = getPrimaryLocation(filters);
-
-      queries.push({
-        bucket: "A",
-        bucketLabel: "Elite Career Sites",
-        engine: "google_jobs",
-        params: {
-          q: `"${filters.role}" India (${sitePair})`,
-          location: primaryLocation,
-          gl: "in",
-          hl: "en",
-          ...(chips && { chips }),
-        },
-        priority: 1,
-        rationale: `Direct career site scrape for ${industry} Tier 1 firms`,
-      });
-
-      // Second variant with experience modifier
-      queries.push({
-        bucket: "A",
-        bucketLabel: "Elite Career Sites — Experience Filtered",
-        engine: "google",
-        params: {
-          q: `"${filters.role}" "${expModifiers[0]}" (${sitePair}) India`,
-          gl: "in",
-          hl: "en",
-          num: 20,
-        },
-        priority: 2,
-        rationale: `Experience-filtered career site search for ${expModifiers[0]} level`,
-      });
+    switch (industry) {
+      case "Consulting": {
+        pushQuery(
+          `"${role}" McKinsey OR BCG OR Bain OR Deloitte OR EY`,
+          "Elite Career Sites — Consulting (MBB + Big 4)",
+          "Tier‑1 consulting firms via Google Jobs"
+        );
+        pushQuery(
+          `"${role}" "Oliver Wyman" OR "Roland Berger" OR "Kearney" OR "Strategy&"`,
+          "Elite Career Sites — Consulting (Strategy Boutiques)",
+          "Global strategy boutiques via Google Jobs"
+        );
+        break;
+      }
+      case "Finance": {
+        pushQuery(
+          `"${role}" "Goldman Sachs" OR "Morgan Stanley" OR "JP Morgan" OR "Citi"`,
+          "Elite Career Sites — Finance (IB)",
+          "Top global investment banks via Google Jobs"
+        );
+        pushQuery(
+          `"${role}" "HDFC Bank" OR "ICICI Bank" OR "Kotak" OR "Axis Bank"`,
+          "Elite Career Sites — Finance (India Banks)",
+          "Leading Indian banks via Google Jobs"
+        );
+        pushQuery(
+          `"${role}" "Bajaj Finance" OR "Zerodha" OR "Groww" OR "CRED" OR "Razorpay"`,
+          "Elite Career Sites — Finance (Fintech)",
+          "High‑growth Indian fintech companies via Google Jobs"
+        );
+        break;
+      }
+      case "Technology": {
+        pushQuery(
+          `"${role}" Google OR Microsoft OR Amazon OR Meta OR Apple`,
+          "Elite Career Sites — Technology (Big Tech)",
+          "Global Big Tech via Google Jobs"
+        );
+        pushQuery(
+          `"${role}" Flipkart OR Swiggy OR Zomato OR PhonePe OR Razorpay OR CRED`,
+          "Elite Career Sites — Technology (India Product)",
+          "Tier‑1 Indian product tech companies via Google Jobs"
+        );
+        break;
+      }
+      case "Operations": {
+        pushQuery(
+          `"${role}" "Tata" OR "Mahindra" OR "L&T" OR "Adani" OR "Reliance"`,
+          "Elite Career Sites — Operations",
+          "Large Indian conglomerates with deep operations orgs"
+        );
+        break;
+      }
+      case "Product": {
+        pushQuery(
+          `"${role}" Google OR Microsoft OR Flipkart OR Meesho OR Swiggy OR Zepto`,
+          "Elite Career Sites — Product",
+          "Product‑heavy tech companies via Google Jobs"
+        );
+        break;
+      }
+      case "Marketing": {
+        pushQuery(
+          `"${role}" "Hindustan Unilever" OR "ITC" OR "Nestle" OR "P&G" OR "Marico"`,
+          "Elite Career Sites — Marketing (FMCG)",
+          "Top FMCG marketing houses via Google Jobs"
+        );
+        break;
+      }
+      case "Data & Analytics": {
+        pushQuery(
+          `"${role}" Google OR Microsoft OR Amazon OR "Mu Sigma" OR "Tiger Analytics"`,
+          "Elite Career Sites — Data & Analytics",
+          "Global + India analytics leaders via Google Jobs"
+        );
+        break;
+      }
+      case "Other":
+      default: {
+        // Generic Tier‑1 tech fallback
+        pushQuery(
+          `"${role}" Google OR Microsoft OR Amazon OR Meta OR Apple`,
+          "Elite Career Sites — General Tier 1",
+          "Generic Tier‑1 companies via Google Jobs"
+        );
+        break;
+      }
     }
   }
 
@@ -552,20 +618,23 @@ function buildBucketD(filters: UserFilters): SerpQuery[] {
   queries.push({
     bucket: "D",
     bucketLabel: "Naukri Direct (Google)",
-    engine: "google",
+    engine: "google_jobs",
     params: {
       q: `"${filters.role}" "${expModifiers[0]}" India site:naukri.com`,
+      location: "India",
       gl: "in",
       hl: "en",
-      num: 20,
     },
     priority: 1,
-    rationale: "Naukri direct search — partial Google indexing + Apify Naukri scraper supplements this",
+    rationale:
+      "Naukri direct search — partial Google Jobs indexing + Apify Naukri scraper supplements this",
   });
 
-  // Internshala for fresher / intern roles
-  if (["Fresher", "0-1 years", "1-2 years"].includes(filters.experience) ||
-      filters.jobTypes.includes("Internship")) {
+  // Internshala & IIMJobs for fresher / intern / MBA roles
+  if (
+    ["Fresher", "0-1 years", "1-2 years"].includes(filters.experience) ||
+    filters.jobTypes.includes("Internship")
+  ) {
     queries.push({
       bucket: "D",
       bucketLabel: "Internshala (Fresher/Intern)",
@@ -577,10 +646,10 @@ function buildBucketD(filters: UserFilters): SerpQuery[] {
         num: 20,
       },
       priority: 2,
-      rationale: "Internshala — critical source for fresher/intern roles in India, not indexed by Google Jobs",
+      rationale:
+        "Internshala — critical source for fresher/intern roles in India, not indexed by Google Jobs",
     });
 
-    // IIMJobs for MBA-specific roles
     queries.push({
       bucket: "D",
       bucketLabel: "IIMJobs (MBA Roles)",
@@ -592,39 +661,10 @@ function buildBucketD(filters: UserFilters): SerpQuery[] {
         num: 20,
       },
       priority: 2,
-      rationale: "IIMJobs — India's primary job board for MBA/management roles",
+      rationale:
+        "IIMJobs — India's primary job board for MBA/management roles",
     });
   }
-
-  // Shine.com
-  queries.push({
-    bucket: "D",
-    bucketLabel: "Shine.com",
-    engine: "google",
-    params: {
-      q: `"${filters.role}" India site:shine.com`,
-      gl: "in",
-      hl: "en",
-      num: 20,
-    },
-    priority: 3,
-    rationale: "Shine — large India job board with different company coverage from Naukri",
-  });
-
-  // Foundit (formerly Monster India)
-  queries.push({
-    bucket: "D",
-    bucketLabel: "Foundit / Monster India",
-    engine: "google",
-    params: {
-      q: `"${filters.role}" India site:foundit.in`,
-      gl: "in",
-      hl: "en",
-      num: 20,
-    },
-    priority: 3,
-    rationale: "Foundit (Monster India) — covers mid-market and traditional corporates",
-  });
 
   return queries;
 }

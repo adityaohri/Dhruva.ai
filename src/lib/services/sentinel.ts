@@ -530,8 +530,11 @@ export async function runSerpQueryEngine(
       (q.bucket === "A" ||
         q.bucket === "B" ||
         q.bucket === "C" ||
-        q.bucket === "D") &&
-      (q.engine === "google_jobs" || q.engine === "google")
+        q.bucket === "D" ||
+        q.bucket === "E") &&
+      (q.engine === "google_jobs" ||
+        q.engine === "google" ||
+        q.engine === "google_news")
   );
 
   const enrichedByBucket: SerpEnrichedJobResult[] = [];
@@ -556,6 +559,15 @@ export async function runSerpQueryEngine(
         } else if (q.engine === "google") {
           const results = (resp?.organic_results || []) as any[];
           const rawJobs: RawJobResult[] = results
+            .map((r) => toRawJobFromGoogleWeb(r))
+            .filter((j): j is RawJobResult => j != null);
+          const enrichedJobs = await Promise.all(
+            rawJobs.map((job) => deepFetchJob(job, q.bucket, serpApiCall))
+          );
+          enrichedByBucket.push(...enrichedJobs);
+        } else if (q.engine === "google_news") {
+          const articles = (resp?.news_results || []) as any[];
+          const rawJobs: RawJobResult[] = articles
             .map((r) => toRawJobFromGoogleWeb(r))
             .filter((j): j is RawJobResult => j != null);
           const enrichedJobs = await Promise.all(
