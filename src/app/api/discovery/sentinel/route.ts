@@ -209,11 +209,9 @@ export async function POST(req: NextRequest) {
       resultsByCompany,
       meta: {
         provider: "serpapi",
-        queriesCount: undefined,
         totalBeforeDedupe: rawResults.length,
         totalAfterDedupe: typedResults.length,
         directCount: typedResults.filter((r) => r.isDirect).length,
-        fromGoogleJobs: googleJobsResults.length,
       },
     });
   } catch (e: unknown) {
