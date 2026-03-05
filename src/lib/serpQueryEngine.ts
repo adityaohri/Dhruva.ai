@@ -296,6 +296,7 @@ function buildBucketA(userFilters: UserFilters): SerpQuery[] {
         hl: "en",
         ...(jobType && { employment_type: jobType.toUpperCase() }),
       },
+      rationale: `Direct ${industry} company career sites for ${role} (group ${idx + 1})`,
     });
   });
 
@@ -312,6 +313,7 @@ function buildBucketA(userFilters: UserFilters): SerpQuery[] {
         hl: "en",
         ...(jobType && { employment_type: jobType.toUpperCase() }),
       },
+      rationale: `Targeted Google Jobs search for ${industry} title "${roleTitle}"`,
     });
   });
 
@@ -350,6 +352,7 @@ function buildBucketB(userFilters: UserFilters): SerpQuery[] {
         hl: "en",
         num: 20,
       },
+      rationale: `Search top ATS boards for primary role "${primaryRole}" in ${location}`,
     },
     {
       engine: "google",
@@ -362,6 +365,7 @@ function buildBucketB(userFilters: UserFilters): SerpQuery[] {
         hl: "en",
         num: 20,
       },
+      rationale: `Search top ATS boards for secondary role "${secondaryRole}" in ${location}`,
     },
     {
       engine: "google",
@@ -374,6 +378,7 @@ function buildBucketB(userFilters: UserFilters): SerpQuery[] {
         hl: "en",
         num: 20,
       },
+      rationale: `Naukri individual pages for ${industry} role "${primaryRole}" in ${location}`,
     },
     {
       engine: "google",
@@ -386,6 +391,7 @@ function buildBucketB(userFilters: UserFilters): SerpQuery[] {
         hl: "en",
         num: 10,
       },
+      rationale: `IIMJobs MBA/strategy roles for ${industry} and "${primaryRole}"`,
     },
   ];
 }
@@ -418,6 +424,7 @@ function buildBucketC(userFilters: UserFilters): SerpQuery[] {
         hl: "en",
         num: 10,
       },
+      rationale: `LinkedIn posts where people are explicitly "hiring" for ${primaryRole} in ${location}`,
     },
     {
       engine: "google",
@@ -430,6 +437,7 @@ function buildBucketC(userFilters: UserFilters): SerpQuery[] {
         hl: "en",
         num: 10,
       },
+      rationale: `LinkedIn referral posts mentioning open roles and ${primarySignal} in ${location}`,
     },
     {
       engine: "google",
@@ -442,6 +450,7 @@ function buildBucketC(userFilters: UserFilters): SerpQuery[] {
         hl: "en",
         num: 10,
       },
+      rationale: `LinkedIn posts with "we are looking for" and ${primaryRole} in India`,
     },
   ];
 }
@@ -475,6 +484,7 @@ function buildBucketD(userFilters: UserFilters): SerpQuery[] {
         hl: "en",
         ...(jobType && { employment_type: jobType.toUpperCase() }),
       },
+      rationale: `Google Jobs listings for ${roleTitle} in ${location} (${experience})`,
     });
   });
 
@@ -494,6 +504,7 @@ function buildBucketD(userFilters: UserFilters): SerpQuery[] {
         hl: "en",
         num: 10,
       },
+      rationale: `Internshala internships for ${primaryRole} in ${industry}`,
     });
   }
 
@@ -545,6 +556,7 @@ function buildBucketE(userFilters: UserFilters): SerpQuery[] {
         hl: "en",
         num: 10,
       },
+      rationale: `Positive ${industry} hiring/funding/expansion news in ${location}`,
     },
     {
       engine: "google_news",
@@ -557,6 +569,7 @@ function buildBucketE(userFilters: UserFilters): SerpQuery[] {
         hl: "en",
         num: 10,
       },
+      rationale: `Company-specific ${industry} signals for top companies (${companyStr})`,
     },
   ];
 }
