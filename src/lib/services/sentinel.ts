@@ -1101,16 +1101,17 @@ async function serpApiCall(params: Record<string, string | number | boolean>) {
 }
 
 function toRawJobFromGoogleJobs(entry: any): RawJobResult | null {
+  const title = entry.title || "";
+  if (!title) return null;
+
   const apply_options = (entry.apply_options || [])
     .map((o: any) => (o?.link ? { link: String(o.link) } : null))
     .filter(Boolean) as { link: string }[];
-  const company_name = entry.company_name || entry.company || "";
-  const title = entry.title || "";
-  if (!title || !company_name) return null;
+
   return {
     job_id: entry.job_id,
     title: String(title),
-    company_name: String(company_name),
+    company_name: entry.company_name || entry.company || "Unknown Company",
     location: String(entry.location || ""),
     description: entry.description ? String(entry.description) : "",
     apply_options,
@@ -1122,16 +1123,15 @@ function toRawJobFromGoogleJobs(entry: any): RawJobResult | null {
 function toRawJobFromGoogleWeb(result: any): RawJobResult | null {
   const link = result.link || result.url;
   if (!link) return null;
+
   const title = result.title || "";
-  const snippet = result.snippet || result.description || "";
-  const brand = extractBrandFromUrl(link) ?? "";
-  const company_name = brand || "";
   if (!title) return null;
+
   return {
     title: String(title),
-    company_name: company_name || "Unknown Company",
+    company_name: "Unknown Company",
     location: "",
-    description: String(snippet || ""),
+    description: String(result.snippet || result.description || ""),
     apply_options: [{ link: String(link) }],
     detected_extensions: {},
     source: "google_web",
@@ -1198,26 +1198,30 @@ export async function runSerpQueryEngine(
   const deduped: EnrichedJobResult[] = deduplicateJobs(enrichedByBucket);
 
   // Map EnrichedJobResult into the legacy HuntResult shape used by the rest of Sentinel.
-  const huntResults: HuntResult[] = deduped.map((job) => {
-    const applyUrl =
-      job.applyUrl ||
-      job.apply_options?.[0]?.link ||
-      "";
-    const brand = extractBrandFromUrl(applyUrl);
-    const snippet =
-      job.fullDescription?.slice(0, 1200) ||
-      job.description?.slice(0, 400) ||
-      "";
-    const source = job.source || job.bucket;
-    return {
-      title: job.title || "Job",
-      url: applyUrl || "",
-      snippet,
-      source: String(source),
-      company: job.company_name?.trim() || brand || null,
-      bucket: job.bucket,
-    };
-  }).filter((r) => r.url);
+  const huntResults: HuntResult[] = deduped
+    .map((job) => {
+      const normalised = normaliseJob(
+        job,
+        job.bucket,
+        userFilters.role
+      );
+      const applyUrl =
+        job.applyUrl ||
+        job.apply_options?.[0]?.link ||
+        "";
+      const snippet =
+        normalised.fullDescription?.slice(0, 1200) ||
+        normalised.description;
+      return {
+        title: normalised.jobTitle,
+        url: applyUrl,
+        snippet,
+        source: normalised.source,
+        company: normalised.companyName,
+        bucket: job.bucket,
+      };
+    })
+    .filter((r) => r.url);
 
   return huntResults;
 }
