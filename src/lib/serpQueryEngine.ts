@@ -1,5 +1,14 @@
 import { fetchJobHtml } from "@/lib/services/scrapingdog";
 import { extractCleanJobDescription } from "@/lib/services/extractor";
+import {
+  INDUSTRY_KEYWORDS,
+  buildBucketAQuery,
+  getTopCompanies,
+  getRoleVariants as getRepoRoleVariants,
+  getSignalKeywords,
+  scoreAgainstIndustry,
+  type IndustryName,
+} from "@/lib/industryKeywords";
 
 /**
  * OPPORTUNITY INTELLIGENCE — SERP QUERY ENGINE
@@ -261,196 +270,124 @@ function getIndustrySectorKeyword(industries: Industry[]): string {
 // BUCKET BUILDERS
 // ─────────────────────────────────────────────────────────────────────────────
 
-/**
- * BUCKET A — Elite Core
- * Tier‑1 company career pages via Google Jobs, per industry.
- */
-function buildBucketA(filters: UserFilters): SerpQuery[] {
-  const queries: SerpQuery[] = [];
-  const primaryLocation = getPrimaryLocation(filters);
-  const role = filters.role;
+function buildBucketA(userFilters: UserFilters): SerpQuery[] {
+  const industry = (userFilters.industries?.[0] ?? "Other") as IndustryName;
+  const role = userFilters.role || "analyst";
+  const location = userFilters.locations?.[0] ?? "India";
+  const jobType = userFilters.jobTypes?.[0] ?? "";
 
-  const pushQuery = (q: string, label: string, rationale: string) => {
+  const roleVariants = getRepoRoleVariants(industry).slice(0, 6);
+  const primaryRoles = roleVariants.length > 0 ? roleVariants : [role];
+
+  const companyQueries = buildBucketAQuery(industry, role, 4);
+
+  const queries: SerpQuery[] = [];
+
+  companyQueries.forEach((q, idx) => {
     queries.push({
-      bucket: "A",
-      bucketLabel: label,
       engine: "google_jobs",
+      bucket: "A",
+      bucketLabel: `Elite ${industry} Companies (group ${idx + 1})`,
+      priority: 1,
       params: {
         q,
-        location: primaryLocation,
+        location,
         gl: "in",
         hl: "en",
+        ...(jobType && { employment_type: jobType.toUpperCase() }),
       },
-      priority: 1,
-      rationale,
     });
-  };
+  });
 
-  for (const industry of filters.industries) {
-    switch (industry) {
-      case "Consulting": {
-        pushQuery(
-          `"${role}" McKinsey OR BCG OR Bain OR Deloitte OR EY`,
-          "Elite Career Sites — Consulting (MBB + Big 4)",
-          "Tier‑1 consulting firms via Google Jobs"
-        );
-        pushQuery(
-          `"${role}" "Oliver Wyman" OR "Roland Berger" OR "Kearney" OR "Strategy&"`,
-          "Elite Career Sites — Consulting (Strategy Boutiques)",
-          "Global strategy boutiques via Google Jobs"
-        );
-        break;
-      }
-      case "Finance": {
-        pushQuery(
-          `"${role}" "Goldman Sachs" OR "Morgan Stanley" OR "JP Morgan" OR "Citi"`,
-          "Elite Career Sites — Finance (IB)",
-          "Top global investment banks via Google Jobs"
-        );
-        pushQuery(
-          `"${role}" "HDFC Bank" OR "ICICI Bank" OR "Kotak" OR "Axis Bank"`,
-          "Elite Career Sites — Finance (India Banks)",
-          "Leading Indian banks via Google Jobs"
-        );
-        pushQuery(
-          `"${role}" "Bajaj Finance" OR "Zerodha" OR "Groww" OR "CRED" OR "Razorpay"`,
-          "Elite Career Sites — Finance (Fintech)",
-          "High‑growth Indian fintech companies via Google Jobs"
-        );
-        break;
-      }
-      case "Technology": {
-        pushQuery(
-          `"${role}" Google OR Microsoft OR Amazon OR Meta OR Apple`,
-          "Elite Career Sites — Technology (Big Tech)",
-          "Global Big Tech via Google Jobs"
-        );
-        pushQuery(
-          `"${role}" Flipkart OR Swiggy OR Zomato OR PhonePe OR Razorpay OR CRED`,
-          "Elite Career Sites — Technology (India Product)",
-          "Tier‑1 Indian product tech companies via Google Jobs"
-        );
-        break;
-      }
-      case "Operations": {
-        pushQuery(
-          `"${role}" "Tata" OR "Mahindra" OR "L&T" OR "Adani" OR "Reliance"`,
-          "Elite Career Sites — Operations",
-          "Large Indian conglomerates with deep operations orgs"
-        );
-        break;
-      }
-      case "Product": {
-        pushQuery(
-          `"${role}" Google OR Microsoft OR Flipkart OR Meesho OR Swiggy OR Zepto`,
-          "Elite Career Sites — Product",
-          "Product‑heavy tech companies via Google Jobs"
-        );
-        break;
-      }
-      case "Marketing": {
-        pushQuery(
-          `"${role}" "Hindustan Unilever" OR "ITC" OR "Nestle" OR "P&G" OR "Marico"`,
-          "Elite Career Sites — Marketing (FMCG)",
-          "Top FMCG marketing houses via Google Jobs"
-        );
-        break;
-      }
-      case "Data & Analytics": {
-        pushQuery(
-          `"${role}" Google OR Microsoft OR Amazon OR "Mu Sigma" OR "Tiger Analytics"`,
-          "Elite Career Sites — Data & Analytics",
-          "Global + India analytics leaders via Google Jobs"
-        );
-        break;
-      }
-      case "Other":
-      default: {
-        // Generic Tier‑1 tech fallback
-        pushQuery(
-          `"${role}" Google OR Microsoft OR Amazon OR Meta OR Apple`,
-          "Elite Career Sites — General Tier 1",
-          "Generic Tier‑1 companies via Google Jobs"
-        );
-        break;
-      }
-    }
-  }
+  primaryRoles.slice(0, 3).forEach((roleTitle) => {
+    queries.push({
+      engine: "google_jobs",
+      bucket: "A",
+      bucketLabel: `${industry} role: ${roleTitle}`,
+      priority: 1,
+      params: {
+        q: `"${roleTitle}" India`,
+        location,
+        gl: "in",
+        hl: "en",
+        ...(jobType && { employment_type: jobType.toUpperCase() }),
+      },
+    });
+  });
 
   return queries;
 }
 
-/**
- * BUCKET B — ATS Deep-Web
- * Workday, Greenhouse, Lever, SmartRecruiters — massive coverage gap in most job boards
- */
-function buildBucketB(filters: UserFilters): SerpQuery[] {
-  const queries: SerpQuery[] = [];
-  const expLabel = EXPERIENCE_MAP[filters.experience].yearsLabel;
-  const sectorKw = getIndustrySectorKeyword(filters.industries);
-  const primaryLocation = getPrimaryLocation(filters);
+function buildBucketB(userFilters: UserFilters): SerpQuery[] {
+  const industry = (userFilters.industries?.[0] ?? "Other") as IndustryName;
+  const role = userFilters.role || "analyst";
+  const location = userFilters.locations?.[0] ?? "India";
+  const jobType = userFilters.jobTypes?.[0] ?? "";
 
-  const atsPlatforms = [
-    { sites: "site:myworkdayjobs.com OR site:wd3.myworkdayjobs.com", label: "Workday" },
-    { sites: "site:boards.greenhouse.io OR site:greenhouse.io/job", label: "Greenhouse" },
-    { sites: "site:jobs.lever.co OR site:lever.co/jobs",            label: "Lever" },
-    { sites: "site:smartrecruiters.com/jobs OR site:careers.smartrecruiters.com", label: "SmartRecruiters" },
-    { sites: "site:jobs.ashbyhq.com OR site:app.ashbyhq.com",       label: "Ashby (startups)" },
-    { sites: "site:instahyre.com OR site:cutshort.io",               label: "India startup ATSes" },
+  const roleVariants = getRepoRoleVariants(industry).slice(0, 3);
+  const primaryRole = roleVariants[0] ?? role;
+  const secondaryRole = roleVariants[1] ?? role;
+
+  const ATS_SITES = [
+    "site:boards.greenhouse.io",
+    "site:lever.co",
+    "site:myworkdayjobs.com",
+    "site:ashbyhq.com",
+    "site:smartrecruiters.com",
   ];
 
-  for (const { sites, label } of atsPlatforms) {
-    // Core query
-    queries.push({
-      bucket: "B",
-      bucketLabel: `ATS Deep-Web — ${label}`,
+  const atsSiteStr = ATS_SITES.slice(0, 3).join(" OR ");
+
+  return [
+    {
       engine: "google",
+      bucket: "B",
+      bucketLabel: `ATS deep-web: ${primaryRole}`,
+      priority: 2,
       params: {
-        q: `"${filters.role}" India (${sites})`,
+        q: `(${atsSiteStr}) "${primaryRole}" ${location}`,
         gl: "in",
         hl: "en",
         num: 20,
       },
-      priority: 1,
-      rationale: `Deep-web ATS scrape via ${label} — not covered by Google Jobs indexing`,
-    });
-
-    // Variant with sector keyword for precision
-    if (sectorKw) {
-      queries.push({
-        bucket: "B",
-        bucketLabel: `ATS Deep-Web — ${label} (sector)`,
-        engine: "google",
-        params: {
-          q: `"${filters.role}" (${sectorKw}) India (${sites})`,
-          gl: "in",
-          hl: "en",
-          num: 20,
-        },
-        priority: 2,
-        rationale: `Sector-filtered ATS search for ${filters.industries.join(", ")}`,
-      });
-    }
-
-    // All target locations
-    for (const location of filters.locations) {
-      queries.push({
-        bucket: "B",
-        bucketLabel: `ATS Deep-Web — ${label} (${location})`,
-        engine: "google",
-        params: {
-          q: `"${filters.role}" "${location}" (${sites})`,
-          gl: "in",
-          hl: "en",
-          num: 10,
-        },
-        priority: 2,
-        rationale: `Location-specific ATS search for ${location}`,
-      });
-    }
-  }
-
-  return queries;
+    },
+    {
+      engine: "google",
+      bucket: "B",
+      bucketLabel: `ATS deep-web: ${secondaryRole}`,
+      priority: 2,
+      params: {
+        q: `(${atsSiteStr}) "${secondaryRole}" ${location}`,
+        gl: "in",
+        hl: "en",
+        num: 20,
+      },
+    },
+    {
+      engine: "google",
+      bucket: "B",
+      bucketLabel: `Naukri: ${industry} roles`,
+      priority: 2,
+      params: {
+        q: `site:naukri.com "${primaryRole}" ${location} -"job vacancies" -"openings in" -"jobs in"`,
+        gl: "in",
+        hl: "en",
+        num: 20,
+      },
+    },
+    {
+      engine: "google",
+      bucket: "B",
+      bucketLabel: `IIMJobs: ${industry}`,
+      priority: 2,
+      params: {
+        q: `site:iimjobs.com "${primaryRole}" ${location}`,
+        gl: "in",
+        hl: "en",
+        num: 10,
+      },
+    },
+  ];
 }
 
 /**
@@ -458,92 +395,55 @@ function buildBucketB(filters: UserFilters): SerpQuery[] {
  * LinkedIn posts, informal hiring signals, referral posts
  * Uses Google Search (not Google Jobs) to surface posts
  */
-function buildBucketC(filters: UserFilters): SerpQuery[] {
-  const queries: SerpQuery[] = [];
+function buildBucketC(userFilters: UserFilters): SerpQuery[] {
+  const industry = (userFilters.industries?.[0] ?? "Other") as IndustryName;
+  const role = userFilters.role || "analyst";
+  const location = userFilters.locations?.[0] ?? "India";
+  const jobType = userFilters.jobTypes?.[0] ?? "";
 
-  // Rolling 30-day date for recency — formatted for Google's after: operator
-  const thirtyDaysAgo = new Date();
-  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-  const afterDate = thirtyDaysAgo.toISOString().split("T")[0]; // YYYY-MM-DD
+  const signals = getSignalKeywords(industry).slice(0, 4);
+  const primarySignal = signals[0] ?? "hiring";
+  const roleVariants = getRepoRoleVariants(industry).slice(0, 2);
+  const primaryRole = roleVariants[0] ?? role;
 
-  const roleVariants = getRoleVariants(filters.role).slice(0, 3);
-  const locationStr = filters.locations.slice(0, 3).join(" OR ");
-
-  // Core hiring post signals
-  const hiringSignals = [
-    `"hiring" "${filters.role}"`,
-    `"we are looking for" "${filters.role}"`,
-    `"open roles" "${filters.role}"`,
-    `"referral" "${filters.role}"`,
-    `"DM me" "${filters.role}"`,
-    `"dropping a referral" "${filters.role}"`,     // very India-specific phrase
-    `"if you know anyone" "${filters.role}"`,
-  ];
-
-  for (const signal of hiringSignals) {
-    queries.push({
-      bucket: "C",
-      bucketLabel: "LinkedIn Hiring Posts",
+  return [
+    {
       engine: "google",
-      params: {
-        q: `${signal} (${locationStr}) site:linkedin.com/posts after:${afterDate}`,
-        gl: "in",
-        hl: "en",
-        num: 10,
-      },
-      priority: 2,
-      rationale: `LinkedIn informal hiring signal: "${signal}"`,
-    });
-  }
-
-  // Role alias variants on LinkedIn
-  for (const variant of roleVariants) {
-    queries.push({
       bucket: "C",
-      bucketLabel: "LinkedIn Posts — Role Alias",
-      engine: "google",
-      params: {
-        q: `"hiring" "${variant}" India site:linkedin.com/posts after:${afterDate}`,
-        gl: "in",
-        hl: "en",
-        num: 10,
-      },
+      bucketLabel: `LinkedIn hiring signals: ${industry}`,
       priority: 3,
-      rationale: `Role alias search for "${variant}" to catch abbreviation usage`,
-    });
-  }
-
-  // Twitter/X hiring signals
-  queries.push({
-    bucket: "C",
-    bucketLabel: "Twitter/X Hiring Signals",
-    engine: "google",
-    params: {
-      q: `"hiring" "${filters.role}" India (site:twitter.com OR site:x.com) after:${afterDate}`,
-      gl: "in",
-      hl: "en",
-      num: 10,
+      params: {
+        q: `site:linkedin.com/posts "hiring" "${primaryRole}" "${location}" after:2026-01-01`,
+        gl: "in",
+        hl: "en",
+        num: 10,
+      },
     },
-    priority: 3,
-    rationale: "Twitter/X informal hiring posts — founders often announce here first",
-  });
-
-  // WhatsApp/Telegram public groups indexed by Google
-  queries.push({
-    bucket: "C",
-    bucketLabel: "Community Hiring Boards",
-    engine: "google",
-    params: {
-      q: `"${filters.role}" India hiring ${filters.experience} (site:hasnode.com OR site:notion.site OR site:airtable.com)`,
-      gl: "in",
-      hl: "en",
-      num: 10,
+    {
+      engine: "google",
+      bucket: "C",
+      bucketLabel: `LinkedIn referrals: ${industry}`,
+      priority: 3,
+      params: {
+        q: `site:linkedin.com "referral" "open roles" "${primarySignal}" "${location}"`,
+        gl: "in",
+        hl: "en",
+        num: 10,
+      },
     },
-    priority: 3,
-    rationale: "Community job boards on Notion/Airtable — common in India startup ecosystem",
-  });
-
-  return queries;
+    {
+      engine: "google",
+      bucket: "C",
+      bucketLabel: `LinkedIn we are hiring: ${industry}`,
+      priority: 3,
+      params: {
+        q: `site:linkedin.com "we are looking for" "${primaryRole}" India`,
+        gl: "in",
+        hl: "en",
+        num: 10,
+      },
+    },
+  ];
 }
 
 /**
@@ -551,118 +451,49 @@ function buildBucketC(filters: UserFilters): SerpQuery[] {
  * Naukri, Indeed, Shine, Internshala, LinkedIn Jobs, Glassdoor
  * Google Jobs engine with exhaustive pagination
  */
-function buildBucketD(filters: UserFilters): SerpQuery[] {
+function buildBucketD(userFilters: UserFilters): SerpQuery[] {
+  const industry = (userFilters.industries?.[0] ?? "Other") as IndustryName;
+  const role = userFilters.role || "analyst";
+  const location = userFilters.locations?.[0] ?? "India";
+  const jobType = userFilters.jobTypes?.[0] ?? "";
+  const experience = userFilters.experience ?? "";
+
+  const roleVariants = getRepoRoleVariants(industry).slice(0, 8);
+
   const queries: SerpQuery[] = [];
-  const chips = buildChipsParam(filters);
-  const expModifiers = EXPERIENCE_MAP[filters.experience].queryModifiers;
-  const jobTypeModifier = getJobTypeQueryModifier(filters.jobTypes);
-  const sectorKw = getIndustrySectorKeyword(filters.industries);
-  const roleVariants = getRoleVariants(filters.role);
 
-  // Primary Google Jobs query — paginated via next_page_token in execution
-  for (const location of filters.locations) {
-    // Core query per location
+  roleVariants.forEach((roleTitle) => {
     queries.push({
-      bucket: "D",
-      bucketLabel: `Aggregators — ${location}`,
       engine: "google_jobs",
+      bucket: "D",
+      bucketLabel: `Jobs: ${roleTitle}`,
+      priority: 3,
       params: {
-        q: `"${filters.role}" ${expModifiers[0]}`,
-        location: location,
+        q: `${roleTitle} ${location} ${experience}`.trim(),
+        location,
         gl: "in",
         hl: "en",
-        ...(chips && { chips }),
+        ...(jobType && { employment_type: jobType.toUpperCase() }),
       },
-      priority: 1,
-      rationale: `Primary Google Jobs search for ${filters.role} in ${location}`,
     });
-
-    // With sector keyword for relevance
-    if (sectorKw) {
-      queries.push({
-        bucket: "D",
-        bucketLabel: `Aggregators — ${location} (sector boosted)`,
-        engine: "google_jobs",
-        params: {
-          q: `"${filters.role}" ${sectorKw.split(" OR ")[0]}`,
-          location: location,
-          gl: "in",
-          hl: "en",
-          ...(chips && { chips }),
-        },
-        priority: 2,
-        rationale: `Sector-boosted Google Jobs for ${filters.industries[0]} roles`,
-      });
-    }
-  }
-
-  // Role alias queries — different titles index different jobs
-  for (const variant of roleVariants.slice(0, 3)) {
-    queries.push({
-      bucket: "D",
-      bucketLabel: `Aggregators — Role Alias (${variant})`,
-      engine: "google_jobs",
-      params: {
-        q: `"${variant}"`,
-        location: "India",
-        gl: "in",
-        hl: "en",
-        ...(chips && { chips }),
-      },
-      priority: 2,
-      rationale: `Alias search for "${variant}" — different companies use different titles`,
-    });
-  }
-
-// Naukri direct (Google indexes some individual job pages; filter out category pages)
-  queries.push({
-    bucket: "D",
-    bucketLabel: "Naukri Direct",
-    engine: "google",
-    params: {
-      q: `"${filters.role}" "${expModifiers[0]}" India site:naukri.com -"job vacancies" -"openings in" -"jobs in"`,
-      gl: "in",
-      hl: "en",
-      num: 20,
-    },
-    priority: 1,
-    rationale:
-      "Naukri direct search — partial Google Jobs indexing + Apify Naukri scraper supplements this",
   });
 
-  // Internshala & IIMJobs for fresher / intern / MBA roles
   if (
-    ["Fresher", "0-1 years", "1-2 years"].includes(filters.experience) ||
-    filters.jobTypes.includes("Internship")
+    jobType.toLowerCase().includes("intern") ||
+    userFilters.jobTypes?.some((jt) => jt.toLowerCase().includes("intern"))
   ) {
+    const primaryRole = roleVariants[0] ?? role;
     queries.push({
-      bucket: "D",
-      bucketLabel: "Internshala (Fresher/Intern)",
       engine: "google",
+      bucket: "D",
+      bucketLabel: `Internshala: ${industry} internships`,
+      priority: 3,
       params: {
-        q: `"${filters.role}" India site:internshala.com/jobs/detail`,
+        q: `site:internshala.com/jobs/detail "${primaryRole}"`,
         gl: "in",
         hl: "en",
-        num: 20,
+        num: 10,
       },
-      priority: 2,
-      rationale:
-        "Internshala — critical source for fresher/intern roles in India, not indexed by Google Jobs",
-    });
-
-    queries.push({
-      bucket: "D",
-      bucketLabel: "IIMJobs (MBA Roles)",
-      engine: "google",
-      params: {
-        q: `"${filters.role}" India site:iimjobs.com`,
-        gl: "in",
-        hl: "en",
-        num: 20,
-      },
-      priority: 2,
-      rationale:
-        "IIMJobs — India's primary job board for MBA/management roles",
     });
   }
 
@@ -673,57 +504,61 @@ function buildBucketD(filters: UserFilters): SerpQuery[] {
  * BUCKET E — Signal Intelligence
  * Funding news, office openings, expansion signals — pre-posting hiring intent
  */
-function buildBucketE(filters: UserFilters): SerpQuery[] {
-  const queries: SerpQuery[] = [];
-  const sectorKw = getIndustrySectorKeyword(filters.industries);
+function buildBucketE(userFilters: UserFilters): SerpQuery[] {
+  const industry = (userFilters.industries?.[0] ?? "Other") as IndustryName;
+  const location = userFilters.locations?.[0] ?? "India";
 
-  const thirtyDaysAgo = new Date();
-  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-  const afterDate = thirtyDaysAgo.toISOString().split("T")[0];
+  const signals = getSignalKeywords(industry);
+  const topCompanies = getTopCompanies(industry, 8);
 
-  // Funding signals → hiring intent
-  queries.push({
-    bucket: "E",
-    bucketLabel: "Funding Signals",
-    engine: "google_news",
-    params: {
-      q: `India startup funding "Series A" OR "Series B" OR "raised" ${sectorKw.split(" OR ")[0]} ${afterDate}`,
-      gl: "in",
-      hl: "en",
+  const POSITIVE_TRIGGERS = [
+    "funding",
+    "raises",
+    "new office",
+    "expands",
+    "hiring",
+    "headcount",
+    "series",
+    "investment",
+    "launches",
+    "appoints",
+  ];
+
+  const triggerStr = POSITIVE_TRIGGERS.slice(0, 3)
+    .map((t) => `"${t}"`)
+    .join(" OR ");
+
+  const companyStr = topCompanies
+    .slice(0, 4)
+    .map((c) => `"${c}"`)
+    .join(" OR ");
+
+  return [
+    {
+      engine: "google_news",
+      bucket: "E",
+      bucketLabel: `${industry} hiring signals`,
+      priority: 3,
+      params: {
+        q: `(${triggerStr}) ${industry} ${location}`,
+        gl: "in",
+        hl: "en",
+        num: 10,
+      },
     },
-    priority: 3,
-    rationale: "Companies that raised funding in last 30 days are likely hiring imminently",
-  });
-
-  // Office expansion signals
-  queries.push({
-    bucket: "E",
-    bucketLabel: "Office Expansion Signals",
-    engine: "google_news",
-    params: {
-      q: `India "new office" OR "expanding team" OR "hiring spree" ${sectorKw.split(" OR ")[0]} after:${afterDate}`,
-      gl: "in",
-      hl: "en",
+    {
+      engine: "google_news",
+      bucket: "E",
+      bucketLabel: `${industry} company signals`,
+      priority: 3,
+      params: {
+        q: `(${companyStr}) ("hiring" OR "expansion" OR "funding" OR "new office")`,
+        gl: "in",
+        hl: "en",
+        num: 10,
+      },
     },
-    priority: 3,
-    rationale: "New office/expansion announcements precede hiring waves",
-  });
-
-  // Layoff signals at competitors → talent displacement creates your user's competition
-  queries.push({
-    bucket: "E",
-    bucketLabel: "Market Displacement Signals",
-    engine: "google_news",
-    params: {
-      q: `India "layoffs" OR "restructuring" ${sectorKw.split(" OR ")[0]} after:${afterDate}`,
-      gl: "in",
-      hl: "en",
-    },
-    priority: 3,
-    rationale: "Layoffs at competitors signal open roles elsewhere + talent displacement narrative",
-  });
-
-  return queries;
+  ];
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

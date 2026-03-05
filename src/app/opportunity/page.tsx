@@ -236,6 +236,7 @@ function resolveTitle(r: OpportunityResult, company: string | null): string {
 }
 
 const JUNK_DOMAINS = [
+  // Indian business news
   "techcrunch.com",
   "financialexpress.com",
   "thehindubusinessline.com",
@@ -254,6 +255,33 @@ const JUNK_DOMAINS = [
   "ndtv.com",
   "thehindu.com",
   "businesstoday.in",
+  // Additional news domains seen in screenshots
+  "peoplematters.in",
+  "indiatoday.in",
+  "consultancy.in",
+  "consultancy.eu",
+  "consultancy.uk",
+  "consultancy.asia",
+  "consultancy.com",
+  "hr.economictimes.com",
+  "shrm.org",
+  "hbr.org",
+  "cnbc.com",
+  "cnbctv18.com",
+  "ft.com",
+  "wsj.com",
+  "scroll.in",
+  "thewire.in",
+  "theprint.in",
+  "outlookindia.com",
+  "hindustantimes.com",
+  "tribuneindia.com",
+  "deccanherald.com",
+  "vccircle.com",
+  "dealstreetasia.com",
+  "techgig.com",
+  "analyticsindiamag.com",
+  "artificialintelligence-news.com",
 ];
 
 const JOB_DOMAINS = [
@@ -306,11 +334,31 @@ const isLinkedInPost = (r: OpportunityResult): boolean => {
 };
 
 const isJobListing = (r: OpportunityResult): boolean => {
-  if (isNewsArticle(r)) return false;
+  try {
+    const host = new URL(r.url).hostname.toLowerCase().replace("www.", "");
+    if (JUNK_DOMAINS.some((d) => host === d || host.endsWith("." + d))) {
+      return false;
+    }
+  } catch {
+    // ignore URL parse errors
+  }
+
   if (isLinkedInPost(r)) return false;
   if (r.bucket === "C" || r.bucket === "E") return false;
+
   const title = (r.title ?? "").toLowerCase();
+
   const NEWS_PATTERNS = [
+    // Negative signals
+    "layoff",
+    "laid off",
+    "firing spree",
+    "job cuts",
+    "retrenchment",
+    "employees lose jobs",
+    "jobs lost",
+    "redundan",
+    // Company moves (not job postings)
     "nabs",
     "launches",
     "opens new office",
@@ -327,9 +375,168 @@ const isJobListing = (r: OpportunityResult): boolean => {
     "merger",
     "ipo",
     "valuation",
+    "welcomes",
+    "strengthens",
+    "collaborates",
+    "organise",
+    "summit",
+    "restructuring practice",
+    "building a better",
+    "home |",
+    // Opinion / analysis pieces
+    "opinion |",
+    "analysis:",
+    "why are",
+    "what is",
+    "how india",
+    "beginning of the end",
+    "says about",
+    "is it because",
   ];
   if (NEWS_PATTERNS.some((p) => title.includes(p))) return false;
+
+  const source = (r.source ?? "").toLowerCase();
+  const NEWS_SOURCES = [
+    "consultancy",
+    "peoplematters",
+    "indiatoday",
+    "financialexpress",
+    "techcrunch",
+    "bloomberg",
+    "reuters",
+    "forbes",
+    "livemint",
+    "moneycontrol",
+    "economictimes",
+    "business-standard",
+    "ndtv",
+  ];
+  if (NEWS_SOURCES.some((s) => source.includes(s))) return false;
+
   return true;
+};
+
+const POSITIVE_SIGNAL_PATTERNS = [
+  // Funding signals
+  "funding",
+  "raises",
+  "raised",
+  "series a",
+  "series b",
+  "series c",
+  "seed round",
+  "investment",
+  "backed",
+  "valuation",
+  // Expansion signals
+  "new office",
+  "expands",
+  "expansion",
+  "opens",
+  "launches",
+  "entering",
+  "new market",
+  "new hub",
+  "sets up",
+  "establishes",
+  "new team",
+  "new practice",
+  "new division",
+  // Hiring signals
+  "hiring",
+  "to hire",
+  "will hire",
+  "plans to hire",
+  "headcount",
+  "adding jobs",
+  "creating jobs",
+  "new roles",
+  "recruitment drive",
+  "talent acquisition",
+  "workforce expansion",
+  // Appointments
+  "appoints",
+  "welcomes",
+  "names",
+  "promotes",
+  "joins as",
+  "strengthens team",
+  "bolsters",
+];
+
+const NEGATIVE_SIGNAL_PATTERNS = [
+  "layoff",
+  "laid off",
+  "job cuts",
+  "retrenchment",
+  "firing",
+  "employees lose",
+  "jobs lost",
+  "redundan",
+  "downsizing",
+  "cost cutting",
+  "restructuring",
+  "bankruptcy",
+  "shutdown",
+  "closing down",
+  "winding up",
+  "losses",
+  "deficit",
+];
+
+const isPositiveSignal = (r: OpportunityResult): boolean => {
+  const title = (r.title ?? "").toLowerCase();
+  const snippet = (r.snippet ?? "").toLowerCase();
+  const combined = `${title} ${snippet}`;
+
+  if (NEGATIVE_SIGNAL_PATTERNS.some((p) => combined.includes(p))) {
+    return false;
+  }
+
+  return POSITIVE_SIGNAL_PATTERNS.some((p) => combined.includes(p));
+};
+
+const getReachOutReason = (r: OpportunityResult, company: string): string => {
+  const title = (r.title ?? "").toLowerCase();
+  const snippet = (r.snippet ?? "").toLowerCase();
+  const combined = `${title} ${snippet}`;
+
+  const label = company || "This company";
+
+  if (
+    combined.includes("series") ||
+    combined.includes("funding") ||
+    combined.includes("raises") ||
+    combined.includes("raised") ||
+    combined.includes("investment")
+  ) {
+    return `${label} recently raised funding — teams typically expand within 60–90 days of a funding round. Reaching out now puts you ahead of the formal job posting.`;
+  }
+  if (
+    combined.includes("new office") ||
+    combined.includes("expands") ||
+    combined.includes("new hub") ||
+    combined.includes("sets up")
+  ) {
+    return `${label} is opening a new office or expanding operations — they will need to staff up quickly. Early outreach significantly improves your chances.`;
+  }
+  if (
+    combined.includes("hiring") ||
+    combined.includes("to hire") ||
+    combined.includes("recruitment drive") ||
+    combined.includes("headcount")
+  ) {
+    return `${label} is actively expanding headcount. Reaching out directly to the hiring team or a relevant leader is more effective than applying through a job board.`;
+  }
+  if (
+    combined.includes("appoints") ||
+    combined.includes("welcomes") ||
+    combined.includes("joins as") ||
+    combined.includes("new practice")
+  ) {
+    return `A new senior hire or practice launch at ${label} often signals team building below. Reaching out to the new leader directly can open doors before roles are posted.`;
+  }
+  return `${label} is showing growth signals. Early outreach to the right person puts you ahead of the hiring curve.`;
 };
 
 const isCredibleSource = (url: string): boolean => {
@@ -545,6 +752,12 @@ export default function OpportunityPage() {
   );
   const [signalsLimit, setSignalsLimit] = useState(20);
   const [radarLimit, setRadarLimit] = useState(10);
+  const [radarReasonByUrl, setRadarReasonByUrl] = useState<Record<string, string>>(
+    {}
+  );
+  const [loadingRadarReasonUrl, setLoadingRadarReasonUrl] = useState<string | null>(
+    null
+  );
   const [benchmarkProfile, setBenchmarkProfile] = useState<{
     top_skills?: string | null;
     latest_company?: string | null;
@@ -748,6 +961,44 @@ export default function OpportunityPage() {
       }
     },
     []
+  );
+
+  const fetchRadarReason = useCallback(
+    async (job: OpportunityResult, company: string) => {
+      if (!job.url || loadingRadarReasonUrl === job.url) return;
+      setLoadingRadarReasonUrl(job.url);
+      try {
+        const res = await fetch("/api/opportunity/radar-explanation", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            company,
+            title: job.title,
+            snippet: job.snippet,
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          console.warn(
+            "[opportunity] radar explanation failed for",
+            job.url,
+            data?.error
+          );
+          return;
+        }
+        if (typeof data.reason === "string" && data.reason.trim()) {
+          setRadarReasonByUrl((prev) => ({
+            ...prev,
+            [job.url]: data.reason.trim(),
+          }));
+        }
+      } catch (e) {
+        console.warn("[opportunity] radar explanation call error", e);
+      } finally {
+        setLoadingRadarReasonUrl(null);
+      }
+    },
+    [loadingRadarReasonUrl]
   );
 
   const resetFilters = useCallback(() => {
@@ -1096,9 +1347,22 @@ export default function OpportunityPage() {
   });
 
   const onTheRadar = results.filter((r) => {
-    if (r.bucket === "E") return true;
-    if (isNewsArticle(r)) return true;
-    return false;
+    const isRadarSource =
+      r.bucket === "E" ||
+      isNewsArticle(r) ||
+      (() => {
+        try {
+          const host = new URL(r.url).hostname.toLowerCase().replace("www.", "");
+          return JUNK_DOMAINS.some(
+            (d) => host === d || host.endsWith("." + d)
+          );
+        } catch {
+          return false;
+        }
+      })();
+
+    if (!isRadarSource) return false;
+    return isPositiveSignal(r);
   });
 
   const sortedMatches = [...yourMatches].sort((a, b) => {
@@ -1360,6 +1624,15 @@ export default function OpportunityPage() {
                       : rawTitle.replace(/^unknown company:\s*/i, "").trim() ||
                         "Signal";
                   const resolvedRadarCompany = (company || "").trim();
+
+                  if (
+                    resolvedRadarCompany &&
+                    !radarReasonByUrl[r.url] &&
+                    loadingRadarReasonUrl !== r.url
+                  ) {
+                    fetchRadarReason(r, resolvedRadarCompany);
+                  }
+
                   return (
                     <>
                       <p className="text-sm font-semibold text-[#3C2A6A]">
@@ -1367,6 +1640,11 @@ export default function OpportunityPage() {
                       </p>
                       <p className="mt-1 text-xs text-slate-600 line-clamp-3">
                         {r.snippet}
+                      </p>
+                      <p className="mt-2 text-xs font-medium text-emerald-700 bg-emerald-50 rounded-lg px-3 py-2">
+                        💡{" "}
+                        {radarReasonByUrl[r.url] ??
+                          getReachOutReason(r, resolvedRadarCompany)}
                       </p>
                       <div className="mt-3 flex flex-wrap gap-2">
                         <button
