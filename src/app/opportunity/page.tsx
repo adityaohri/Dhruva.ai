@@ -141,6 +141,100 @@ function getSourceBadge(url: string): string {
   }
 }
 
+function resolveCompany(r: OpportunityResult): string | null {
+  let company = (r.company ?? "").trim();
+  if (company && company.toLowerCase() !== "unknown company") return company;
+
+  const rawTitle = (r.title ?? "").trim();
+
+  // Pattern 1: "Software Engineering Intern @ Persona AI Inc" → "Persona AI Inc"
+  const atMatch = rawTitle.match(/\s@\s+(.+)$/);
+  if (atMatch) return atMatch[1].trim();
+
+  // Pattern 2: "in India - BCG - Boston Consulting Group" → "Boston Consulting Group"
+  const inIndiaMatch = rawTitle.match(/in\s+india\s*[-–]\s*.+?[-–]\s*(.+)$/i);
+  if (inIndiaMatch) return inIndiaMatch[1].trim();
+
+  // Pattern 3: "Unknown Company: Ema" → "Ema" (only if remainder is not a job title)
+  const colonMatch = rawTitle.match(/^unknown company:\s*(.+)$/i);
+  if (colonMatch) {
+    const remainder = colonMatch[1].trim();
+    const JOB_WORDS = [
+      "engineer",
+      "analyst",
+      "manager",
+      "developer",
+      "intern",
+      "consultant",
+      "associate",
+      "director",
+      "specialist",
+      "hire",
+      "hiring",
+      "post",
+      "software",
+      "technical",
+      "member",
+      "partner",
+      "trainee",
+      "apprentice",
+    ];
+    const tokens = remainder.toLowerCase().split(/[\s@\-–]+/);
+    const isJobTitle = JOB_WORDS.some(
+      (w) => tokens.includes(w) || remainder.toLowerCase().startsWith(w)
+    );
+    if (!isJobTitle && remainder.length < 40) return remainder;
+  }
+
+  return null;
+}
+
+function resolveTitle(r: OpportunityResult, company: string | null): string {
+  const rawTitle = (r.title ?? "").trim();
+
+  let role = rawTitle
+    .replace(/^unknown company:\s*/i, "")
+    .replace(/\s*@\s+.+$/, "")
+    .replace(/\s*in\s+india.*/i, "")
+    .replace(/\s*\(india\)\s*/i, " ")
+    .trim();
+
+  // Remove trailing " - CompanyName" only if it looks like a company (not a location/seniority word)
+  role = role
+    .replace(/\s*[-–]\s*([A-Z][^-–]{2,})$/, (match, tail: string) => {
+      const KEEP = [
+        "senior",
+        "junior",
+        "lead",
+        "principal",
+        "bangalore",
+        "mumbai",
+        "delhi",
+        "hyderabad",
+        "pune",
+        "chennai",
+        "india",
+        "remote",
+        "hybrid",
+        "gurugram",
+      ];
+      return KEEP.some((w) => tail.toLowerCase().startsWith(w)) ? match : "";
+    })
+    .trim();
+
+  // If company leaked into the start of role, strip it
+  if (company && role.toLowerCase().startsWith(company.toLowerCase())) {
+    role = role.slice(company.length).replace(/^[\s:\-–—|,]+/, "").trim();
+  }
+
+  // If role and company are the same string, role is empty
+  if (company && role.toLowerCase() === company.toLowerCase()) {
+    role = "";
+  }
+
+  return role;
+}
+
 function OpportunityCard({
   r,
   matchData,
@@ -197,25 +291,18 @@ function OpportunityCard({
         <div className="flex-1">
           <h3 className="font-semibold text-[#3C2A6A] line-clamp-2">
             {(() => {
-              if (r.displayName) return r.displayName;
-              const company = (r.company ?? "").trim();
-              const rawTitle = (r.title ?? "").trim();
-              if (!company && rawTitle) return rawTitle;
-              if (!company && !rawTitle) return "Job listing";
+              const company = resolveCompany(r);
+              const role = resolveTitle(r, company);
 
-              let role = rawTitle;
-              const lowerCompany = company.toLowerCase();
-              const lowerTitle = rawTitle.toLowerCase();
-              if (lowerTitle.startsWith(lowerCompany)) {
-                role = rawTitle.slice(company.length).replace(/^[:\-–—|,\s]+/, "");
-              }
-              const cleanedRole = role || "Role";
-              return `${company || "Unknown Company"}: ${cleanedRole}`;
+              if (!role && !company) return r.title || "Job listing";
+              if (!role) return company!;
+              if (!company) return role;
+              return `${company}: ${role}`;
             })()}
           </h3>
-          {r.company && (
+          {resolveCompany(r) && (
             <p className="mt-1.5 text-sm font-medium text-[#3C2A6A]/90">
-              {r.company}
+              {resolveCompany(r)}
             </p>
           )}
           <p className="mt-1 text-xs text-slate-500 line-clamp-1">
