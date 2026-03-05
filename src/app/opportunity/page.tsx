@@ -235,6 +235,128 @@ function resolveTitle(r: OpportunityResult, company: string | null): string {
   return role;
 }
 
+const JUNK_DOMAINS = [
+  "techcrunch.com",
+  "financialexpress.com",
+  "thehindubusinessline.com",
+  "business-standard.com",
+  "globenewswire.com",
+  "economictimes.com",
+  "livemint.com",
+  "moneycontrol.com",
+  "yourstory.com",
+  "inc42.com",
+  "entrackr.com",
+  "reuters.com",
+  "bloomberg.com",
+  "forbes.com",
+  "timesofindia.com",
+  "ndtv.com",
+  "thehindu.com",
+  "businesstoday.in",
+];
+
+const JOB_DOMAINS = [
+  "linkedin.com/jobs",
+  "naukri.com",
+  "iimjobs.com",
+  "internshala.com",
+  "greenhouse.io",
+  "lever.co",
+  "myworkdayjobs.com",
+  "ashbyhq.com",
+  "smartrecruiters.com",
+  "jobs.mckinsey.com",
+  "careers.bcg.com",
+  "careers.bain.com",
+  "careers.google.com",
+  "careers.microsoft.com",
+  "amazon.jobs",
+  "metacareers.com",
+  "instahyre.com",
+  "wellfound.com",
+  "angel.co",
+  "cutshort.io",
+];
+
+const isNewsArticle = (r: OpportunityResult): boolean => {
+  try {
+    const host = new URL(r.url).hostname.toLowerCase().replace("www.", "");
+    return JUNK_DOMAINS.some(
+      (d) => host === d || host.endsWith("." + d)
+    );
+  } catch {
+    return false;
+  }
+};
+
+const isLinkedInPost = (r: OpportunityResult): boolean => {
+  try {
+    const url = r.url.toLowerCase();
+    const host = new URL(r.url).hostname.toLowerCase();
+    return (
+      host.includes("linkedin.com") &&
+      (url.includes("/posts/") ||
+        url.includes("/pulse/") ||
+        url.includes("/feed/"))
+    );
+  } catch {
+    return false;
+  }
+};
+
+const isJobListing = (r: OpportunityResult): boolean => {
+  if (isNewsArticle(r)) return false;
+  if (isLinkedInPost(r)) return false;
+  if (r.bucket === "C" || r.bucket === "E") return false;
+  const title = (r.title ?? "").toLowerCase();
+  const NEWS_PATTERNS = [
+    "nabs",
+    "launches",
+    "opens new office",
+    "hiring spree",
+    "appoints",
+    "expands",
+    "arrives in",
+    "adds up to",
+    "landmark",
+    "global footprint",
+    "funding",
+    "raises",
+    "acquires",
+    "merger",
+    "ipo",
+    "valuation",
+  ];
+  if (NEWS_PATTERNS.some((p) => title.includes(p))) return false;
+  return true;
+};
+
+const isCredibleSource = (url: string): boolean => {
+  try {
+    const host = new URL(url).hostname.toLowerCase();
+    const CREDIBLE = [
+      "greenhouse.io",
+      "lever.co",
+      "myworkdayjobs.com",
+      "ashbyhq.com",
+      "jobs.mckinsey.com",
+      "careers.bcg.com",
+      "careers.bain.com",
+      "careers.google.com",
+      "careers.microsoft.com",
+      "amazon.jobs",
+      "metacareers.com",
+      "linkedin.com",
+      "naukri.com",
+      "iimjobs.com",
+    ];
+    return CREDIBLE.some((d) => host === d || host.endsWith("." + d));
+  } catch {
+    return false;
+  }
+};
+
 function OpportunityCard({
   r,
   matchData,
@@ -331,6 +453,11 @@ function OpportunityCard({
             Direct
           </span>
         )}
+        {isCredibleSource(r.url) && (
+          <span className="rounded-md bg-blue-50 px-2 py-0.5 text-[10px] font-medium text-blue-700">
+            Verified Source
+          </span>
+        )}
       </div>
       {(r.summary || r.snippet) && (
         <p className="mt-3 line-clamp-2 flex-1 text-xs text-slate-600">
@@ -416,6 +543,8 @@ export default function OpportunityPage() {
   const [loadingPeopleCompany, setLoadingPeopleCompany] = useState<string | null>(
     null
   );
+  const [signalsLimit, setSignalsLimit] = useState(20);
+  const [radarLimit, setRadarLimit] = useState(10);
   const [benchmarkProfile, setBenchmarkProfile] = useState<{
     top_skills?: string | null;
     latest_company?: string | null;
@@ -958,31 +1087,19 @@ export default function OpportunityPage() {
     );
   }
 
-  const yourMatches = results.filter((r) => {
-    const bucket = r.bucket;
-    if (bucket === "C" || bucket === "E") return false;
-    // Filter out obvious LinkedIn signal posts from matches.
-    try {
-      const host = new URL(r.url).hostname.toLowerCase();
-      if (host.includes("linkedin.com") && r.url.includes("/posts/")) {
-        return false;
-      }
-    } catch {
-      // ignore URL parse errors
-    }
-    return true;
-  });
+  const yourMatches = results.filter(isJobListing);
 
   const hiringSignals = results.filter((r) => {
-    try {
-      const host = new URL(r.url).hostname.toLowerCase();
-      return host.includes("linkedin.com") && r.url.includes("/posts/");
-    } catch {
-      return false;
-    }
+    if (r.bucket === "C") return true;
+    if (isLinkedInPost(r)) return true;
+    return false;
   });
 
-  const onTheRadar = results.filter((r) => r.bucket === "E");
+  const onTheRadar = results.filter((r) => {
+    if (r.bucket === "E") return true;
+    if (isNewsArticle(r)) return true;
+    return false;
+  });
 
   const sortedMatches = [...yourMatches].sort((a, b) => {
     if (sortMode === "match") {
@@ -1154,7 +1271,7 @@ export default function OpportunityPage() {
             Hiring Signals
           </h2>
           <div className="space-y-3">
-            {hiringSignals.slice(0, 20).map((r, i) => (
+            {hiringSignals.slice(0, signalsLimit).map((r, i) => (
               <div
                 key={`${r.url}-${i}`}
                 className="rounded-2xl border border-[#E5E7EB] bg-white p-4"
@@ -1208,11 +1325,16 @@ export default function OpportunityPage() {
                 </div>
               </div>
             ))}
-            {hiringSignals.length > 20 && (
-              <p className="text-xs text-slate-500">
-                Showing first 20 hiring signals. Narrow your filters to see more
-                targeted posts.
-              </p>
+            {hiringSignals.length > signalsLimit && (
+              <button
+                type="button"
+                onClick={() =>
+                  setSignalsLimit((prev) => Math.min(prev + 20, hiringSignals.length))
+                }
+                className="mt-2 rounded-full border border-[#3C2A6A]/40 bg-white px-4 py-1.5 text-[11px] font-medium text-[#3C2A6A] hover:bg-[#3C2A6A]/5"
+              >
+                Load more signals
+              </button>
             )}
           </div>
         </div>
@@ -1224,7 +1346,7 @@ export default function OpportunityPage() {
             On The Radar
           </h2>
           <div className="space-y-3">
-            {onTheRadar.map((r, i) => (
+            {onTheRadar.slice(0, radarLimit).map((r, i) => (
               <div
                 key={`${r.url}-${i}`}
                 className="rounded-2xl border border-[#E5E7EB] bg-white p-4"
@@ -1307,6 +1429,17 @@ export default function OpportunityPage() {
               </div>
             ))}
           </div>
+          {onTheRadar.length > radarLimit && (
+            <button
+              type="button"
+              onClick={() =>
+                setRadarLimit((prev) => Math.min(prev + 10, onTheRadar.length))
+              }
+              className="mt-2 rounded-full border border-[#3C2A6A]/40 bg-white px-4 py-1.5 text-[11px] font-medium text-[#3C2A6A] hover:bg-[#3C2A6A]/5"
+            >
+              Load more signals
+            </button>
+          )}
         </div>
       )}
     </div>
