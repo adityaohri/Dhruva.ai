@@ -6,6 +6,7 @@ import { createClient as createSupabaseClient } from "@/lib/supabase/client";
 import {
   scoreAgainstIndustry,
   getTopCompanies,
+  getRoleVariants,
   type IndustryName,
 } from "@/lib/industryKeywords";
 const CREAM = "#FDFBF1";
@@ -963,23 +964,61 @@ export default function OpportunityPage() {
     }, 1200);
 
     try {
-      const res = await fetch("/api/discovery/sentinel", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          industry: filters.industry,
-          jobType: filters.jobType,
-          experience: filters.experience,
-          location: filters.location || undefined,
-          pay: filters.pay || undefined,
-          companies: filters.companies
-            ? filters.companies.split(",").map((s) => s.trim()).filter(Boolean)
-            : undefined,
-          roles: filters.roles
-            ? filters.roles.split(",").map((s) => s.trim()).filter(Boolean)
-            : undefined,
+      const sentinelPayload = {
+        industry: filters.industry,
+        jobType: filters.jobType,
+        experience: filters.experience,
+        location: filters.location || undefined,
+        pay: filters.pay || undefined,
+        companies: filters.companies
+          ? filters.companies
+              .split(",")
+              .map((s) => s.trim())
+              .filter(Boolean)
+          : undefined,
+        roles: filters.roles
+          ? filters.roles
+              .split(",")
+              .map((s) => s.trim())
+              .filter(Boolean)
+          : undefined,
+      };
+
+      const [res, radarResults, hiringResults] = await Promise.all([
+        fetch("/api/discovery/sentinel", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(sentinelPayload),
         }),
-      });
+        fetch("/api/discovery/radar-signals", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            industry: filters.industry,
+            topCompanies: getTopCompanies(
+              filters.industry as IndustryName,
+              12
+            ),
+            location: filters.location || undefined,
+          }),
+        }).then(async (r) => (r.ok ? r.json() : { signals: [] })),
+        fetch("/api/discovery/hiring-signals", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            industry: filters.industry,
+            topCompanies: getTopCompanies(
+              filters.industry as IndustryName,
+              10
+            ),
+            roleVariants: getRoleVariants(
+              filters.industry as IndustryName
+            ).slice(0, 4),
+            location: filters.location || undefined,
+          }),
+        }).then(async (r) => (r.ok ? r.json() : { signals: [] })),
+      ]);
+
       const data = await res.json();
       clearInterval(progressInterval);
       clearInterval(statusInterval);
@@ -991,10 +1030,47 @@ export default function OpportunityPage() {
         return;
       }
       const baseResults: OpportunityResult[] = data.results || [];
-      const withIndex = baseResults.map((r, idx) => ({
+
+      // Remove legacy Bucket C/E signals coming from SerpApi – will be replaced by Exa.
+      const withoutLegacySignals = baseResults.filter(
+        (r) => r.bucket !== "C" && r.bucket !== "E"
+      );
+
+      const radarSignals: OpportunityResult[] = (radarResults?.signals ?? []).map(
+        (s: any) => ({
+          title: String(s.title ?? ""),
+          url: String(s.url ?? ""),
+          snippet: String(s.snippet ?? ""),
+          source: String(s.source ?? "News"),
+          isDirect: false,
+          company: null,
+          bucket: "E",
+        })
+      );
+
+      const hiringSignalsFromApi: OpportunityResult[] = (
+        hiringResults?.signals ?? []
+      ).map((s: any) => ({
+        title: String(s.title ?? ""),
+        url: String(s.url ?? ""),
+        snippet: String(s.snippet ?? ""),
+        source: "LinkedIn",
+        isDirect: false,
+        company: null,
+        bucket: "C",
+      }));
+
+      const merged: OpportunityResult[] = [
+        ...withoutLegacySignals,
+        ...radarSignals,
+        ...hiringSignalsFromApi,
+      ];
+
+      const withIndex = merged.map((r, idx) => ({
         ...r,
         originalIndex: idx,
       }));
+
       setResults(withIndex);
       setResultsByCompany(data.resultsByCompany || {});
       setMatchByUrl({});
