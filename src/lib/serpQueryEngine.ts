@@ -266,6 +266,44 @@ function getIndustrySectorKeyword(industries: Industry[]): string {
   return signals.slice(0, 3).join(" OR ");
 }
 
+function getExperienceQueryTerms(experience: string | undefined | null): {
+  include: string;
+  exclude: string;
+} {
+  const exp = (experience ?? "").toLowerCase();
+
+  if (exp.includes("fresher") || exp.includes("0-1")) {
+    return {
+      include:
+        'fresher OR "entry level" OR "0-1 years" OR "fresh graduate" OR "campus hire"',
+      exclude:
+        '-"3+ years" -"5+ years" -"senior" -"manager" -"lead" -"director" -"head of" -"mtech" -"phd required"',
+    };
+  }
+  if (exp.includes("1-2")) {
+    return {
+      include: '"1-2 years" OR "1+ year" OR "junior"',
+      exclude:
+        '-"5+ years" -"senior manager" -"director" -"head of"',
+    };
+  }
+  if (exp.includes("2-5")) {
+    return {
+      include: '"2-5 years" OR "2+ years" OR "mid level"',
+      exclude:
+        '-"fresher" -"entry level" -"10+ years" -"director"',
+    };
+  }
+  if (exp.includes("5+")) {
+    return {
+      include: '"5+ years" OR "senior" OR "lead" OR "manager"',
+      exclude:
+        '-"fresher" -"entry level" -"0-1 years"',
+    };
+  }
+  return { include: "", exclude: "" };
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // BUCKET BUILDERS
 // ─────────────────────────────────────────────────────────────────────────────
@@ -283,14 +321,17 @@ function buildBucketA(userFilters: UserFilters): SerpQuery[] {
 
   const queries: SerpQuery[] = [];
 
+   const expTerms = getExperienceQueryTerms(userFilters.experience ?? "");
+
   companyQueries.forEach((q, idx) => {
+    const qWithExp = [q, expTerms.include].filter(Boolean).join(" ").trim();
     queries.push({
       engine: "google_jobs",
       bucket: "A",
       bucketLabel: `Elite ${industry} Companies (group ${idx + 1})`,
       priority: 1,
       params: {
-        q,
+        q: qWithExp,
         location,
         gl: "in",
         hl: "en",
@@ -307,7 +348,7 @@ function buildBucketA(userFilters: UserFilters): SerpQuery[] {
       bucketLabel: `${industry} role: ${roleTitle}`,
       priority: 1,
       params: {
-        q: `"${roleTitle}" India`,
+        q: `"${roleTitle}" ${expTerms.include} India`.trim(),
         location,
         gl: "in",
         hl: "en",
@@ -340,6 +381,8 @@ function buildBucketB(userFilters: UserFilters): SerpQuery[] {
 
   const atsSiteStr = ATS_SITES.slice(0, 3).join(" OR ");
 
+  const expTerms = getExperienceQueryTerms(userFilters.experience ?? "");
+
   return [
     {
       engine: "google",
@@ -347,7 +390,7 @@ function buildBucketB(userFilters: UserFilters): SerpQuery[] {
       bucketLabel: `ATS deep-web: ${primaryRole}`,
       priority: 2,
       params: {
-        q: `(${atsSiteStr}) "${primaryRole}" ${location}`,
+        q: `(${atsSiteStr}) "${primaryRole}" ${location} ${expTerms.include} ${expTerms.exclude}`.trim(),
         gl: "in",
         hl: "en",
         num: 20,
@@ -360,7 +403,7 @@ function buildBucketB(userFilters: UserFilters): SerpQuery[] {
       bucketLabel: `ATS deep-web: ${secondaryRole}`,
       priority: 2,
       params: {
-        q: `(${atsSiteStr}) "${secondaryRole}" ${location}`,
+        q: `(${atsSiteStr}) "${secondaryRole}" ${location} ${expTerms.include} ${expTerms.exclude}`.trim(),
         gl: "in",
         hl: "en",
         num: 20,
@@ -373,7 +416,7 @@ function buildBucketB(userFilters: UserFilters): SerpQuery[] {
       bucketLabel: `Naukri: ${industry} roles`,
       priority: 2,
       params: {
-        q: `site:naukri.com "${primaryRole}" ${location} -"job vacancies" -"openings in" -"jobs in"`,
+        q: `site:naukri.com "${primaryRole}" ${location} -"job vacancies" -"openings in" -"jobs in" ${expTerms.include} ${expTerms.exclude}`.trim(),
         gl: "in",
         hl: "en",
         num: 20,
@@ -386,7 +429,7 @@ function buildBucketB(userFilters: UserFilters): SerpQuery[] {
       bucketLabel: `IIMJobs: ${industry}`,
       priority: 2,
       params: {
-        q: `site:iimjobs.com "${primaryRole}" ${location}`,
+        q: `site:iimjobs.com "${primaryRole}" ${location} ${expTerms.include} ${expTerms.exclude}`.trim(),
         gl: "in",
         hl: "en",
         num: 10,
@@ -517,6 +560,8 @@ function buildBucketD(userFilters: UserFilters): SerpQuery[] {
 
   const queries: SerpQuery[] = [];
 
+  const expTerms = getExperienceQueryTerms(userFilters.experience ?? "");
+
   roleVariants.forEach((roleTitle) => {
     queries.push({
       engine: "google_jobs",
@@ -524,7 +569,7 @@ function buildBucketD(userFilters: UserFilters): SerpQuery[] {
       bucketLabel: `Jobs: ${roleTitle}`,
       priority: 3,
       params: {
-        q: `${roleTitle} ${location} ${experience}`.trim(),
+        q: `${roleTitle} ${location} ${experience} ${expTerms.include}`.trim(),
         location,
         gl: "in",
         hl: "en",
@@ -545,7 +590,7 @@ function buildBucketD(userFilters: UserFilters): SerpQuery[] {
       bucketLabel: `Internshala: ${industry} internships`,
       priority: 3,
       params: {
-        q: `site:internshala.com/jobs/detail "${primaryRole}"`,
+        q: `site:internshala.com/jobs/detail "${primaryRole}" ${expTerms.include} ${expTerms.exclude}`.trim(),
         gl: "in",
         hl: "en",
         num: 10,

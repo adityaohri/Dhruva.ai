@@ -106,6 +106,36 @@ const NEGATIVE_KEYWORDS = [
   "declining",
 ];
 
+function cleanSnippet(raw: string): string {
+  if (!raw) return "";
+  const cleaned = raw
+    // Remove markdown headers
+    .replace(/#{1,6}\s+/g, "")
+    // Remove bullet points and list markers
+    .replace(/^[\*\-\•]\s+/gm, "")
+    // Remove markdown links [text](url)
+    .replace(/\[\s*[^\]]{0,30}\]\s*\([^)]+\)/g, "")
+    // Remove bold/italic markers
+    .replace(/\*{1,2}([^*]+)\*{1,2}/g, "$1")
+    .split("\n")
+    .filter((line) => {
+      const trimmed = line.trim();
+      if (!trimmed) return false;
+      if (trimmed.length < 20) return false;
+      if (/^(menu|skip|home|about|contact|search)/i.test(trimmed)) return false;
+      if (/\*{3,}/.test(trimmed)) return false;
+      return true;
+    })
+    .join(" ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 280)
+    .replace(/[^.!?]*$/, "")
+    .trim();
+
+  return cleaned;
+}
+
 export async function POST(req: NextRequest) {
   try {
     const body = (await req.json()) as {
@@ -212,7 +242,7 @@ export async function POST(req: NextRequest) {
 
         const highlight = Array.isArray(r.highlights) && r.highlights.length > 0
           ? String(r.highlights[0])
-          : "";
+          : String((r as any).text ?? "");
 
         const publishedDate =
           r.publishedDate || r.published_date || r.date || "";
@@ -221,7 +251,7 @@ export async function POST(req: NextRequest) {
           title: String(r.title ?? ""),
           url,
           publishedDate: String(publishedDate || ""),
-          snippet: highlight,
+          snippet: cleanSnippet(highlight),
           source: host,
         };
       });

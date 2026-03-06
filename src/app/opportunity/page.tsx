@@ -74,6 +74,16 @@ type OpportunityResult = {
   match_action_item?: string;
   /** Origin bucket from Serp Query Engine, when present. */
   bucket?: "A" | "B" | "C" | "D" | "E";
+  /** Recency score for LinkedIn jobs (higher = more recent). */
+  recencyScore?: number;
+  /** True if job posted within last ~week. */
+  isFresh?: boolean;
+  /** Optional location for display. */
+  location?: string | null;
+  /** Optional human-readable posted time, e.g. "3 days ago". */
+  posted_at?: string | null;
+  /** Optional explicit verified flag (defaults to credible source). */
+  isVerified?: boolean;
 };
 
 type LazyMatch = {
@@ -361,181 +371,169 @@ const isLinkedInPost = (r: OpportunityResult): boolean => {
   }
 };
 
-const isJobListing = (r: OpportunityResult): boolean => {
-  // Reject results with no usable URL
-  if (!r.url || r.url.trim() === "") return false;
+const CREDIBLE_ALLOWLIST = [
+  // ATS platforms — always credible
+  "greenhouse.io",
+  "boards.greenhouse.io",
+  "lever.co",
+  "jobs.lever.co",
+  "myworkdayjobs.com",
+  "ashbyhq.com",
+  "smartrecruiters.com",
+  "jobvite.com",
+  "icims.com",
+  "taleo.net",
+  "successfactors.com",
+  "workable.com",
+  "apply.workable.com",
+  "recruitee.com",
 
+  // Direct company career pages — MBB and Big 4
+  "jobs.mckinsey.com",
+  "careers.bcg.com",
+  "careers.bain.com",
+  "careers.deloitte.com",
+  "careers.kpmg.com",
+  "careers.ey.com",
+  "pwc.com",
+  "careers.accenture.com",
+  "careers.capgemini.com",
+
+  // Direct company career pages — Tech
+  "careers.google.com",
+  "careers.microsoft.com",
+  "amazon.jobs",
+  "metacareers.com",
+  "jobs.apple.com",
+  "linkedin.com/jobs",
+
+  // Quality Indian job boards
+  "naukri.com",
+  "iimjobs.com",
+  "instahyre.com",
+  "wellfound.com",
+  "cutshort.io",
+  "internshala.com",
+];
+
+const isCareerSubdomain = (host: string): boolean => {
+  return (
+    host.startsWith("careers.") ||
+    host.startsWith("jobs.") ||
+    host.startsWith("career.") ||
+    host.startsWith("job.") ||
+    host.includes(".greenhouse.io") ||
+    host.includes(".lever.co") ||
+    host.includes(".myworkdayjobs.com") ||
+    host.includes(".ashbyhq.com")
+  );
+};
+
+const isFromCredibleSource = (r: OpportunityResult): boolean => {
   try {
-    const url = new URL(r.url);
-    const host = url.hostname.toLowerCase().replace("www.", "");
-    const pathname = url.pathname.toLowerCase();
-    const fullUrl = r.url.toLowerCase();
-
-    // Block non-India locale ATS pages (German, French etc)
-    const NON_INDIA_LOCALES = ["/de/", "/de-de/", "/fr/", "/es/"];
-    if (NON_INDIA_LOCALES.some((p) => fullUrl.includes(p))) return false;
-
-    // Hard block all known news domains
-    if (JUNK_DOMAINS.some((d) => host === d || host.endsWith("." + d))) {
-      return false;
+    const host = new URL(r.url).hostname.toLowerCase().replace("www.", "");
+    if (CREDIBLE_ALLOWLIST.some((d) => host === d || host.endsWith("." + d))) {
+      return true;
     }
-
-    // Block insight/article/content paths even on valid consulting domains
-    const INSIGHT_PATHS = [
-      "/insights/",
-      "/insight/",
-      "/articles/",
-      "/article/",
-      "/publications/",
-      "/publication/",
-      "/reports/",
-      "/report/",
-      "/perspectives/",
-      "/featured-insights/",
-      "/capabilities/",
-      "/our-insights/",
-      "/research/",
-      "/blog/",
-      "/news/",
-      "/media/",
-      "/press/",
-      "/podcast/",
-      "/video/",
-      "/events/",
-      "/event/",
-      "/webinar/",
-    ];
-    const isInsightPage = INSIGHT_PATHS.some((p) => pathname.includes(p));
-    if (isInsightPage) return false;
-
-    // Block McKinsey/BCG/Bain/Deloitte/EY/KPMG insight and article pages –
-    // only allow explicit careers paths
-    if (host.includes("mckinsey.com") && !pathname.includes("/careers/")) return false;
-    if (host.includes("bcg.com") && !pathname.includes("/careers/")) return false;
-    if (host.includes("bain.com") && !pathname.includes("/careers/")) return false;
-    if (host.includes("deloitte.com") && !pathname.includes("/careers/")) return false;
-    if (host.includes("ey.com") && !pathname.includes("/careers/")) return false;
-    if (host.includes("kpmg.com") && !pathname.includes("/careers/")) return false;
+    if (isCareerSubdomain(host)) return true;
+    return false;
   } catch {
-    // If URL parsing fails, treat as invalid
     return false;
   }
+};
 
+const isJobListing = (
+  r: OpportunityResult,
+  jobType: string,
+  experience: string
+): boolean => {
+  // Gate 0: basic URL presence
+  if (!r.url || r.url.trim() === "") return false;
+
+  // Gate 1: credible source allowlist
+  if (!isFromCredibleSource(r)) return false;
+
+  // Gate 2: not a LinkedIn post (those go to Hiring Signals)
   if (isLinkedInPost(r)) return false;
+
+  // Gate 3: not buckets C or E
   if (r.bucket === "C" || r.bucket === "E") return false;
 
+  // Gate 4: article/news-style titles
   const title = (r.title ?? "").toLowerCase();
-  const source = (r.source ?? "").toLowerCase();
-
-  const NEWS_PATTERNS = [
-    // Layoffs / negative
-    "layoff",
-    "laid off",
-    "job cuts",
-    "retrenchment",
-    "firing spree",
-    "employees lose",
-    "jobs lost",
-    "redundan",
-    "downsizing",
-    // Company moves (not job postings)
-    "nabs",
-    "opens new office",
-    "hiring spree",
-    "expands",
-    "arrives in",
-    "landmark",
-    "global footprint",
-    "funding round",
-    "raises $",
-    "acquires",
-    "merger",
-    "ipo",
-    "valuation",
-    "welcomes",
-    "collaborates",
-    "organise",
-    "summit",
-    "restructuring practice",
-    "building a better",
-    "home |",
-    // Opinion / analysis / research
-    "opinion |",
-    "analysis:",
-    "why are",
+  const ARTICLE_PATTERNS = [
+    "opinion",
+    "analysis",
+    "why ",
+    "how ",
     "what is",
-    "how india",
-    "beginning of the end",
-    "says about",
-    "is it because",
-    "the next frontier",
-    "thriving startup landscape",
-    "current state of",
-    "early-stage investing",
-    "fair-chance hiring",
-    "untapped opportunity",
-    "great attrition",
-    "skills-based approach",
-    "beyond hiring",
-    "reskilling",
-    "agile funding",
-    "from the military",
-    "european defense",
-    "mobilizing capital",
-    "mena fintech",
-    "water resilience",
-    "insurtech",
-    "closing the funding gap",
-    "greenfield opportunity",
-    "top profitability lever",
-    "fintech in menap",
-    "anz's mckinsey review",
-    "mckinsey review",
-    "madhabi",
-    "sebi chief",
-    "raises more doubts",
-    // Profile / company info pages
-    "company profile",
-    "funding & investors",
-    "about us",
-    "our story",
-    "who we are",
+    "layoff",
+    "funding",
+    "raises",
+    "opens office",
+    "expands",
+    "report:",
+    "survey:",
+    "study:",
   ];
-  if (NEWS_PATTERNS.some((p) => title.includes(p))) return false;
+  if (ARTICLE_PATTERNS.some((p) => title.includes(p))) return false;
 
-  // Block results whose source badge is a known news outlet
-  const NEWS_SOURCES = [
-    "consultancy",
-    "peoplematters",
-    "indiatoday",
-    "financialexpress",
-    "techcrunch",
-    "bloomberg",
-    "reuters",
-    "forbes",
-    "livemint",
-    "moneycontrol",
-    "economictimes",
-    "business-standard",
-    "ndtv",
-    "yourstory",
-    "inc42",
-    "prnewswire",
-    "businesswire",
-    "newswire",
-    "apnnews",
-    "dnaindia",
-    "thehansindia",
-    "knocksense",
-    "scroll",
-    "analyticsindiamag",
-    "afr",
-    "medium",
-    "substack",
-  ];
-  if (NEWS_SOURCES.some((s) => source.includes(s))) return false;
+  // Gate 5: Internshala only for internship job type
+  try {
+    const host = new URL(r.url).hostname.toLowerCase();
+    if (
+      host.includes("internshala") &&
+      !jobType.toLowerCase().includes("intern")
+    ) {
+      return false;
+    }
+  } catch {
+    // ignore
+  }
+
+  // Gate 6: Experience hard mismatch block (for junior profiles)
+  const expLower = (experience ?? "").toLowerCase();
+  const snippet = (r.snippet ?? "").toLowerCase();
+  const titleLower = (r.title ?? "").toLowerCase();
+  const combined = `${titleLower} ${snippet}`;
+
+  if (expLower.includes("fresher") || expLower.includes("0-1")) {
+    const SENIOR_INDICATORS = [
+      "3+ years",
+      "3-6 years",
+      "5+ years",
+      "5-10 years",
+      "7+ years",
+      "10+ years",
+      "senior consultant",
+      "senior manager",
+      "associate director",
+      "director",
+      "mtech mandatory",
+      "phd required",
+      "must have experience",
+      "minimum 3 years",
+    ];
+    if (SENIOR_INDICATORS.some((ind) => combined.includes(ind))) {
+      return false;
+    }
+  }
 
   return true;
+};
+
+const toReadableSnippet = (raw: string | undefined, maxLen = 180): string => {
+  if (!raw) return "";
+  const cleaned = raw
+    .replace(/#{1,6}\s+/g, "")
+    .replace(/\*{1,2}([^*]+)\*{1,2}/g, "$1")
+    .replace(/\[\s*[^\]]+\]\([^)]+\)/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, maxLen)
+    .replace(/[^.!?,:]*$/, "")
+    .trim();
+  return cleaned;
 };
 
 const POSITIVE_SIGNAL_PATTERNS = [
@@ -724,6 +722,8 @@ function OpportunityCard({
   const actionItem = matchData?.actionItem ?? r.match_action_item;
   const hasMatchDetails = Boolean(strengths?.length || gaps?.length || actionItem);
 
+  const verified = r.isVerified ?? isCredibleSource(r.url);
+
   let bandColor =
     "border-slate-300 text-slate-600 bg-white";
   if (band === "Strong") {
@@ -756,8 +756,16 @@ function OpportunityCard({
               {resolveCompany(r)}
             </p>
           )}
+          {r.location && (
+            <p className="mt-0.5 text-xs text-slate-500">
+              📍 {r.location}
+            </p>
+          )}
           <p className="mt-1 text-xs text-slate-500 line-clamp-1">
             {getSourceBadge(r.url)}
+            {r.posted_at && (
+              <span className="ml-2 text-slate-400">· {r.posted_at}</span>
+            )}
           </p>
         </div>
         {score !== null && band && (
@@ -777,12 +785,17 @@ function OpportunityCard({
         <span className="rounded-md bg-[#3C2A6A]/10 px-2 py-0.5 text-[10px] font-medium text-[#3C2A6A]">
           {getSourceBadge(r.url)}
         </span>
+        {r.isFresh && (
+          <span className="rounded-md bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-800 uppercase tracking-wide">
+            🟢 Fresh
+          </span>
+        )}
         {r.isDirect && (
-          <span className="rounded-md bg-emerald-100 px-2 py-0.5 text-[10px] font-medium text-emerald-800">
+          <span className="rounded-md bg-blue-50 px-2 py-0.5 text-[10px] font-medium text-blue-700">
             Direct
           </span>
         )}
-        {isCredibleSource(r.url) && (
+        {verified && (
           <span className="rounded-md bg-blue-50 px-2 py-0.5 text-[10px] font-medium text-blue-700">
             Verified Source
           </span>
@@ -1015,6 +1028,8 @@ export default function OpportunityPage() {
               filters.industry as IndustryName
             ).slice(0, 4),
             location: filters.location || undefined,
+            jobType: filters.jobType,
+            experience: filters.experience,
           }),
         }).then(async (r) => (r.ok ? r.json() : { signals: [] })),
       ]);
@@ -1048,8 +1063,10 @@ export default function OpportunityPage() {
         })
       );
 
+      const hiringData = hiringResults ?? {};
+
       const hiringSignalsFromApi: OpportunityResult[] = (
-        hiringResults?.signals ?? []
+        hiringData.signals ?? []
       ).map((s: any) => ({
         title: String(s.title ?? ""),
         url: String(s.url ?? ""),
@@ -1060,8 +1077,94 @@ export default function OpportunityPage() {
         bucket: "C",
       }));
 
+      const linkedInJobsMapped: OpportunityResult[] = (
+        hiringData.linkedInJobs ?? []
+      ).map((job: any, idx: number) => {
+        const rawTitle = String(job.title ?? "");
+
+        const extractCompany = (title: string): string => {
+          const atMatch = title.match(/\bat\s+(.+)$/i);
+          if (atMatch) return atMatch[1].trim();
+          const colonMatch = title.match(/^([^:]{2,40}):\s+/);
+          if (colonMatch) return colonMatch[1].trim();
+          return "";
+        };
+
+        const extractTitle = (title: string, company: string): string => {
+          if (company) {
+            return title
+              .replace(new RegExp(`\\s+at\\s+${company}`, "i"), "")
+              .replace(new RegExp(`^${company}:\\s+`, "i"), "")
+              .trim();
+          }
+          return title;
+        };
+
+        const rawCompany = extractCompany(rawTitle);
+        const cleanTitle = extractTitle(rawTitle, rawCompany);
+
+        const snippetStr = String(job.snippet ?? "");
+        const snippetLower = snippetStr.toLowerCase();
+        const CITIES = [
+          "mumbai",
+          "delhi",
+          "bangalore",
+          "bengaluru",
+          "gurgaon",
+          "gurugram",
+          "hyderabad",
+          "pune",
+          "chennai",
+          "kolkata",
+          "noida",
+          "ahmedabad",
+          "remote",
+        ];
+        const foundCity = CITIES.find((c) => snippetLower.includes(c));
+        const location =
+          foundCity != null
+            ? foundCity.charAt(0).toUpperCase() + foundCity.slice(1)
+            : "India";
+
+        const publishedDate = job.publishedDate as string | undefined;
+        const posted_at =
+          publishedDate && !Number.isNaN(Date.parse(publishedDate))
+            ? (() => {
+                const days = Math.floor(
+                  (Date.now() - new Date(publishedDate).getTime()) /
+                    (1000 * 60 * 60 * 24)
+                );
+                if (days === 0) return "Today";
+                if (days === 1) return "Yesterday";
+                if (days <= 7) return `${days} days ago`;
+                if (days <= 30) return `${Math.floor(days / 7)} weeks ago`;
+                return `${Math.floor(days / 30)} months ago`;
+              })()
+            : null;
+
+        return {
+          title: cleanTitle || rawTitle,
+          company: rawCompany || null,
+          url: String(job.url ?? ""),
+          snippet: snippetStr,
+          source: "LinkedIn",
+          bucket: "B",
+          displayName: rawCompany || null,
+          originalIndex: idx,
+          recencyScore: Number(job.recencyScore ?? 0),
+          isFresh: Boolean(job.isFresh),
+          isVerified: true,
+          isDirect: false,
+          match_score: undefined,
+          prestige_score: undefined,
+          location,
+          posted_at,
+        } as OpportunityResult;
+      });
+
       const merged: OpportunityResult[] = [
         ...withoutLegacySignals,
+        ...linkedInJobsMapped,
         ...radarSignals,
         ...hiringSignalsFromApi,
       ];
@@ -1535,43 +1638,75 @@ export default function OpportunityPage() {
     );
   }
 
-  const yourMatches = results.filter(isJobListing);
-
-  const deduplicatedMatches = (() => {
+  const deduplicatedResults = (() => {
     const seen = new Map<string, OpportunityResult>();
-    for (const r of yourMatches) {
-      const company = (resolveCompany(r) ?? r.company ?? "")
+
+    const sorted = [...results].sort((a, b) => {
+      const aCredible = isFromCredibleSource(a) ? 0 : 1;
+      const bCredible = isFromCredibleSource(b) ? 0 : 1;
+      return aCredible - bCredible;
+    });
+
+    const STOP_WORDS = new Set([
+      "intern",
+      "senior",
+      "associate",
+      "manager",
+      "the",
+      "and",
+      "for",
+      "with",
+      "our",
+      "new",
+      "india",
+      "delhi",
+      "mumbai",
+      "bangalore",
+      "gurgaon",
+    ]);
+
+    for (const r of sorted) {
+      if (seen.has(r.url)) continue;
+
+      const company = (resolveCompany(r) ?? "")
         .toLowerCase()
         .replace(/[^a-z0-9]/g, "")
         .slice(0, 15);
+
       const titleWords = (r.title ?? "")
         .toLowerCase()
         .replace(/[^a-z0-9\s]/g, " ")
-        .split(" ")
-        .filter((w) => w.length > 3)
+        .split(/\s+/)
+        .filter(
+          (w) => w.length > 3 && !STOP_WORDS.has(w)
+        )
         .sort()
         .slice(0, 4)
-        .join(" ");
-      const key = `${company}__${titleWords}`;
-      if (!seen.has(key)) {
-        seen.set(key, r);
-      } else {
-        const existing = seen.get(key)!;
-        if ((r.snippet ?? "").length > (existing.snippet ?? "").length) {
-          seen.set(key, r);
-        }
+        .join("|");
+
+      const fuzzyKey = `${company}__${titleWords}`;
+
+      if (!seen.has(fuzzyKey)) {
+        seen.set(r.url, r);
+        seen.set(fuzzyKey, r);
       }
     }
-    return Array.from(seen.values());
+
+    const urlEntries = [...seen.entries()].filter(([k]) => k.startsWith("http"));
+    return [...new Map(urlEntries).values()];
   })();
 
-  const hiringSignals = results.filter((r) => {
+  const yourMatches = deduplicatedResults.filter((r) =>
+    isJobListing(r, filters.jobType, filters.experience)
+  );
+
+  const hiringSignals = deduplicatedResults.filter((r) => {
     if (r.bucket === "C") return true;
     if (isLinkedInPost(r)) return true;
     return false;
   });
 
-  const onTheRadar = results.filter((r) => {
+  const onTheRadar = deduplicatedResults.filter((r) => {
     const isRadarSource =
       r.bucket === "E" ||
       isNewsArticle(r) ||
@@ -1779,7 +1914,7 @@ export default function OpportunityPage() {
     E: 5,
   };
 
-  const sortedMatches = [...deduplicatedMatches].sort((a, b) => {
+  const sortedMatches = [...yourMatches].sort((a, b) => {
     const bp = benchmarkProfile;
     // Priority 1: Direct ATS/company career pages always first
     const ta = getSourceTier(a);
@@ -1796,6 +1931,11 @@ export default function OpportunityPage() {
       const pb = b.prestige_score ?? 0;
       if (pb !== pa) return pb - pa;
     }
+
+      // Priority 2.5: Recency boost for LinkedIn jobs
+      const ra = (a as any).recencyScore ?? 0;
+      const rb = (b as any).recencyScore ?? 0;
+      if (rb !== ra) return rb - ra;
 
     // Priority 3: Industry + CV relevance score
     const sa = scoreResult(
@@ -1961,9 +2101,11 @@ export default function OpportunityPage() {
                     return cleaned || "Hiring Signal";
                   })()}
                 </p>
-                <p className="mt-1 text-xs text-slate-600 line-clamp-3">
-                  {r.snippet}
-                </p>
+                {toReadableSnippet(r.snippet) && (
+                  <p className="mt-1 text-sm text-slate-600 line-clamp-2">
+                    {toReadableSnippet(r.snippet)}
+                  </p>
+                )}
                 <div className="mt-3 flex flex-wrap gap-2">
                   <button
                     type="button"
@@ -2031,9 +2173,11 @@ export default function OpportunityPage() {
                       <p className="text-sm font-semibold text-[#3C2A6A]">
                         {heading}
                       </p>
-                      <p className="mt-1 text-xs text-slate-600 line-clamp-3">
-                        {r.snippet}
-                      </p>
+                      {toReadableSnippet(r.snippet) && (
+                        <p className="mt-1 text-sm text-slate-600 line-clamp-2">
+                          {toReadableSnippet(r.snippet)}
+                        </p>
+                      )}
                       <p className="mt-2 text-xs font-medium text-emerald-700 bg-emerald-50 rounded-lg px-3 py-2">
                         💡{" "}
                         {radarReasonByUrl[r.url] ??
