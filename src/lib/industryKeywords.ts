@@ -1227,3 +1227,11 @@ export function getRoleVariants(industry: IndustryName): string[] {
 export function getSignalKeywords(industry: IndustryName): string[] {
   return INDUSTRY_KEYWORDS[industry]?.signals ?? [];
 }
+
+/**
+ * Returns industry aliases (alternate names, abbreviations) for query building
+ * and matching — e.g. "mgmt consulting", "strategy consulting", "big4".
+ */
+export function getIndustryAliases(industry: IndustryName): string[] {
+  return INDUSTRY_KEYWORDS[industry]?.aliases ?? [];
+}
