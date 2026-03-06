@@ -193,7 +193,19 @@ export async function POST(req: NextRequest) {
         numResults: 15,
         category: "news",
         startPublishedDate,
-        excludeDomains: JUNK_DOMAINS,
+        excludeDomains: [
+          ...JUNK_DOMAINS,
+          // Block company portal/blog articles
+          "bcg.com",
+          "mckinsey.com",
+          "bain.com",
+          "deloitte.com",
+          "pwc.com",
+          "ey.com",
+          "kpmg.com",
+          "accenture.com",
+          "capgemini.com",
+        ],
         contents: {
           highlights: {
             maxCharacters: 4000,
@@ -205,7 +217,18 @@ export async function POST(req: NextRequest) {
         numResults: 15,
         category: "news",
         startPublishedDate,
-        excludeDomains: JUNK_DOMAINS,
+        excludeDomains: [
+          ...JUNK_DOMAINS,
+          "bcg.com",
+          "mckinsey.com",
+          "bain.com",
+          "deloitte.com",
+          "pwc.com",
+          "ey.com",
+          "kpmg.com",
+          "accenture.com",
+          "capgemini.com",
+        ],
         contents: {
           highlights: {
             maxCharacters: 4000,

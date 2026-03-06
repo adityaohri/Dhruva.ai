@@ -147,6 +147,7 @@ function getSourceBadge(url: string): string {
     if (host.includes("microsoft")) return "Microsoft Direct";
     if (host.includes("naukri")) return "Naukri";
     if (host.includes("linkedin")) return "LinkedIn";
+    if (host.includes("jsearch") || host.includes("rapidapi")) return "JSearch";
     if (host.includes("bain")) return "Bain Direct";
     if (host.includes("bcg")) return "BCG Direct";
     if (host.includes("deloitte")) return "Deloitte Direct";
@@ -455,6 +456,52 @@ const isJobListing = (
 
   // Gate 2: not a LinkedIn post (those go to Hiring Signals)
   if (isLinkedInPost(r)) return false;
+
+  // Gate 2b: block LinkedIn aggregator pages
+  // These are collection/search/company job tab pages that list
+  // multiple jobs — not individual listings
+  const urlLower = (r.url ?? "").toLowerCase();
+  const LINKEDIN_AGGREGATOR_PATTERNS = [
+    "linkedin.com/jobs/search",
+    "linkedin.com/jobs/collections",
+    "linkedin.com/company/",
+    "/jobs?",
+    "linkedin.com/pub/",
+  ];
+  if (LINKEDIN_AGGREGATOR_PATTERNS.some((p) => urlLower.includes(p))) {
+    return false;
+  }
+
+  // Gate 2c: block any result whose title contains aggregator language
+  const titleLowerForAgg = (r.title ?? "").toLowerCase();
+  const AGGREGATOR_TITLE_PATTERNS = [
+    " jobs in ",
+    " openings in ",
+    " vacancies in ",
+    " positions in ",
+    "jobs near",
+    "search results",
+    "job listings",
+    "linkedin respects your privacy",
+  ];
+  if (AGGREGATOR_TITLE_PATTERNS.some((p) => titleLowerForAgg.includes(p))) {
+    return false;
+  }
+
+  // Gate 2d: block results whose snippet contains LinkedIn
+  // cookie/privacy boilerplate — these are page shells not job content
+  const snippetLower = (r.snippet ?? "").toLowerCase();
+  const BOILERPLATE_PATTERNS = [
+    "linkedin respects your privacy",
+    "essential and non-essential cookies",
+    "3rd parties use essential",
+    "sign in to view",
+    "join to apply",
+    "members who viewed",
+  ];
+  if (BOILERPLATE_PATTERNS.some((p) => snippetLower.includes(p))) {
+    return false;
+  }
 
   // Gate 3: not buckets C or E
   if (r.bucket === "C" || r.bucket === "E") return false;
@@ -997,7 +1044,8 @@ export default function OpportunityPage() {
           : undefined,
       };
 
-      const [res, radarResults, hiringResults] = await Promise.all([
+      const [res, radarResults, hiringResults, jsearchResults] =
+        await Promise.all([
         fetch("/api/discovery/sentinel", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -1032,6 +1080,23 @@ export default function OpportunityPage() {
             experience: filters.experience,
           }),
         }).then(async (r) => (r.ok ? r.json() : { signals: [] })),
+        fetch("/api/discovery/jsearch", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            industry: filters.industry,
+            roleVariants: getRoleVariants(
+              filters.industry as IndustryName
+            ).slice(0, 4),
+            experience: filters.experience,
+            jobType: filters.jobType,
+            location: filters.location || "India",
+            topCompanies: getTopCompanies(
+              filters.industry as IndustryName,
+              8
+            ),
+          }),
+        }).then(async (r) => (r.ok ? r.json() : { jobs: [] })),
       ]);
 
       const data = await res.json();
@@ -1169,9 +1234,17 @@ export default function OpportunityPage() {
         } as OpportunityResult;
       });
 
+      const jsearchMapped: OpportunityResult[] = (
+        (jsearchResults as any)?.jobs ?? []
+      ).map((job: any, idx: number) => ({
+        ...(job as OpportunityResult),
+        originalIndex: idx,
+      }));
+
       const merged: OpportunityResult[] = [
         ...withoutLegacySignals,
         ...linkedInJobsMapped,
+        ...jsearchMapped,
         // On The Radar — Exa + SerpApi merged
         ...radarSignals,
         ...serpRadarSignals,
@@ -1712,9 +1785,31 @@ export default function OpportunityPage() {
   );
 
   const hiringSignals = deduplicatedResults.filter((r) => {
-    if (r.bucket === "C") return true;
-    if (isLinkedInPost(r)) return true;
-    return false;
+    // Only bucket C (LinkedIn posts from Exa)
+    if (r.bucket !== "C") return false;
+
+    const url = (r.url ?? "").toLowerCase();
+
+    // Hard block any URL that is a formal job listing
+    const JOB_URL_PATTERNS = [
+      "/jobs/view/",
+      "/jobs/detail/",
+      "/jobs/collections/",
+      "/job-apply/",
+      "linkedin.com/jobs",
+      "myworkdayjobs.com",
+      "greenhouse.io",
+      "lever.co",
+      "ashbyhq.com",
+      "smartrecruiters.com",
+    ];
+    if (JOB_URL_PATTERNS.some((p) => url.includes(p))) return false;
+
+    // Must be an actual LinkedIn post URL
+    const POST_URL_PATTERNS = ["/posts/", "/pulse/", "/feed/update/"];
+    if (!POST_URL_PATTERNS.some((p) => url.includes(p))) return false;
+
+    return true;
   });
 
   const onTheRadar = deduplicatedResults.filter((r) => {
@@ -1723,7 +1818,9 @@ export default function OpportunityPage() {
       isNewsArticle(r) ||
       (() => {
         try {
-          const host = new URL(r.url).hostname.toLowerCase().replace("www.", "");
+          const host = new URL(r.url).hostname
+            .toLowerCase()
+            .replace("www.", "");
           return JUNK_DOMAINS.some(
             (d) => host === d || host.endsWith("." + d)
           );
@@ -1733,6 +1830,59 @@ export default function OpportunityPage() {
       })();
 
     if (!isRadarSource) return false;
+
+    const company = resolveCompany(r);
+    if (!company || company.toLowerCase() === "unknown company") {
+      return false;
+    }
+
+    const combined = `${(r.title ?? "")} ${(r.snippet ?? "")}`.toLowerCase();
+    const INDIA_TERMS = [
+      "india",
+      "indian",
+      "mumbai",
+      "delhi",
+      "bangalore",
+      "bengaluru",
+      "hyderabad",
+      "pune",
+      "chennai",
+      "gurgaon",
+      "gurugram",
+      "noida",
+      "kolkata",
+      "ahmedabad",
+    ];
+    const isIndiaRelevant = INDIA_TERMS.some((t) => combined.includes(t));
+    if (!isIndiaRelevant) return false;
+
+    const titleLower = (r.title ?? "").toLowerCase();
+    const ARTICLE_TITLE_PATTERNS = [
+      "how ",
+      "why ",
+      "what is",
+      "the case for",
+      "opinion:",
+      "analysis:",
+      "report:",
+      "survey:",
+      "study:",
+      "deep dive",
+      "explainer",
+      "everything you need",
+      "a guide to",
+      "tokenized",
+      "next-gen",
+      "enables",
+      "unlocks",
+      "the future of",
+      "is this the",
+      "are you ready",
+    ];
+    if (ARTICLE_TITLE_PATTERNS.some((p) => titleLower.includes(p))) {
+      return false;
+    }
+
     return isPositiveSignal(r);
   });
 

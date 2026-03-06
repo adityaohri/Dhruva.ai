@@ -90,6 +90,23 @@ function getRecencyScore(publishedDate: string | null | undefined): number {
   }
 }
 
+function getATSSource(url: string): string {
+  const host = (url ?? "").toLowerCase();
+  if (host.includes("greenhouse")) return "Greenhouse";
+  if (host.includes("lever.co")) return "Lever";
+  if (host.includes("workday")) return "Workday";
+  if (host.includes("mckinsey")) return "McKinsey Direct";
+  if (host.includes("bcg.com")) return "BCG Direct";
+  if (host.includes("bain.com")) return "Bain Direct";
+  if (host.includes("deloitte")) return "Deloitte Direct";
+  if (host.includes("kpmg")) return "KPMG Direct";
+  if (host.includes("naukri")) return "Naukri";
+  if (host.includes("iimjobs")) return "IIMJobs";
+  if (host.includes("instahyre")) return "Instahyre";
+  if (host.includes("linkedin")) return "LinkedIn";
+  return "Direct";
+}
+
 export async function POST(req: NextRequest) {
   try {
     const body = (await req.json()) as {
@@ -129,10 +146,10 @@ export async function POST(req: NextRequest) {
     const primaryRole = roleVariants[0] || "analyst";
     const roleGroup = roleVariants.slice(0, 3);
 
-    const threeMonthsAgo = new Date();
-    threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
-    const threeMonthsAgoISODate = threeMonthsAgo.toISOString().split("T")[0];
-    const threeMonthsAgoISO = threeMonthsAgo.toISOString();
+    const sixMonthsAgo = new Date();
+    sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+    const threeMonthsAgoISODate = sixMonthsAgo.toISOString().split("T")[0];
+    const threeMonthsAgoISO = sixMonthsAgo.toISOString();
 
     const companiesPart = topCompanies.slice(0, 5).join(" OR ");
     const rolesPart = roleGroup.join(" OR ");
@@ -181,10 +198,10 @@ export async function POST(req: NextRequest) {
 
     const jobsQuery = jobsQueryParts.join(" ");
 
-    const [companySearch, roleSearch, jobsSearch] = await Promise.all([
+    const [companySearch, roleSearch, jobsSearch, atsSearch] = await Promise.all([
       exa.searchAndContents(companyQuery, {
         type: "auto",
-        numResults: 25,
+        numResults: 40,
         includeDomains: ["linkedin.com"],
         startPublishedDate: threeMonthsAgoISODate,
         highlights: {
@@ -193,7 +210,7 @@ export async function POST(req: NextRequest) {
       } as any),
       exa.searchAndContents(roleQuery, {
         type: "auto",
-        numResults: 25,
+        numResults: 40,
         includeDomains: ["linkedin.com"],
         startPublishedDate: threeMonthsAgoISODate,
         highlights: {
@@ -202,19 +219,66 @@ export async function POST(req: NextRequest) {
       } as any),
       exa.searchAndContents(jobsQuery, {
         type: "auto",
-        numResults: 30,
+        numResults: 50,
         includeDomains: ["linkedin.com"],
         startPublishedDate: threeMonthsAgoISO,
         highlights: {
           maxCharacters: 4000,
         },
       } as any),
+      // Search 4 — ATS platforms and direct company career pages
+      exa.searchAndContents(
+        [
+          roleVariants
+            .slice(0, 4)
+            .map((r) => `"${r}"`)
+            .join(" OR "),
+          expTerms ||
+            '"entry level" OR "fresher" OR "analyst"',
+          jobTypeTerms,
+          locationTerm,
+        ]
+          .filter(Boolean)
+          .join(" "),
+        {
+          type: "auto",
+          numResults: 40,
+          includeDomains: [
+            "greenhouse.io",
+            "boards.greenhouse.io",
+            "lever.co",
+            "jobs.lever.co",
+            "myworkdayjobs.com",
+            "ashbyhq.com",
+            "smartrecruiters.com",
+            "jobs.mckinsey.com",
+            "careers.bcg.com",
+            "careers.bain.com",
+            "careers.deloitte.com",
+            "careers.kpmg.com",
+            "careers.ey.com",
+            "careers.google.com",
+            "careers.microsoft.com",
+            "amazon.jobs",
+            "naukri.com",
+            "iimjobs.com",
+            "instahyre.com",
+            "wellfound.com",
+            "cutshort.io",
+          ],
+          startPublishedDate: threeMonthsAgoISO,
+          highlights: {
+            maxCharacters: 4000,
+          },
+        } as any
+      ),
     ]);
 
     const search1Results = ((companySearch as any)?.results ?? []) as any[];
     const search2Results = ((roleSearch as any)?.results ?? []) as any[];
     const search3Results = (jobsSearch as any) ?? {};
     const search3List = (search3Results.results ?? []) as any[];
+    const search4Results = ((atsSearch as any)?.results ?? []) as any[];
 
     const linkedInJobResults = search3List.filter((r: any) =>
       LINKEDIN_JOB_PATHS.some((p) => String(r.url).includes(p))
@@ -358,9 +422,64 @@ export async function POST(req: NextRequest) {
       })
       .sort((a, b) => (b.recencyScore ?? 0) - (a.recencyScore ?? 0));
 
+    const CLOSED_JOB_PATTERNS = [
+      "no longer accepting",
+      "position has been filled",
+      "this job is closed",
+      "application closed",
+      "no longer available",
+      "listing has expired",
+      "job has expired",
+      "this role has been filled",
+      "closed to applications",
+    ];
+
+    const openLinkedInJobs = scoredLinkedInJobs.filter((job) => {
+      const snippet = String(job.snippet ?? "").toLowerCase();
+      return !CLOSED_JOB_PATTERNS.some((p) => snippet.includes(p));
+    });
+
+    const CLOSED_PATTERNS = [
+      "no longer accepting",
+      "position has been filled",
+      "job is closed",
+      "application closed",
+      "no longer available",
+      "listing has expired",
+    ];
+
+    const atsJobResults = search4Results
+      .map((r: any) => {
+        const url = String(r.url ?? "");
+        const highlight =
+          Array.isArray(r.highlights) && r.highlights.length > 0
+            ? String(r.highlights[0])
+            : String((r as any).text ?? "");
+        const snippet = cleanSnippet(highlight);
+        const publishedDate = String(
+          r.publishedDate || r.published_date || r.date || ""
+        );
+        const recencyScore = getRecencyScore(publishedDate || null);
+
+        return {
+          title: String(r.title ?? ""),
+          url,
+          publishedDate,
+          snippet,
+          source: getATSSource(url),
+          bucket: "A" as const,
+          recencyScore,
+          isFresh: recencyScore >= 60,
+        };
+      })
+      .filter((job) => {
+        const snippet = job.snippet.toLowerCase();
+        return !CLOSED_PATTERNS.some((p) => snippet.includes(p));
+      });
+
     return NextResponse.json({
       signals,
-      linkedInJobs: scoredLinkedInJobs,
+      linkedInJobs: [...openLinkedInJobs, ...atsJobResults],
     });
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : "Unknown error";
