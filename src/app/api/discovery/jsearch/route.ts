@@ -137,6 +137,7 @@ export async function POST(req: NextRequest) {
     ]);
 
     const combined = [...data1, ...data2, ...data3];
+    const rawCount = combined.length;
 
     const dedupedByUrl: any[] = [];
     const seenApplyLinks = new Set<string>();
@@ -227,6 +228,13 @@ export async function POST(req: NextRequest) {
       return true;
     });
 
+    const afterFilters = filtered.length;
+    if (rawCount === 0) {
+      console.warn("[jsearch] External API returned 0 results for all 3 queries. Check query terms and API key validity.");
+    } else if (afterFilters === 0) {
+      console.warn("[jsearch] All", rawCount, "raw results were filtered out (India/closed/experience/industry).");
+    }
+
     const jobs = filtered.map((job: any) => {
       const rawDesc: string = String(job.job_description ?? "");
       const snippet = rawDesc
@@ -291,7 +299,11 @@ export async function POST(req: NextRequest) {
       };
     });
 
-    return NextResponse.json({ jobs }, { headers });
+    const payload: { jobs: any[]; _meta?: { raw: number; afterDedup: number; afterFilters: number } } = { jobs };
+    if (jobs.length === 0) {
+      payload._meta = { raw: rawCount, afterDedup: dedupedByUrl.length, afterFilters };
+    }
+    return NextResponse.json(payload, { headers });
   } catch (e: unknown) {
     console.warn("[jsearch] handler error", e);
     return NextResponse.json({ jobs: [] }, { status: 200, headers });

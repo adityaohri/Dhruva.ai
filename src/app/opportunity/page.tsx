@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import Link from "next/link";
 import { createClient as createSupabaseClient } from "@/lib/supabase/client";
 import {
@@ -1021,6 +1021,7 @@ export default function OpportunityPage() {
   const [loadingRadarReasonUrl, setLoadingRadarReasonUrl] = useState<string | null>(
     null
   );
+  const radarReasonQueueRef = useRef<OpportunityResult[]>([]);
 
   const [benchmarkProfile, setBenchmarkProfile] = useState<{
     top_skills?: string | null;
@@ -1518,6 +1519,23 @@ export default function OpportunityPage() {
     } catch {}
   }, []);
 
+  // Serialize radar explanation requests (one at a time) to avoid Anthropic 429.
+  // Must run before any early return so hook order is stable (React #310).
+  useEffect(() => {
+    if (loadingRadarReasonUrl != null) return;
+    const list = radarReasonQueueRef.current;
+    const next = list.find((r) => {
+      const company = resolveCompany(r);
+      if (!company || company.toLowerCase() === "unknown company") return false;
+      if (radarReasonByUrl[r.url]) return false;
+      return true;
+    });
+    if (next) {
+      const company = resolveCompany(next)!;
+      fetchRadarReason(next, company);
+    }
+  }, [loadingRadarReasonUrl, radarReasonByUrl, fetchRadarReason, results.length]);
+
   const canProceedFromStep1 =
     filters.industry && filters.jobType && filters.experience;
 
@@ -2005,21 +2023,7 @@ export default function OpportunityPage() {
 
     return isPositiveSignal(r);
   });
-
-  // Serialize radar explanation requests: only one Anthropic call at a time to avoid 429 rate limits
-  useEffect(() => {
-    if (loadingRadarReasonUrl != null) return;
-    const next = onTheRadar.find((r) => {
-      const company = resolveCompany(r);
-      if (!company || company.toLowerCase() === "unknown company") return false;
-      if (radarReasonByUrl[r.url]) return false;
-      return true;
-    });
-    if (next) {
-      const company = resolveCompany(next)!;
-      fetchRadarReason(next, company);
-    }
-  }, [loadingRadarReasonUrl, radarReasonByUrl, fetchRadarReason, onTheRadar.length]);
+  radarReasonQueueRef.current = onTheRadar;
 
   const TIER1_SIGNAL_COMPANIES = getTopCompanies(
     filters.industry as IndustryName,
