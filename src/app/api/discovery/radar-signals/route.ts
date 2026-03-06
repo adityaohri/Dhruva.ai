@@ -411,44 +411,103 @@ export async function POST(req: NextRequest) {
       });
 
     function extractCompanyFromResult(r: any): string | null {
-      const text = `${r.title ?? ""} ${getHighlightText(r)}`;
-      const textLower = text.toLowerCase();
+      const title = String(r.title ?? "");
+      const text = `${title} ${getHighlightText(r)}`;
 
-      // First check against known top companies
-      for (const company of topCompanies) {
-        if (textLower.includes(company.toLowerCase())) {
-          return company;
+      // PRIORITY 1: Extract company from the article TITLE first
+      // This is more reliable than matching against topCompanies which can false-match
+      
+      // Pattern A: "CompanyName Raises/Secures $X" (most common funding headline)
+      const fundingHeadline = title.match(
+        /^([A-Z][a-zA-Z0-9&\-\s]{2,35}?)\s+(?:raises|secures|closes|bags|gets|lands)\s+(?:\$|₹|Rs\.?|INR|USD|Mn|Cr|million|crore)/i
+      );
+      if (fundingHeadline?.[1]?.trim()) {
+        const name = fundingHeadline[1].trim();
+        // Skip generic phrases
+        if (!/^(the|a|an|indian|india|mumbai|startup|company|firm)\s/i.test(name)) {
+          return name;
         }
       }
 
-      // Pattern 1: Capitalised phrase before signal verb
-      const signalMatch = text.match(
-        /([A-Z][a-zA-Z&\s]{2,30}?)\s(?:raises|expands|hires|appoints|wins|launches|opens|secures|acquires|partners|founded|started|announces|bags|gets)/
+      // Pattern B: "CompanyName, a/an [type] startup/firm" 
+      const startupMatch = title.match(
+        /^([A-Z][a-zA-Z0-9&\-\s]{2,30}?),?\s+(?:a|an|the)\s+(?:[\w\s\-]{1,25})?(?:startup|firm|company|venture|platform|consultancy)/i
       );
-      if (signalMatch?.[1]?.trim()) return signalMatch[1].trim();
+      if (startupMatch?.[1]?.trim()) {
+        const name = startupMatch[1].trim();
+        if (!/^(the|a|an|indian|india|mumbai)\s/i.test(name)) {
+          return name;
+        }
+      }
 
-      // Pattern 2: "XYZ, a/an [industry] startup" pattern
-      const startupMatch = text.match(
-        /([A-Z][a-zA-Z0-9&\-]{2,25}),?\s+(?:a|an|the)\s+(?:[\w\s]{1,30})?(?:startup|firm|company|venture|platform)/i
+      // Pattern C: "CompanyName expands/hires/launches/appoints/wins"
+      const actionHeadline = title.match(
+        /^([A-Z][a-zA-Z0-9&\-\s]{2,30}?)\s+(?:expands|hires|launches|appoints|wins|opens|acquires|partners|announces|to\s+hire|plans\s+to)/i
       );
-      if (startupMatch?.[1]?.trim()) return startupMatch[1].trim();
+      if (actionHeadline?.[1]?.trim()) {
+        const name = actionHeadline[1].trim();
+        if (!/^(the|a|an|indian|india|mumbai|startup)\s/i.test(name)) {
+          return name;
+        }
+      }
 
-      // Pattern 3: "XYZ raises/secures $X" startup funding pattern
-      const fundingMatch = text.match(
-        /([A-Z][a-zA-Z0-9&\-]{2,25})\s+(?:raises|secures|closes|bags|gets)\s+(?:\$|₹|Rs\.?|INR|USD)/i
+      // Pattern D: "CompanyName's [something]" or "CompanyName: [something]"
+      const possessiveMatch = title.match(
+        /^([A-Z][a-zA-Z0-9&\-]{2,25})(?:'s|'s|:)\s/
       );
-      if (fundingMatch?.[1]?.trim()) return fundingMatch[1].trim();
+      if (possessiveMatch?.[1]?.trim()) {
+        return possessiveMatch[1].trim();
+      }
 
-      // Pattern 4: "XYZ's founder/CEO" pattern
-      const founderMatch = text.match(
-        /([A-Z][a-zA-Z0-9&\-]{2,25})(?:'s|'s)\s+(?:founder|co-founder|CEO|CTO|team|office)/i
+      // Pattern E: Look for "Based" pattern - "Mumbai-Based CompanyName"
+      const basedMatch = title.match(
+        /(?:mumbai|delhi|bangalore|bengaluru|hyderabad|pune|chennai|india)[- ]based\s+([A-Z][a-zA-Z0-9&\-\s]{2,30}?)(?:\s+secures|\s+raises|\s+gets|\s+bags|\s+launches)/i
       );
-      if (founderMatch?.[1]?.trim()) return founderMatch[1].trim();
+      if (basedMatch?.[1]?.trim()) {
+        return basedMatch[1].trim();
+      }
 
-      // Pattern 5: Title often starts with company name
-      const title = String(r.title ?? "");
-      const titleMatch = title.match(/^([A-Z][a-zA-Z0-9&\-\s]{2,25}?)(?:\s+raises|\s+expands|\s+hires|\s+launches|\s+to|\s+bags|\s+gets|\s+secures|:)/);
-      if (titleMatch?.[1]?.trim()) return titleMatch[1].trim();
+      // PRIORITY 2: Check snippet for company name patterns
+      const snippetCompany = text.match(
+        /([A-Z][a-zA-Z0-9&\-]{3,25})\s+(?:raises|secures|closes|bags|gets)\s+(?:\$|₹|Rs\.?|INR|USD)/i
+      );
+      if (snippetCompany?.[1]?.trim()) {
+        const name = snippetCompany[1].trim();
+        // Avoid generic words
+        if (!/^(The|This|That|Their|Company|Firm|Startup|India|Indian)$/i.test(name)) {
+          return name;
+        }
+      }
+
+      // PRIORITY 3: Only NOW check against known top companies
+      // Use word boundary matching to avoid false positives
+      for (const company of topCompanies) {
+        // Create a word-boundary regex for the company name
+        const escapedCompany = company.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const companyRegex = new RegExp(`\\b${escapedCompany}\\b`, 'i');
+        
+        // Only match if it's a prominent mention (in title or first 200 chars)
+        const prominentText = `${title} ${getHighlightText(r).slice(0, 200)}`;
+        if (companyRegex.test(prominentText)) {
+          // Extra check: the title should be ABOUT this company, not just mentioning it
+          // Skip if the title clearly starts with a different company name
+          const titleStart = title.slice(0, 40);
+          const startsWithOther = /^[A-Z][a-zA-Z0-9&\-]{3,20}\s+(raises|secures|expands|hires|launches)/i.test(titleStart);
+          if (!startsWithOther || titleStart.toLowerCase().includes(company.toLowerCase())) {
+            return company;
+          }
+        }
+      }
+
+      // PRIORITY 4: Fallback - extract first capitalized phrase from title
+      const fallbackMatch = title.match(/^([A-Z][a-zA-Z0-9&\-\s]{3,25}?)(?:\s|,|:|\.|$)/);
+      if (fallbackMatch?.[1]?.trim()) {
+        const name = fallbackMatch[1].trim();
+        // Skip generic/junk starts
+        if (!/^(The|A|An|Indian|India|Mumbai|New|How|Why|What|This|These|Top|Best)\s/i.test(name) && name.length > 3) {
+          return name;
+        }
+      }
 
       return null;
     }
@@ -486,7 +545,7 @@ export async function POST(req: NextRequest) {
     });
 
     // Fallback: relax company gate if we have too few
-    if (sorted.length < 15) {
+    if (sorted.length < 20) {
       const fallback = allRaw
         .filter((r) => {
           // Gate 1
@@ -548,10 +607,32 @@ export async function POST(req: NextRequest) {
             : 0;
           return db - da;
         });
-      sorted = [...sorted, ...fallback].slice(0, 25);
+      sorted = [...sorted, ...fallback].slice(0, 40);
     } else {
-      sorted = sorted.slice(0, 25);
+      sorted = sorted.slice(0, 40);
     }
+
+    // FINAL PASS: Strict company-level deduplication
+    // Ensure each company name only appears ONCE in the final results
+    const finalCompanySeen = new Set<string>();
+    const finalDeduped: typeof sorted = [];
+    for (const r of sorted) {
+      const companyName = extractCompanyFromResult(r);
+      const companyKey = (companyName ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
+      
+      // Skip if we've already seen this company (unless company is empty)
+      if (companyKey && companyKey.length > 2 && finalCompanySeen.has(companyKey)) {
+        continue;
+      }
+      
+      if (companyKey && companyKey.length > 2) {
+        finalCompanySeen.add(companyKey);
+      }
+      
+      finalDeduped.push(r);
+    }
+    
+    sorted = finalDeduped;
 
     const signals = sorted.map((r) => {
       const url = String(r.url ?? "");

@@ -2522,31 +2522,36 @@ export default function OpportunityPage() {
               >
                 {(() => {
                   const company = resolveCompany(r);
-                const radarMeta = r as any;
+                  const radarMeta = r as any;
                   const rawTitle = (r.title ?? "").trim();
-                  const heading =
-                    company && company.toLowerCase() !== "unknown company"
-                      ? company
-                      : rawTitle.replace(/^unknown company:\s*/i, "").trim() ||
-                        "Signal";
+                  
+                  // For radar cards, show the actual news headline (truncated)
+                  // The company is extracted from the title by the API
+                  const headlineDisplay = rawTitle
+                    .replace(/^unknown company:\s*/i, "")
+                    .slice(0, 100)
+                    .trim();
+                  
+                  // Company name for the badge and "People to Reach Out" button
                   const resolvedRadarCompany = (company || "").trim();
-                  // Radar reasons are fetched one-at-a-time by the effect above to avoid Anthropic 429 rate limits
 
                   return (
                     <>
-                      <p className="text-sm font-semibold text-[#3C2A6A]">
-                        {heading}
-                      </p>
-                    {radarMeta.signalLabel && (
-                      <span className="mb-1 inline-block rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700">
-                        {radarMeta.signalLabel}
-                      </span>
-                    )}
-                      {toReadableSnippet(r.snippet) && (
-                        <p className="mt-1 text-sm text-slate-600 line-clamp-2">
-                          {toReadableSnippet(r.snippet)}
+                      {/* Company badge at top */}
+                      {resolvedRadarCompany && resolvedRadarCompany.toLowerCase() !== "unknown company" && (
+                        <p className="text-sm font-bold text-[#3C2A6A] mb-1">
+                          {resolvedRadarCompany}
                         </p>
                       )}
+                      {radarMeta.signalLabel && (
+                        <span className="mb-2 inline-block rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700">
+                          {radarMeta.signalLabel}
+                        </span>
+                      )}
+                      {/* Show the actual headline */}
+                      <p className="text-sm text-slate-700 line-clamp-2">
+                        {headlineDisplay || toReadableSnippet(r.snippet) || "Industry signal"}
+                      </p>
                     <p className="mt-1 text-xs text-slate-400">
                       {r.source}
                       {radarMeta.postedAgo && (
