@@ -3,6 +3,7 @@
 import { useState, useCallback, useEffect } from "react";
 import Link from "next/link";
 import { createClient as createSupabaseClient } from "@/lib/supabase/client";
+import { scoreAgainstIndustry, type IndustryName } from "@/lib/industryKeywords";
 const CREAM = "#FDFBF1";
 const PURPLE = "#3C2A6A";
 
@@ -236,7 +237,7 @@ function resolveTitle(r: OpportunityResult, company: string | null): string {
 }
 
 const JUNK_DOMAINS = [
-  // Indian business news
+  // Indian business/general news
   "techcrunch.com",
   "financialexpress.com",
   "thehindubusinessline.com",
@@ -255,33 +256,55 @@ const JUNK_DOMAINS = [
   "ndtv.com",
   "thehindu.com",
   "businesstoday.in",
-  // Additional news domains seen in screenshots
   "peoplematters.in",
   "indiatoday.in",
-  "consultancy.in",
-  "consultancy.eu",
-  "consultancy.uk",
-  "consultancy.asia",
-  "consultancy.com",
-  "hr.economictimes.com",
-  "shrm.org",
-  "hbr.org",
-  "cnbc.com",
-  "cnbctv18.com",
-  "ft.com",
-  "wsj.com",
   "scroll.in",
   "thewire.in",
   "theprint.in",
   "outlookindia.com",
   "hindustantimes.com",
-  "tribuneindia.com",
   "deccanherald.com",
   "vccircle.com",
   "dealstreetasia.com",
-  "techgig.com",
   "analyticsindiamag.com",
-  "artificialintelligence-news.com",
+  "cnbc.com",
+  "cnbctv18.com",
+  "ft.com",
+  "wsj.com",
+  "shrm.org",
+  "hbr.org",
+  "apnews.com",
+  "afr.com",
+  // Consulting-specific news aggregators
+  "consultancy.in",
+  "consultancy.eu",
+  "consultancy.uk",
+  "consultancy.asia",
+  "consultancy.com",
+  "consulting.us",
+  // Wire services and PR
+  "prnewswire.com",
+  "businesswire.com",
+  "newswire.com",
+  "globenewswire.com",
+  "accesswire.com",
+  "einpresswire.com",
+  // India news (additional)
+  "dnaindia.com",
+  "thehansindia.com",
+  "knocksense.com",
+  "apnnews.com",
+  "odishatv.in",
+  "zeebiz.com",
+  "wionews.com",
+  "aninews.in",
+  "uniindia.com",
+  // General content / opinion
+  "medium.com",
+  "substack.com",
+  "quora.com",
+  "reddit.com",
+  "wikipedia.org",
 ];
 
 const JOB_DOMAINS = [
@@ -335,55 +358,94 @@ const isLinkedInPost = (r: OpportunityResult): boolean => {
 
 const isJobListing = (r: OpportunityResult): boolean => {
   try {
-    const host = new URL(r.url).hostname.toLowerCase().replace("www.", "");
+    const url = new URL(r.url);
+    const host = url.hostname.toLowerCase().replace("www.", "");
+    const pathname = url.pathname.toLowerCase();
+
+    // Hard block all known news domains
     if (JUNK_DOMAINS.some((d) => host === d || host.endsWith("." + d))) {
       return false;
     }
+
+    // Block insight/article/content paths even on valid consulting domains
+    const INSIGHT_PATHS = [
+      "/insights/",
+      "/insight/",
+      "/articles/",
+      "/article/",
+      "/publications/",
+      "/publication/",
+      "/reports/",
+      "/report/",
+      "/perspectives/",
+      "/featured-insights/",
+      "/capabilities/",
+      "/our-insights/",
+      "/research/",
+      "/blog/",
+      "/news/",
+      "/media/",
+      "/press/",
+      "/podcast/",
+      "/video/",
+      "/events/",
+      "/event/",
+      "/webinar/",
+    ];
+    const isInsightPage = INSIGHT_PATHS.some((p) => pathname.includes(p));
+    if (isInsightPage) return false;
+
+    // Block McKinsey/BCG/Bain/Deloitte/EY/KPMG insight and article pages –
+    // only allow explicit careers paths
+    if (host.includes("mckinsey.com") && !pathname.includes("/careers/")) return false;
+    if (host.includes("bcg.com") && !pathname.includes("/careers/")) return false;
+    if (host.includes("bain.com") && !pathname.includes("/careers/")) return false;
+    if (host.includes("deloitte.com") && !pathname.includes("/careers/")) return false;
+    if (host.includes("ey.com") && !pathname.includes("/careers/")) return false;
+    if (host.includes("kpmg.com") && !pathname.includes("/careers/")) return false;
   } catch {
-    // ignore URL parse errors
+    // ignore URL parse errors – fall through to heuristics
   }
 
   if (isLinkedInPost(r)) return false;
   if (r.bucket === "C" || r.bucket === "E") return false;
 
   const title = (r.title ?? "").toLowerCase();
+  const source = (r.source ?? "").toLowerCase();
 
   const NEWS_PATTERNS = [
-    // Negative signals
+    // Layoffs / negative
     "layoff",
     "laid off",
-    "firing spree",
     "job cuts",
     "retrenchment",
-    "employees lose jobs",
+    "firing spree",
+    "employees lose",
     "jobs lost",
     "redundan",
+    "downsizing",
     // Company moves (not job postings)
     "nabs",
-    "launches",
     "opens new office",
     "hiring spree",
-    "appoints",
     "expands",
     "arrives in",
-    "adds up to",
     "landmark",
     "global footprint",
-    "funding",
-    "raises",
+    "funding round",
+    "raises $",
     "acquires",
     "merger",
     "ipo",
     "valuation",
     "welcomes",
-    "strengthens",
     "collaborates",
     "organise",
     "summit",
     "restructuring practice",
     "building a better",
     "home |",
-    // Opinion / analysis pieces
+    // Opinion / analysis / research
     "opinion |",
     "analysis:",
     "why are",
@@ -392,10 +454,42 @@ const isJobListing = (r: OpportunityResult): boolean => {
     "beginning of the end",
     "says about",
     "is it because",
+    "the next frontier",
+    "thriving startup landscape",
+    "current state of",
+    "early-stage investing",
+    "fair-chance hiring",
+    "untapped opportunity",
+    "great attrition",
+    "skills-based approach",
+    "beyond hiring",
+    "reskilling",
+    "agile funding",
+    "from the military",
+    "european defense",
+    "mobilizing capital",
+    "mena fintech",
+    "water resilience",
+    "insurtech",
+    "closing the funding gap",
+    "greenfield opportunity",
+    "top profitability lever",
+    "fintech in menap",
+    "anz's mckinsey review",
+    "mckinsey review",
+    "madhabi",
+    "sebi chief",
+    "raises more doubts",
+    // Profile / company info pages
+    "company profile",
+    "funding & investors",
+    "about us",
+    "our story",
+    "who we are",
   ];
   if (NEWS_PATTERNS.some((p) => title.includes(p))) return false;
 
-  const source = (r.source ?? "").toLowerCase();
+  // Block results whose source badge is a known news outlet
   const NEWS_SOURCES = [
     "consultancy",
     "peoplematters",
@@ -410,6 +504,20 @@ const isJobListing = (r: OpportunityResult): boolean => {
     "economictimes",
     "business-standard",
     "ndtv",
+    "yourstory",
+    "inc42",
+    "prnewswire",
+    "businesswire",
+    "newswire",
+    "apnnews",
+    "dnaindia",
+    "thehansindia",
+    "knocksense",
+    "scroll",
+    "analyticsindiamag",
+    "afr",
+    "medium",
+    "substack",
   ];
   if (NEWS_SOURCES.some((s) => source.includes(s))) return false;
 
@@ -1365,7 +1473,98 @@ export default function OpportunityPage() {
     return isPositiveSignal(r);
   });
 
+  const scoreResult = (
+    r: OpportunityResult,
+    industry: string,
+    jobType: string,
+    experience: string
+  ): number => {
+    const text = `${r.title ?? ""} ${r.snippet ?? ""} ${r.company ?? ""}`.toLowerCase();
+    let score = 0;
+
+    // Delegate to repository scoring — covers roles, companies, skills, signals
+    const industryScore = scoreAgainstIndustry(text, industry as IndustryName);
+    score += industryScore;
+
+    // Penalise if repository returns zero or negative score
+    if (industryScore <= 0) {
+      score -= 20;
+    }
+
+    // Light bonus if job type and experience string appear in text
+    if (jobType && text.includes(jobType.toLowerCase())) {
+      score += 10;
+    }
+    if (experience && text.includes(experience.toLowerCase())) {
+      score += 10;
+    }
+
+    return score;
+  };
+
+  const getSourceTier = (r: OpportunityResult): number => {
+    try {
+      const host = new URL(r.url).hostname.toLowerCase();
+
+      // Tier 1: Direct company career pages and ATS
+      const TIER_1 = [
+        "greenhouse.io",
+        "lever.co",
+        "myworkdayjobs.com",
+        "ashbyhq.com",
+        "smartrecruiters.com",
+        "jobs.mckinsey.com",
+        "careers.bcg.com",
+        "careers.bain.com",
+        "careers.google.com",
+        "careers.microsoft.com",
+        "amazon.jobs",
+        "metacareers.com",
+        "careers.deloitte.com",
+        "careers.kpmg.com",
+        "careers.ey.com",
+        "careers.pwc.com",
+        "jobs.lever.co",
+        "apply.workable.com",
+        "boards.greenhouse.io",
+      ];
+      if (TIER_1.some((d) => host === d || host.endsWith("." + d))) return 1;
+
+      // Tier 2: Quality job boards with individual listings
+      const TIER_2 = [
+        "linkedin.com",
+        "naukri.com",
+        "iimjobs.com",
+        "internshala.com",
+        "wellfound.com",
+        "cutshort.io",
+        "instahyre.com",
+        "angel.co",
+      ];
+      if (TIER_2.some((d) => host === d || host.endsWith("." + d))) return 2;
+
+      // Tier 3: Other job boards
+      return 3;
+    } catch {
+      return 4;
+    }
+  };
+
+  const BUCKET_RANK: Record<NonNullable<OpportunityResult["bucket"]>, number> = {
+    A: 1,
+    B: 2,
+    C: 3,
+    D: 4,
+    E: 5,
+  };
+
   const sortedMatches = [...yourMatches].sort((a, b) => {
+    // Priority 1: Direct ATS/company career pages always first
+    const ta = getSourceTier(a);
+    const tb = getSourceTier(b);
+    if (ta !== tb) return ta - tb;
+
+    // Priority 2: CV match score if user has checked
     if (sortMode === "match") {
       const ma = matchByUrl[a.url]?.score ?? a.match_score ?? -1;
       const mb = matchByUrl[b.url]?.score ?? b.match_score ?? -1;
@@ -1375,6 +1574,18 @@ export default function OpportunityPage() {
       const pb = b.prestige_score ?? 0;
       if (pb !== pa) return pb - pa;
     }
+
+    // Priority 3: Industry relevance score
+    const sa = scoreResult(a, filters.industry, filters.jobType, filters.experience);
+    const sb = scoreResult(b, filters.industry, filters.jobType, filters.experience);
+    if (sb !== sa) return sb - sa;
+
+    // Priority 4: Bucket rank (A before B before C...)
+    const ba = BUCKET_RANK[a.bucket ?? "E"] ?? 4;
+    const bb = BUCKET_RANK[b.bucket ?? "E"] ?? 4;
+    if (ba !== bb) return ba - bb;
+
+    // Final tie-breaker: Original index for determinism
     const ia = a.originalIndex ?? 0;
     const ib = b.originalIndex ?? 0;
     return ia - ib;
@@ -1455,60 +1666,6 @@ export default function OpportunityPage() {
 
       {results.length > 0 && activeSection === "matches" && (
         <>
-          {/* By company: one layer deeper than aggregate — individual roles per company */}
-          {Object.keys(resultsByCompany).length > 0 && (
-            <div className="space-y-8">
-              <h2 className="font-serif text-lg font-semibold text-[#3C2A6A]">
-                By company
-              </h2>
-              {Object.entries(resultsByCompany)
-                .filter(([name]) => name !== "Other")
-                .sort(([, a], [, b]) => b.length - a.length)
-                .map(([companyName, companyResults]) => (
-                  <div key={companyName} className="space-y-3">
-                    <h3 className="text-sm font-medium uppercase tracking-wider text-[#3C2A6A]/80">
-                      {companyName}
-                      <span className="ml-2 font-normal normal-case tracking-normal text-slate-500">
-                        ({companyResults.length} role{companyResults.length !== 1 ? "s" : ""})
-                      </span>
-                    </h3>
-                    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                      {companyResults.map((r, i) => (
-                        <OpportunityCard
-                          key={`${r.url}-${i}`}
-                          r={r}
-                          matchData={matchByUrl[r.url]}
-                          loadingMatch={loadingMatchUrl === r.url}
-                          onCheckMatch={() => fetchMatchForJob(r)}
-                        />
-                      ))}
-                    </div>
-                  </div>
-                ))}
-              {resultsByCompany["Other"] && resultsByCompany["Other"].length > 0 && (
-                <div className="space-y-3">
-                  <h3 className="text-sm font-medium uppercase tracking-wider text-[#3C2A6A]/80">
-                    Other
-                    <span className="ml-2 font-normal normal-case tracking-normal text-slate-500">
-                      ({resultsByCompany["Other"].length} role{resultsByCompany["Other"].length !== 1 ? "s" : ""})
-                    </span>
-                  </h3>
-                  <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                    {resultsByCompany["Other"].map((r, i) => (
-                      <OpportunityCard
-                        key={`${r.url}-${i}`}
-                        r={r}
-                        matchData={matchByUrl[r.url]}
-                        loadingMatch={loadingMatchUrl === r.url}
-                        onCheckMatch={() => fetchMatchForJob(r)}
-                      />
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-
           {/* Flat list (Your Matches) */}
           <div className="mt-8 space-y-4">
             <h2 className="font-serif text-lg font-semibold text-[#3C2A6A]">
