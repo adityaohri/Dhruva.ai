@@ -415,6 +415,25 @@ const CREDIBLE_ALLOWLIST = [
   "wellfound.com",
   "cutshort.io",
   "internshala.com",
+  
+  // JSearch aggregator domains — these are validated by JSearch API
+  "jobrapido.com",
+  "in.jobrapido.com",
+  "glassdoor.com",
+  "glassdoor.co.in",
+  "indeed.com",
+  "in.indeed.com",
+  "ziprecruiter.com",
+  "simplyhired.com",
+  "monster.com",
+  "monsterindia.com",
+  "shine.com",
+  "foundit.in",
+  "timesjobs.com",
+  "freshersworld.com",
+  "apna.co",
+  "hirist.com",
+  "angel.co",
 ];
 
 const isCareerSubdomain = (host: string): boolean => {
@@ -431,6 +450,11 @@ const isCareerSubdomain = (host: string): boolean => {
 };
 
 const isFromCredibleSource = (r: OpportunityResult): boolean => {
+  // JSearch-verified jobs always pass (they've been validated by JSearch API)
+  if (r.isVerified === true && r.bucket === "B") {
+    return true;
+  }
+  
   try {
     const host = new URL(r.url).hostname.toLowerCase().replace("www.", "");
     if (CREDIBLE_ALLOWLIST.some((d) => host === d || host.endsWith("." + d))) {
