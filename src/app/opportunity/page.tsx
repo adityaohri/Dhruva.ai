@@ -443,6 +443,57 @@ const isFromCredibleSource = (r: OpportunityResult): boolean => {
   }
 };
 
+// Patterns that indicate a job is closed, removed, or an error page — not an actual listing
+const CLOSED_OR_EMPTY_JOB_PATTERNS = [
+  "job not found",
+  "taken down",
+  "closed or removed",
+  "no longer accepting",
+  "job has been closed",
+  "no longer available",
+  "position has been filled",
+  "listing has expired",
+  "removed by the administrator",
+  "application closed",
+];
+
+// Career-site landing/search page text — we want actual job URLs, not "Search Jobs" pages
+const CAREER_LANDING_PATTERNS = [
+  "search jobs",
+  "find your next",
+  "browse jobs",
+  "browse opportunities",
+  "job not found",
+  "this job may have been taken down",
+];
+
+// Non-India location strings — results with these should be excluded for India-tailored results
+const NON_INDIA_LOCATION_STRINGS = [
+  "georgia",
+  "usa",
+  "united states",
+  "uk",
+  "united kingdom",
+  "london",
+  "singapore",
+  "dubai",
+  "uae",
+  "new york",
+  "california",
+  "texas",
+  "boston",
+  "chicago",
+  "australia",
+  "sydney",
+  "melbourne",
+  "germany",
+  "france",
+  "europe",
+  "hong kong",
+  "remote (us)",
+  "remote (uk)",
+];
+
 const isJobListing = (
   r: OpportunityResult,
   jobType: string,
@@ -450,6 +501,36 @@ const isJobListing = (
 ): boolean => {
   // Gate 0: basic URL presence
   if (!r.url || r.url.trim() === "") return false;
+
+  // Gate 0b: reject closed/empty/error job indicators (snippet or title)
+  const combinedForClosed = `${(r.title ?? "").toLowerCase()} ${(r.snippet ?? "").toLowerCase()}`;
+  if (CLOSED_OR_EMPTY_JOB_PATTERNS.some((p) => combinedForClosed.includes(p))) {
+    return false;
+  }
+
+  // Gate 0c: reject career landing/search pages (we want actual job links)
+  if (CAREER_LANDING_PATTERNS.some((p) => combinedForClosed.includes(p))) {
+    return false;
+  }
+
+  // Gate 0d: India-only — reject if location or content clearly indicates non-India
+  const locationStr = (r.location ?? "").toLowerCase();
+  const combinedForLocation = `${locationStr} ${(r.title ?? "").toLowerCase()} ${(r.snippet ?? "").toLowerCase()}`;
+  if (NON_INDIA_LOCATION_STRINGS.some((s) => combinedForLocation.includes(s))) {
+    return false;
+  }
+
+  // Gate 0e: IIM Jobs (and similar) category/aggregator snippets — keyword lists, not job descriptions
+  const snippetForGate = (r.snippet ?? "").toLowerCase();
+  const sourceLower = (r.source ?? "").toLowerCase();
+  if (sourceLower.includes("iimjobs")) {
+    const fragmentCount = (snippetForGate.match(/\s+jobs\s+/g) ?? []).length;
+    const looksLikeCategoryPage =
+      snippetForGate.includes("| iimjobs.com") ||
+      fragmentCount >= 2 ||
+      /\b(Finance|Corporate|Investment|Wealth|Marketing)\s+&\s+(Accounts|Banking|Research)\s+Jobs/i.test(snippetForGate);
+    if (looksLikeCategoryPage) return false;
+  }
 
   // Gate 1: credible source allowlist
   if (!isFromCredibleSource(r)) return false;
@@ -1149,9 +1230,38 @@ export default function OpportunityPage() {
         bucket: "C",
       }));
 
+      // India-only for LinkedIn jobs: exclude listings that clearly indicate non-India location
+      const LINKEDIN_NON_INDIA = [
+        "georgia",
+        "usa",
+        "united states",
+        "uk",
+        "london",
+        "singapore",
+        "dubai",
+        "uae",
+        "new york",
+        "california",
+        "australia",
+        "sydney",
+        "melbourne",
+        "germany",
+        "france",
+        "europe",
+        "hong kong",
+      ];
+
       const linkedInJobsMapped: OpportunityResult[] = (
         hiringData.linkedInJobs ?? []
-      ).map((job: any, idx: number) => {
+      )
+        .filter((job: any) => {
+          const rawSnippet = String(job.snippet ?? "");
+          const rawTitle = String(job.title ?? "");
+          const combined = `${rawTitle} ${rawSnippet}`.toLowerCase();
+          const hasNonIndia = LINKEDIN_NON_INDIA.some((s) => combined.includes(s));
+          return !hasNonIndia;
+        })
+        .map((job: any, idx: number) => {
         const rawTitle = String(job.title ?? "");
 
         const extractCompany = (title: string): string => {
@@ -1177,7 +1287,7 @@ export default function OpportunityPage() {
 
         const snippetStr = String(job.snippet ?? "");
         const snippetLower = snippetStr.toLowerCase();
-        const CITIES = [
+        const INDIAN_CITIES = [
           "mumbai",
           "delhi",
           "bangalore",
@@ -1190,9 +1300,9 @@ export default function OpportunityPage() {
           "kolkata",
           "noida",
           "ahmedabad",
-          "remote",
+          "india",
         ];
-        const foundCity = CITIES.find((c) => snippetLower.includes(c));
+        const foundCity = INDIAN_CITIES.find((c) => snippetLower.includes(c));
         const location =
           foundCity != null
             ? foundCity.charAt(0).toUpperCase() + foundCity.slice(1)
@@ -2313,6 +2423,7 @@ export default function OpportunityPage() {
               >
                 {(() => {
                   const company = resolveCompany(r);
+                const radarMeta = r as any;
                   const rawTitle = (r.title ?? "").trim();
                   const heading =
                     company && company.toLowerCase() !== "unknown company"
@@ -2334,11 +2445,24 @@ export default function OpportunityPage() {
                       <p className="text-sm font-semibold text-[#3C2A6A]">
                         {heading}
                       </p>
+                    {radarMeta.signalLabel && (
+                      <span className="mb-1 inline-block rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700">
+                        {radarMeta.signalLabel}
+                      </span>
+                    )}
                       {toReadableSnippet(r.snippet) && (
                         <p className="mt-1 text-sm text-slate-600 line-clamp-2">
                           {toReadableSnippet(r.snippet)}
                         </p>
                       )}
+                    <p className="mt-1 text-xs text-slate-400">
+                      {r.source}
+                      {radarMeta.postedAgo && (
+                        <span className="ml-2 text-slate-400">
+                          {radarMeta.postedAgo}
+                        </span>
+                      )}
+                    </p>
                       <p className="mt-2 text-xs font-medium text-emerald-700 bg-emerald-50 rounded-lg px-3 py-2">
                         💡{" "}
                         {radarReasonByUrl[r.url] ??

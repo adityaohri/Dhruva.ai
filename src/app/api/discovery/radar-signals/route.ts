@@ -1,122 +1,44 @@
 import { NextRequest, NextResponse } from "next/server";
 import Exa from "exa-js";
-import { getSignalKeywords, type IndustryName } from "@/lib/industryKeywords";
+import {
+  getTopCompanies,
+  getRoleVariants,
+  getSignalKeywords,
+  getIndustryAliases,
+  type IndustryName,
+} from "@/lib/industryKeywords";
 
 const exa = new Exa(process.env.EXA_API_KEY || "");
 
-const JUNK_DOMAINS = [
-  // Indian business/general news
-  "techcrunch.com",
-  "financialexpress.com",
-  "thehindubusinessline.com",
-  "business-standard.com",
-  "globenewswire.com",
-  "economictimes.com",
-  "livemint.com",
-  "moneycontrol.com",
-  "yourstory.com",
-  "inc42.com",
-  "entrackr.com",
-  "reuters.com",
-  "bloomberg.com",
-  "forbes.com",
-  "timesofindia.com",
-  "ndtv.com",
-  "thehindu.com",
-  "businesstoday.in",
-  "peoplematters.in",
-  "indiatoday.in",
-  "scroll.in",
-  "thewire.in",
-  "theprint.in",
-  "outlookindia.com",
-  "hindustantimes.com",
-  "deccanherald.com",
-  "vccircle.com",
-  "dealstreetasia.com",
-  "analyticsindiamag.com",
-  "cnbc.com",
-  "cnbctv18.com",
-  "ft.com",
-  "wsj.com",
-  "shrm.org",
-  "hbr.org",
-  "apnews.com",
-  "afr.com",
-  // Consulting-specific news aggregators
-  "consultancy.in",
-  "consultancy.eu",
-  "consultancy.uk",
-  "consultancy.asia",
-  "consultancy.com",
-  "consulting.us",
-  // Wire services and PR
-  "prnewswire.com",
-  "businesswire.com",
-  "newswire.com",
-  "accesswire.com",
-  "einpresswire.com",
-  // India news (additional)
-  "dnaindia.com",
-  "thehansindia.com",
-  "knocksense.com",
-  "apnnews.com",
-  "odishatv.in",
-  "zeebiz.com",
-  "wionews.com",
-  "aninews.in",
-  "uniindia.com",
-  // General content / opinion
-  "medium.com",
-  "substack.com",
-  "quora.com",
-  "reddit.com",
-  "wikipedia.org",
+// Company portals / blogs to exclude (we want news ABOUT them, not BY them)
+const PORTAL_DOMAINS = [
+  "bcg.com",
+  "mckinsey.com",
+  "bain.com",
+  "deloitte.com",
+  "pwc.com",
+  "ey.com",
+  "kpmg.com",
+  "accenture.com",
+  "capgemini.com",
+  "hdfcbank.com",
+  "icicibank.com",
+  "axisbank.com",
+  "tatacapital.com",
+  "infosys.com",
+  "wipro.com",
+  "tcs.com",
+  "hcl.com",
+  "techm.com",
 ];
 
-const POSITIVE_KEYWORDS = [
-  "funding",
-  "raises",
-  "raised",
-  "series",
-  "new office",
-  "expands",
-  "expansion",
-  "hiring",
-  "to hire",
-  "headcount",
-  "appoints",
-  "launches",
-  "new practice",
-  "new hub",
-  "investment",
-  "backed",
-  "opens",
-];
-
-const NEGATIVE_KEYWORDS = [
-  "layoff",
-  "laid off",
-  "job cuts",
-  "retrenchment",
-  "firing",
-  "losses",
-  "deficit",
-  "bankruptcy",
-  "shutdown",
-  "declining",
-];
-
+// Keep existing cleanSnippet helper to normalise snippets
 function cleanSnippet(raw: string): string {
   if (!raw) return "";
   const cleaned = raw
-    // Remove markdown headers
     .replace(/#{1,6}\s+/g, "")
-    // Remove bullet points and list markers
     .replace(/^[\*\-\•]\s+/gm, "")
-    // Remove markdown links [text](url)
     .replace(/\[\s*[^\]]{0,30}\]\s*\([^)]+\)/g, "")
-    // Remove bold/italic markers
     .replace(/\*{1,2}([^*]+)\*{1,2}/g, "$1")
     .split("\n")
     .filter((line) => {
@@ -137,19 +59,122 @@ function cleanSnippet(raw: string): string {
   return cleaned;
 }
 
+const UNIVERSAL_POSITIVE = [
+  "funding",
+  "raises",
+  "raised",
+  "series",
+  "investment",
+  "backed",
+  "expands",
+  "expansion",
+  "new office",
+  "new hub",
+  "launches",
+  "hiring",
+  "to hire",
+  "headcount",
+  "appoints",
+  "appointment",
+  "joins as",
+  "wins contract",
+  "awarded",
+  "mandate",
+  "secures",
+  "new client",
+  "partnership",
+  "joint venture",
+  "ipo",
+  "valuation",
+  "growth",
+  "new practice",
+  "new centre",
+  "new vertical",
+];
+
+const NEGATIVE_SIGNALS = [
+  "layoff",
+  "laid off",
+  "job cuts",
+  "retrenchment",
+  "firing",
+  "losses",
+  "deficit",
+  "bankruptcy",
+  "shutdown",
+  "winding down",
+  "fraud",
+  "scam",
+  "scandal",
+  "arrested",
+  "penalty",
+  "fine",
+  "declining revenue",
+  "below expectations",
+  "misses target",
+];
+
+const INDIA_TERMS = [
+  "india",
+  "indian",
+  "mumbai",
+  "delhi",
+  "bangalore",
+  "bengaluru",
+  "hyderabad",
+  "pune",
+  "chennai",
+  "gurgaon",
+  "gurugram",
+  "noida",
+  "kolkata",
+  "ahmedabad",
+];
+
+const ARTICLE_PATTERNS = [
+  "how ",
+  "why ",
+  "what is",
+  "opinion:",
+  "analysis:",
+  "report:",
+  "survey:",
+  "the case for",
+  "explainer",
+  "a guide to",
+  "everything you need",
+  "deep dive",
+  "tokenized",
+  "next-gen",
+  "the future of",
+  "are you ready",
+  "is this the",
+];
+
+const CATEGORY_PRIORITY: Record<string, number> = {
+  funding: 1,
+  expansion: 2,
+  hiring: 3,
+  leadership: 4,
+  deal: 5,
+  industry: 6,
+};
+
+function getHighlightText(r: any): string {
+  if (Array.isArray(r.highlights) && r.highlights.length > 0) {
+    return String(r.highlights[0] ?? "");
+  }
+  return String(r.text ?? "");
+}
+
 export async function POST(req: NextRequest) {
   try {
     const body = (await req.json()) as {
-      industry?: string;
-      topCompanies?: string[];
+      industry: string;
       location?: string;
     };
 
-    const industry = (body.industry || "").trim();
-    const topCompanies = Array.isArray(body.topCompanies)
-      ? body.topCompanies.filter((c) => typeof c === "string" && c.trim().length > 0)
-      : [];
-    const location = (body.location || "India").trim() || "India";
+    const { industry, location = "India" } = body;
 
     if (!industry) {
       return NextResponse.json(
@@ -159,143 +184,334 @@ export async function POST(req: NextRequest) {
     }
 
     if (!process.env.EXA_API_KEY) {
-      return NextResponse.json(
-        { error: "EXA_API_KEY is not configured", signals: [] },
-        { status: 500 }
-      );
+      // Soft-fail so the page can still render
+      return NextResponse.json({ signals: [] }, { status: 200 });
     }
+
+    const industryName = industry as IndustryName;
+    const topCompanies = getTopCompanies(industryName, 20);
+    const roleVariants = getRoleVariants(industryName).slice(0, 4);
+    const signalKeywords = getSignalKeywords(industryName) ?? [];
+    const industryAliases = getIndustryAliases(industryName) ?? [];
 
     const sixMonthsAgo = new Date();
     sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
-    const startPublishedDate = sixMonthsAgo.toISOString().split("T")[0];
+    const sixMonthsAgoISO = sixMonthsAgo.toISOString();
 
-    const industryKey = (industry || "Other") as IndustryName;
-    const signalKeywords = getSignalKeywords(industryKey);
-    const signalsPart = signalKeywords
-      .slice(0, 5)
-      .map((s) => `"${s}"`)
-      .join(" OR ");
-    const basePositive =
-      'funding OR raises OR "new office" OR expands OR hiring OR headcount OR investment OR launches OR appoints';
-    const triggerQuery = [signalsPart, basePositive]
-      .filter(Boolean)
-      .join(" OR ");
+    const companies_1_6 = topCompanies.slice(0, 6).join(" OR ");
+    const companies_7_12 = topCompanies.slice(6, 12).join(" OR ");
+    const companies_13_20 = topCompanies.slice(12, 20).join(" OR ");
 
-    const industryQuery = `(${triggerQuery}) ${industry} ${location} 2025 2026`;
-    const companiesPart = topCompanies.slice(0, 6).join(" OR ");
-    const companyQuery = companiesPart
-      ? `(${companiesPart}) (${triggerQuery}) ${location} 2025 2026`
-      : industryQuery;
+    const industryLabel = industryAliases[0] ?? industry;
 
-    const [industrySearch, companySearch] = await Promise.all([
-      exa.search(industryQuery, {
-        type: "auto",
-        numResults: 15,
-        category: "news",
-        startPublishedDate,
-        excludeDomains: [
-          ...JUNK_DOMAINS,
-          // Block company portal/blog articles
-          "bcg.com",
-          "mckinsey.com",
-          "bain.com",
-          "deloitte.com",
-          "pwc.com",
-          "ey.com",
-          "kpmg.com",
-          "accenture.com",
-          "capgemini.com",
-        ],
-        contents: {
-          highlights: {
-            maxCharacters: 4000,
-          },
-        },
-      } as any),
-      exa.search(companyQuery, {
-        type: "auto",
-        numResults: 15,
-        category: "news",
-        startPublishedDate,
-        excludeDomains: [
-          ...JUNK_DOMAINS,
-          "bcg.com",
-          "mckinsey.com",
-          "bain.com",
-          "deloitte.com",
-          "pwc.com",
-          "ey.com",
-          "kpmg.com",
-          "accenture.com",
-          "capgemini.com",
-        ],
-        contents: {
-          highlights: {
-            maxCharacters: 4000,
-          },
-        },
-      } as any),
+    const repoSignals =
+      signalKeywords.slice(0, 8).join(" OR ") || "expansion hiring growth";
+
+    const commonParams = {
+      type: "auto" as const,
+      category: "news" as const,
+      startPublishedDate: sixMonthsAgoISO,
+      highlights: { maxCharacters: 3000 },
+      excludeDomains: PORTAL_DOMAINS,
+    };
+
+    const query1 = `(${companies_1_6}) OR "${industryLabel}" ${location}
+("funding" OR "raises" OR "raised" OR "series A" OR "series B" OR "series C" OR "investment" OR "backed" OR "PE investment" OR "venture capital" OR "IPO" OR "capital raise" OR "valuation") 2025 2026`;
+
+    const query2 = `(${companies_7_12}) OR "${industryLabel}" ${location}
+("new office" OR "expands" OR "expansion" OR "opens in" OR "launches in" OR "new hub" OR "new practice" OR "new vertical" OR "new centre" OR "new capability" OR "enters India" OR "India operations" OR "sets up" OR "establishes") ${location} 2025 2026`;
+
+    const query3 = `(${companies_1_6}) OR (${companies_7_12}) ${location} ("hiring" OR "to hire" OR "plans to hire" OR "headcount" OR "recruitment drive" OR "campus hiring" OR "lateral hiring" OR "talent acquisition" OR "workforce expansion" OR "adding jobs" OR "creating jobs" OR "job creation") 2025 2026`;
+
+    const query4 = `(${companies_13_20}) OR "${industryLabel}" ${location}
+("appoints" OR "appointment" OR "new CEO" OR "new MD" OR "new head" OR "new partner" OR "new director" OR "country head" OR "hires" OR "joins as" OR "strategic partnership" OR "MOU" OR "joint venture") ${location} 2025 2026`;
+
+    const query5 = `(${companies_1_6}) OR "${industryLabel}" ${location} ("wins contract" OR "awarded" OR "mandate" OR "project win" OR "secures deal" OR "new client" OR "government contract" OR "selected as" OR "empanelled" OR "RFP win" OR "bagged order") 2025 2026`;
+
+    const query6 = `"${industryLabel}" ${location} (${repoSignals}) ("hiring" OR "growth" OR "talent" OR "expanding" OR "new roles" OR "jobs" OR "headcount") 2025 2026`;
+
+    const settled = await Promise.allSettled([
+      exa.searchAndContents(query1, commonParams as any),
+      exa.searchAndContents(query2, commonParams as any),
+      exa.searchAndContents(query3, { ...commonParams, numResults: 25 } as any),
+      exa.searchAndContents(query4, commonParams as any),
+      exa.searchAndContents(query5, commonParams as any),
+      exa.searchAndContents(query6, commonParams as any),
     ]);
 
-    const allResults = [
-      ...((industrySearch as any)?.results ?? []),
-      ...((companySearch as any)?.results ?? []),
+    const [
+      fundingResults,
+      expansionResults,
+      hiringResults,
+      leadershipResults,
+      dealResults,
+      industryResults,
+    ] = settled.map((res) =>
+      res.status === "fulfilled" ? (res.value as any) : { results: [] }
+    );
+
+    const tag = (results: any[], category: string, label: string) =>
+      (results ?? []).map((r) => ({
+        ...r,
+        signalCategory: category,
+        signalLabel: label,
+      }));
+
+    const allRaw: any[] = [
+      ...tag(fundingResults.results, "funding", "💰 Funding / Investment"),
+      ...tag(
+        expansionResults.results,
+        "expansion",
+        "🏢 Expansion / New Office"
+      ),
+      ...tag(hiringResults.results, "hiring", "🧑‍💼 Hiring Drive"),
+      ...tag(
+        leadershipResults.results,
+        "leadership",
+        "👤 Leadership Appointment"
+      ),
+      ...tag(dealResults.results, "deal", "📋 Deal / Contract Win"),
+      ...tag(
+        industryResults.results,
+        "industry",
+        "📈 Industry Growth Signal"
+      ),
     ];
 
-    const seenUrls = new Set<string>();
-    const signals = allResults
-      .filter((r: any) => {
-        if (!r?.url) return false;
-        const url = String(r.url);
-        if (seenUrls.has(url)) return false;
+    const allPositive = [...UNIVERSAL_POSITIVE, ...signalKeywords];
 
-        const title = String(r.title ?? "");
-        const highlight = Array.isArray(r.highlights) && r.highlights.length > 0
-          ? String(r.highlights[0])
-          : "";
-
-        const text = `${title} ${highlight}`.toLowerCase();
-        const hasPositive = POSITIVE_KEYWORDS.some((kw) =>
-          text.includes(kw.toLowerCase())
-        );
-        const hasNegative = NEGATIVE_KEYWORDS.some((kw) =>
-          text.includes(kw.toLowerCase())
-        );
-
-        if (!hasPositive || hasNegative) return false;
-
-        seenUrls.add(url);
-        return true;
-      })
-      .map((r: any) => {
-        const url = String(r.url);
-        let host = "";
+    const filtered = allRaw
+      // Gate 1: hard 6-month ceiling
+      .filter((r) => {
+        if (!r.publishedDate) return true;
         try {
-          host = new URL(url).hostname.replace(/^www\./i, "");
+          return new Date(r.publishedDate) >= sixMonthsAgo;
         } catch {
-          host = "";
+          return true;
         }
+      })
+      // Gate 2: Must name a company OR an industry term.
+      // Accept any result that mentions the industry name, an alias,
+      // OR passes a basic "looks like a company signal" check.
+      // Do NOT restrict to only the top 20 companies — this blocks
+      // valid signals from Tier 2 and emerging companies.
+      .filter((r) => {
+        const rawText = `${r.title ?? ""} ${getHighlightText(r)}`;
+        const text = rawText.toLowerCase();
 
-        const highlight = Array.isArray(r.highlights) && r.highlights.length > 0
-          ? String(r.highlights[0])
-          : String((r as any).text ?? "");
+        // Always pass if it mentions the industry or its aliases
+        if (industryAliases.some((a) => text.includes(a.toLowerCase())))
+          return true;
+        if (text.includes(industry.toLowerCase())) return true;
 
-        const publishedDate =
-          r.publishedDate || r.published_date || r.date || "";
+        // Pass if it mentions any of the top companies (bonus, not requirement)
+        if (topCompanies.some((c) => text.includes(c.toLowerCase())))
+          return true;
 
-        return {
-          title: String(r.title ?? ""),
-          url,
-          publishedDate: String(publishedDate || ""),
-          snippet: cleanSnippet(highlight),
-          source: host,
-        };
+        // Pass if it looks like a company-specific signal:
+        // Has a proper noun followed by a signal word
+        const HAS_COMPANY_SIGNAL =
+          /[A-Z][a-zA-Z&\s]{2,30}\s(raises|expands|hires|appoints|wins|launches|opens|secures|acquires|partners|backs)/;
+        if (HAS_COMPANY_SIGNAL.test(rawText)) return true;
+
+        return false;
+      })
+      // Gate 3: positive signal confirmation
+      .filter((r) => {
+        const text = `${r.title ?? ""} ${getHighlightText(r)}`.toLowerCase();
+        return allPositive.some((kw) => text.includes(kw.toLowerCase()));
+      })
+      // Gate 4: negative signal block
+      .filter((r) => {
+        const text = `${r.title ?? ""} ${getHighlightText(r)}`.toLowerCase();
+        return !NEGATIVE_SIGNALS.some((kw) => text.includes(kw.toLowerCase()));
+      })
+      // Gate 5: India relevance
+      .filter((r) => {
+        const text = `${r.title ?? ""} ${getHighlightText(r)}`.toLowerCase();
+        const urlLower = String(r.url ?? "").toLowerCase();
+        return (
+          INDIA_TERMS.some((t) => text.includes(t)) ||
+          urlLower.includes("india") ||
+          urlLower.includes(".in/") ||
+          urlLower.includes("indiatimes") ||
+          urlLower.includes("yourstory") ||
+          urlLower.includes("inc42") ||
+          urlLower.includes("entrackr") ||
+          urlLower.includes("vccircle") ||
+          urlLower.includes("livemint") ||
+          urlLower.includes("business-standard") ||
+          urlLower.includes("economictimes")
+        );
+      })
+      // Gate 6: editorial / opinion block
+      .filter((r) => {
+        const titleLower = String(r.title ?? "").toLowerCase();
+        return !ARTICLE_PATTERNS.some(
+          (p) => titleLower.startsWith(p) || titleLower.includes(p)
+        );
       });
 
+    function extractCompanyFromResult(r: any): string | null {
+      const text = `${r.title ?? ""} ${getHighlightText(r)}`;
+
+      // First check against known top companies
+      for (const company of topCompanies) {
+        if (text.toLowerCase().includes(company.toLowerCase())) {
+          return company;
+        }
+      }
+
+      // Fallback: extract first capitalised multi-word phrase before
+      // a signal verb as the company name
+      const match = text.match(
+        /([A-Z][a-zA-Z&\s]{2,30}?)\s(?:raises|expands|hires|appoints|wins|launches|opens|secures|acquires|partners)/
+      );
+      return match?.[1]?.trim() ?? null;
+    }
+
+    const companyMap = new Map<string, any>();
+    for (const r of filtered) {
+      const company = extractCompanyFromResult(r);
+      const key = (company ?? String(r.url ?? "")).toLowerCase();
+      const existing = companyMap.get(key);
+      if (!existing) {
+        companyMap.set(key, r);
+      } else {
+        const newPriority = CATEGORY_PRIORITY[r.signalCategory] ?? 99;
+        const existingPriority =
+          CATEGORY_PRIORITY[existing.signalCategory] ?? 99;
+        if (newPriority < existingPriority) {
+          companyMap.set(key, r);
+        }
+      }
+    }
+
+    let deduplicated = Array.from(companyMap.values());
+
+    let sorted = deduplicated.sort((a, b) => {
+      const pa = CATEGORY_PRIORITY[a.signalCategory] ?? 99;
+      const pb = CATEGORY_PRIORITY[b.signalCategory] ?? 99;
+      if (pa !== pb) return pa - pb;
+      const da = a.publishedDate
+        ? new Date(a.publishedDate).getTime()
+        : 0;
+      const db = b.publishedDate
+        ? new Date(b.publishedDate).getTime()
+        : 0;
+      return db - da;
+    });
+
+    // Fallback: relax company gate if we have too few
+    if (sorted.length < 15) {
+      const fallback = allRaw
+        .filter((r) => {
+          // Gate 1
+          if (r.publishedDate) {
+            try {
+              if (new Date(r.publishedDate) < sixMonthsAgo) return false;
+            } catch {
+              // ignore
+            }
+          }
+          // Gate 3
+          const text = `${r.title ?? ""} ${getHighlightText(r)}`.toLowerCase();
+          if (!allPositive.some((kw) => text.includes(kw.toLowerCase()))) {
+            return false;
+          }
+          // Gate 4
+          if (NEGATIVE_SIGNALS.some((kw) => text.includes(kw.toLowerCase()))) {
+            return false;
+          }
+          // Gate 5
+          const urlLower = String(r.url ?? "").toLowerCase();
+          if (
+            !(
+              INDIA_TERMS.some((t) => text.includes(t)) ||
+              urlLower.includes("india") ||
+              urlLower.includes(".in/") ||
+              urlLower.includes("indiatimes") ||
+              urlLower.includes("yourstory") ||
+              urlLower.includes("inc42") ||
+              urlLower.includes("entrackr") ||
+              urlLower.includes("vccircle") ||
+              urlLower.includes("livemint") ||
+              urlLower.includes("business-standard") ||
+              urlLower.includes("economictimes")
+            )
+          ) {
+            return false;
+          }
+          // Gate 6
+          const titleLower = String(r.title ?? "").toLowerCase();
+          if (
+            ARTICLE_PATTERNS.some(
+              (p) => titleLower.startsWith(p) || titleLower.includes(p)
+            )
+          ) {
+            return false;
+          }
+          return !sorted.some((f) => f.url === r.url);
+        })
+        .sort((a, b) => {
+          const pa = CATEGORY_PRIORITY[a.signalCategory] ?? 99;
+          const pb = CATEGORY_PRIORITY[b.signalCategory] ?? 99;
+          if (pa !== pb) return pa - pb;
+          const da = a.publishedDate
+            ? new Date(a.publishedDate).getTime()
+            : 0;
+          const db = b.publishedDate
+            ? new Date(b.publishedDate).getTime()
+            : 0;
+          return db - da;
+        });
+      sorted = [...sorted, ...fallback].slice(0, 25);
+    } else {
+      sorted = sorted.slice(0, 25);
+    }
+
+    const signals = sorted.map((r) => {
+      const url = String(r.url ?? "");
+      let host = "";
+      try {
+        host = new URL(url).hostname.replace(/^www\./i, "");
+      } catch {
+        host = "";
+      }
+
+      const companyName = extractCompanyFromResult(r) ?? "";
+      const publishedDate = r.publishedDate ?? "";
+
+      const postedAgo =
+        publishedDate &&
+        (() => {
+          const days = Math.floor(
+            (Date.now() - new Date(publishedDate).getTime()) /
+              (1000 * 60 * 60 * 24)
+          );
+          if (days === 0) return "Today";
+          if (days <= 7) return `${days}d ago`;
+          if (days <= 30) return `${Math.floor(days / 7)}w ago`;
+          return `${Math.floor(days / 30)}mo ago`;
+        })();
+
+      return {
+        title: String(r.title ?? ""),
+        url,
+        publishedDate,
+        snippet: cleanSnippet(getHighlightText(r)),
+        source: host,
+        signalCategory: r.signalCategory as string,
+        signalLabel: r.signalLabel as string,
+        companyName,
+        postedAgo: (postedAgo as string | null) ?? null,
+      };
+    });
+
     return NextResponse.json({ signals });
-  } catch (e: unknown) {
-    const message = e instanceof Error ? e.message : "Unknown error";
-    return NextResponse.json({ error: message, signals: [] }, { status: 500 });
+  } catch {
+    return NextResponse.json({ signals: [] }, { status: 200 });
   }
 }
+
 

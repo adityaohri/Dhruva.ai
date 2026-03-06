@@ -22,12 +22,15 @@ function getJobTypeParam(jobType: string): string {
   return "FULLTIME";
 }
 
+// JSearch is only invoked when JSEARCH_API_KEY is set (e.g. in Vercel env or .env.local).
+// If the RapidAPI dashboard shows 0 requests, add JSEARCH_API_KEY to your deployment environment.
 async function jsearchRequest(
   query: string,
   employmentType: string
 ): Promise<any[]> {
-  if (!process.env.JSEARCH_API_KEY) {
-    console.warn("[jsearch] JSEARCH_API_KEY is not configured");
+  const apiKey = process.env.JSEARCH_API_KEY?.trim();
+  if (!apiKey) {
+    console.warn("[jsearch] JSEARCH_API_KEY is not set — add it to env to enable JSearch results");
     return [];
   }
 
@@ -42,7 +45,7 @@ async function jsearchRequest(
     const res = await fetch(url.toString(), {
       method: "GET",
       headers: {
-        "X-RapidAPI-Key": process.env.JSEARCH_API_KEY ?? "",
+        "X-RapidAPI-Key": apiKey,
         "X-RapidAPI-Host": "jsearch.p.rapidapi.com",
       },
       cache: "no-store",
@@ -127,6 +130,12 @@ export async function POST(req: NextRequest) {
       "position has been filled",
       "application closed",
       "no longer available",
+      "job has been closed",
+      "closed or removed",
+      "taken down",
+      "job not found",
+      "listing has expired",
+      "removed by the administrator",
     ];
 
     const SENIOR_INDICATORS = [
