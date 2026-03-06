@@ -3,7 +3,11 @@
 import { useState, useCallback, useEffect } from "react";
 import Link from "next/link";
 import { createClient as createSupabaseClient } from "@/lib/supabase/client";
-import { scoreAgainstIndustry, type IndustryName } from "@/lib/industryKeywords";
+import {
+  scoreAgainstIndustry,
+  getTopCompanies,
+  type IndustryName,
+} from "@/lib/industryKeywords";
 const CREAM = "#FDFBF1";
 const PURPLE = "#3C2A6A";
 
@@ -357,10 +361,18 @@ const isLinkedInPost = (r: OpportunityResult): boolean => {
 };
 
 const isJobListing = (r: OpportunityResult): boolean => {
+  // Reject results with no usable URL
+  if (!r.url || r.url.trim() === "") return false;
+
   try {
     const url = new URL(r.url);
     const host = url.hostname.toLowerCase().replace("www.", "");
     const pathname = url.pathname.toLowerCase();
+    const fullUrl = r.url.toLowerCase();
+
+    // Block non-India locale ATS pages (German, French etc)
+    const NON_INDIA_LOCALES = ["/de/", "/de-de/", "/fr/", "/es/"];
+    if (NON_INDIA_LOCALES.some((p) => fullUrl.includes(p))) return false;
 
     // Hard block all known news domains
     if (JUNK_DOMAINS.some((d) => host === d || host.endsWith("." + d))) {
@@ -404,7 +416,8 @@ const isJobListing = (r: OpportunityResult): boolean => {
     if (host.includes("ey.com") && !pathname.includes("/careers/")) return false;
     if (host.includes("kpmg.com") && !pathname.includes("/careers/")) return false;
   } catch {
-    // ignore URL parse errors – fall through to heuristics
+    // If URL parsing fails, treat as invalid
+    return false;
   }
 
   if (isLinkedInPost(r)) return false;
@@ -1448,6 +1461,34 @@ export default function OpportunityPage() {
 
   const yourMatches = results.filter(isJobListing);
 
+  const deduplicatedMatches = (() => {
+    const seen = new Map<string, OpportunityResult>();
+    for (const r of yourMatches) {
+      const company = (resolveCompany(r) ?? r.company ?? "")
+        .toLowerCase()
+        .replace(/[^a-z0-9]/g, "")
+        .slice(0, 15);
+      const titleWords = (r.title ?? "")
+        .toLowerCase()
+        .replace(/[^a-z0-9\s]/g, " ")
+        .split(" ")
+        .filter((w) => w.length > 3)
+        .sort()
+        .slice(0, 4)
+        .join(" ");
+      const key = `${company}__${titleWords}`;
+      if (!seen.has(key)) {
+        seen.set(key, r);
+      } else {
+        const existing = seen.get(key)!;
+        if ((r.snippet ?? "").length > (existing.snippet ?? "").length) {
+          seen.set(key, r);
+        }
+      }
+    }
+    return Array.from(seen.values());
+  })();
+
   const hiringSignals = results.filter((r) => {
     if (r.bucket === "C") return true;
     if (isLinkedInPost(r)) return true;
@@ -1473,11 +1514,47 @@ export default function OpportunityPage() {
     return isPositiveSignal(r);
   });
 
+  const TIER1_SIGNAL_COMPANIES = getTopCompanies(
+    filters.industry as IndustryName,
+    8
+  ).map((c) => c.toLowerCase());
+
+  const hiringSignalsSorted = [...hiringSignals].sort((a, b) => {
+    const aText = `${(a.title ?? "")} ${(a.company ?? "")} ${(a.snippet ?? "")}`.toLowerCase();
+    const bText = `${(b.title ?? "")} ${(b.company ?? "")} ${(b.snippet ?? "")}`.toLowerCase();
+
+    const aIsTier1 = TIER1_SIGNAL_COMPANIES.some((c) => aText.includes(c));
+    const bIsTier1 = TIER1_SIGNAL_COMPANIES.some((c) => bText.includes(c));
+    if (aIsTier1 && !bIsTier1) return -1;
+    if (!aIsTier1 && bIsTier1) return 1;
+
+    const bp = benchmarkProfile;
+    const sa = scoreResult(
+      a,
+      filters.industry,
+      filters.jobType,
+      filters.experience,
+      bp?.top_skills ?? null,
+      bp?.latest_company ?? null
+    );
+    const sb = scoreResult(
+      b,
+      filters.industry,
+      filters.jobType,
+      filters.experience,
+      bp?.top_skills ?? null,
+      bp?.latest_company ?? null
+    );
+    return sb - sa;
+  });
+
   const scoreResult = (
     r: OpportunityResult,
     industry: string,
     jobType: string,
-    experience: string
+    experience: string,
+    cvSkills?: string | null,
+    cvExperience?: string | null
   ): number => {
     const text = `${r.title ?? ""} ${r.snippet ?? ""} ${r.company ?? ""}`.toLowerCase();
     let score = 0;
@@ -1491,11 +1568,79 @@ export default function OpportunityPage() {
       score -= 20;
     }
 
+    // CV skills match — high weight
+    if (cvSkills) {
+      const rawSkills: any = cvSkills as any;
+      let skillsSource: string | null = null;
+      if (Array.isArray(rawSkills)) {
+        skillsSource = rawSkills
+          .map((s: any) => String(s).trim())
+          .filter(Boolean)
+          .join(", ");
+      } else if (typeof rawSkills === "string") {
+        skillsSource = rawSkills;
+      }
+      if (skillsSource) {
+        const skillTokens = skillsSource
+          .toLowerCase()
+          .split(/[,|;\n]+/)
+          .map((s) => s.trim())
+          .filter((s) => s.length > 2);
+        const skillMatches = skillTokens.filter((sk) => text.includes(sk)).length;
+        score += skillMatches * 8;
+      }
+    }
+
+    // CV experience / past companies match
+    if (cvExperience) {
+      const rawExp: any = cvExperience as any;
+      let expSource: string | null = null;
+      if (Array.isArray(rawExp)) {
+        expSource = rawExp
+          .map((s: any) => String(s).trim())
+          .filter(Boolean)
+          .join(", ");
+      } else if (typeof rawExp === "string") {
+        expSource = rawExp;
+      }
+      if (expSource) {
+        const expTokens = expSource
+          .toLowerCase()
+          .split(/[,|;\n]+/)
+          .map((s) => s.trim())
+          .filter((s) => s.length > 2);
+        const expMatches = expTokens.filter((ex) => text.includes(ex)).length;
+        score += expMatches * 6;
+      }
+    }
+
+    // Experience level seniority match — penalise mismatches
+    const expLower = (experience || "").toLowerCase();
+    const isJunior =
+      expLower.includes("fresher") || expLower.includes("0-1");
+    const isSenior = expLower.includes("5+");
+
+    const textHasSeniorTerms =
+      text.includes("senior") ||
+      text.includes(" vp ") ||
+      text.includes("director") ||
+      text.includes("head of");
+    const textHasJuniorTerms =
+      text.includes("intern") ||
+      text.includes("fresher") ||
+      text.includes("entry level");
+
+    const seniorityMismatch =
+      (isJunior && textHasSeniorTerms) || (isSenior && textHasJuniorTerms);
+    if (seniorityMismatch) {
+      score -= 25;
+    }
+
     // Light bonus if job type and experience string appear in text
     if (jobType && text.includes(jobType.toLowerCase())) {
       score += 10;
     }
-    if (experience && text.includes(experience.toLowerCase())) {
+    if (experience && text.toLowerCase().includes(experience.toLowerCase())) {
       score += 10;
     }
 
@@ -1558,7 +1703,8 @@ export default function OpportunityPage() {
     E: 5,
   };
 
-  const sortedMatches = [...yourMatches].sort((a, b) => {
+  const sortedMatches = [...deduplicatedMatches].sort((a, b) => {
+    const bp = benchmarkProfile;
     // Priority 1: Direct ATS/company career pages always first
     const ta = getSourceTier(a);
     const tb = getSourceTier(b);
@@ -1575,9 +1721,23 @@ export default function OpportunityPage() {
       if (pb !== pa) return pb - pa;
     }
 
-    // Priority 3: Industry relevance score
-    const sa = scoreResult(a, filters.industry, filters.jobType, filters.experience);
-    const sb = scoreResult(b, filters.industry, filters.jobType, filters.experience);
+    // Priority 3: Industry + CV relevance score
+    const sa = scoreResult(
+      a,
+      filters.industry,
+      filters.jobType,
+      filters.experience,
+      bp?.top_skills ?? null,
+      bp?.latest_company ?? null
+    );
+    const sb = scoreResult(
+      b,
+      filters.industry,
+      filters.jobType,
+      filters.experience,
+      bp?.top_skills ?? null,
+      bp?.latest_company ?? null
+    );
     if (sb !== sa) return sb - sa;
 
     // Priority 4: Bucket rank (A before B before C...)
@@ -1692,7 +1852,7 @@ export default function OpportunityPage() {
             Hiring Signals
           </h2>
           <div className="space-y-3">
-            {hiringSignals.slice(0, signalsLimit).map((r, i) => (
+          {hiringSignalsSorted.slice(0, signalsLimit).map((r, i) => (
               <div
                 key={`${r.url}-${i}`}
                 className="rounded-2xl border border-[#E5E7EB] bg-white p-4"

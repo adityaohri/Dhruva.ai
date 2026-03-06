@@ -405,26 +405,82 @@ function buildBucketC(userFilters: UserFilters): SerpQuery[] {
   const industry = (userFilters.industries?.[0] ?? "Other") as IndustryName;
   const role = userFilters.role || "analyst";
   const location = userFilters.locations?.[0] ?? "India";
-  const jobType = userFilters.jobTypes?.[0] ?? "";
 
-  const signals = getSignalKeywords(industry).slice(0, 4);
-  const primarySignal = signals[0] ?? "hiring";
-  const roleVariants = getRepoRoleVariants(industry).slice(0, 2);
+  const topCompanies = getTopCompanies(industry, 12);
+  const roleVariants = getRepoRoleVariants(industry).slice(0, 3);
   const primaryRole = roleVariants[0] ?? role;
 
-  return [
-    {
+  const companyStr4 = topCompanies.slice(0, 4).map((c) => `"${c}"`).join(" OR ");
+  const companyStr8 = topCompanies.slice(4, 8).map((c) => `"${c}"`).join(" OR ");
+  const companyStr12 = topCompanies.slice(8, 12).map((c) => `"${c}"`).join(" OR ");
+
+  const queries: SerpQuery[] = [];
+
+  if (companyStr4) {
+    queries.push({
       engine: "google",
       bucket: "C",
-      bucketLabel: `LinkedIn hiring signals: ${industry}`,
-      priority: 3,
+      bucketLabel: `LinkedIn hiring: top ${industry} firms (1-4)`,
+      priority: 2,
       params: {
-        q: `site:linkedin.com/posts "hiring" "${primaryRole}" "${location}" after:2026-01-01`,
+        q: `site:linkedin.com (${companyStr4}) ("hiring" OR "we are looking for" OR "open roles") "${primaryRole}"`,
         gl: "in",
         hl: "en",
         num: 10,
+        tbs: "qdr:m6",
       },
-      rationale: `LinkedIn posts where people are explicitly "hiring" for ${primaryRole} in ${location}`,
+      rationale: `LinkedIn hiring posts for ${primaryRole} at top ${industry} firms (1-4)`,
+    });
+  }
+
+  if (companyStr8) {
+    queries.push({
+      engine: "google",
+      bucket: "C",
+      bucketLabel: `LinkedIn hiring: top ${industry} firms (5-8)`,
+      priority: 2,
+      params: {
+        q: `site:linkedin.com (${companyStr8}) ("hiring" OR "we are looking for" OR "open roles") "${primaryRole}"`,
+        gl: "in",
+        hl: "en",
+        num: 10,
+        tbs: "qdr:m6",
+      },
+      rationale: `LinkedIn hiring posts for ${primaryRole} at top ${industry} firms (5-8)`,
+    });
+  }
+
+  if (companyStr12) {
+    queries.push({
+      engine: "google",
+      bucket: "C",
+      bucketLabel: `LinkedIn hiring: top ${industry} firms (9-12)`,
+      priority: 3,
+      params: {
+        q: `site:linkedin.com (${companyStr12}) ("hiring" OR "referral" OR "open roles")`,
+        gl: "in",
+        hl: "en",
+        num: 10,
+        tbs: "qdr:m6",
+      },
+      rationale: `LinkedIn hiring/referral posts at next-tier ${industry} firms (9-12)`,
+    });
+  }
+
+  queries.push(
+    {
+      engine: "google",
+      bucket: "C",
+      bucketLabel: `LinkedIn hiring: ${primaryRole} India`,
+      priority: 3,
+      params: {
+        q: `site:linkedin.com/posts "hiring" "${primaryRole}" India after:2025-09-01`,
+        gl: "in",
+        hl: "en",
+        num: 10,
+        tbs: "qdr:m6",
+      },
+      rationale: `Role-specific LinkedIn posts explicitly "hiring" for ${primaryRole} in India`,
     },
     {
       engine: "google",
@@ -432,27 +488,17 @@ function buildBucketC(userFilters: UserFilters): SerpQuery[] {
       bucketLabel: `LinkedIn referrals: ${industry}`,
       priority: 3,
       params: {
-        q: `site:linkedin.com "referral" "open roles" "${primarySignal}" "${location}"`,
+        q: `site:linkedin.com (${companyStr4}) "referral" "open roles" India`,
         gl: "in",
         hl: "en",
         num: 10,
+        tbs: "qdr:m6",
       },
-      rationale: `LinkedIn referral posts mentioning open roles and ${primarySignal} in ${location}`,
-    },
-    {
-      engine: "google",
-      bucket: "C",
-      bucketLabel: `LinkedIn we are hiring: ${industry}`,
-      priority: 3,
-      params: {
-        q: `site:linkedin.com "we are looking for" "${primaryRole}" India`,
-        gl: "in",
-        hl: "en",
-        num: 10,
-      },
-      rationale: `LinkedIn posts with "we are looking for" and ${primaryRole} in India`,
-    },
-  ];
+      rationale: `Referral-oriented LinkedIn posts from top ${industry} firms mentioning open roles in India`,
+    }
+  );
+
+  return queries;
 }
 
 /**
@@ -555,6 +601,7 @@ function buildBucketE(userFilters: UserFilters): SerpQuery[] {
         gl: "in",
         hl: "en",
         num: 10,
+        tbs: "qdr:m6",
       },
       rationale: `Positive ${industry} hiring/funding/expansion news in ${location}`,
     },
@@ -568,6 +615,7 @@ function buildBucketE(userFilters: UserFilters): SerpQuery[] {
         gl: "in",
         hl: "en",
         num: 10,
+        tbs: "qdr:m6",
       },
       rationale: `Company-specific ${industry} signals for top companies (${companyStr})`,
     },
@@ -730,16 +778,36 @@ export async function deepFetchJob(
 // DEDUPLICATION
 // ─────────────────────────────────────────────────────────────────────────────
 
+function normaliseForDedupKey(str: string): string {
+  return str
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .replace(/\b(intern|internship|the|a|an|at|in|for|of|and|or)\b/g, "")
+    .trim()
+    .split(" ")
+    .sort()
+    .join(" ");
+}
+
 /**
  * Deduplicate jobs across all buckets.
- * Key: normalised title + company.
+ * Key: fuzzy-normalised title + company.
  * When duplicate found, keep the record with more description depth.
  */
 export function deduplicateJobs(jobs: EnrichedJobResult[]): EnrichedJobResult[] {
   const seen = new Map<string, EnrichedJobResult>();
 
   for (const job of jobs) {
-    const key = `${job.title.toLowerCase().trim()}__${job.company_name.toLowerCase().trim()}`;
+    const titleKey = normaliseForDedupKey(job.title)
+      .split(" ")
+      .slice(0, 5)
+      .join(" ");
+    const companyKey = job.company_name
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, "")
+      .slice(0, 15);
+    const key = `${companyKey}__${titleKey}`;
     const existing = seen.get(key);
 
     if (!existing) {

@@ -461,6 +461,54 @@ function mapToUserFilters(filters: SentinelFilters): UserFilters {
   };
 }
 
+function isValidApplyUrl(url: string): boolean {
+  if (!url || typeof url !== "string") return false;
+  try {
+    const u = new URL(url);
+    const host = u.hostname.toLowerCase();
+    const path = u.pathname.toLowerCase();
+
+    // Block non-job file types
+    if (path.endsWith(".pdf") && !path.includes("job")) return false;
+
+    // Block known dead-link patterns
+    const DEAD_LINK_PATTERNS = [
+      "/404",
+      "/not-found",
+      "/error",
+      "/page-not-found",
+      "/job-expired",
+      "/expired",
+      "/closed",
+      "/filled",
+    ];
+    if (DEAD_LINK_PATTERNS.some((p) => path.includes(p))) return false;
+
+    // Block non-Indian/irrelevant locale ATS pages
+    const lowerUrl = url.toLowerCase();
+    const NON_INDIA_LOCALES = [
+      "/de/",
+      "/de-de/",
+      "/fr/",
+      "/es/",
+      "/pt/",
+      "/nl/",
+      "/ja/",
+      "/ko/",
+      "/zh/",
+      "?lang=de",
+      "?lang=fr",
+      "?locale=de",
+      "?locale=fr",
+    ];
+    if (NON_INDIA_LOCALES.some((p) => lowerUrl.includes(p))) return false;
+
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 async function serpApiCall(params: Record<string, string | number | boolean>) {
   const apiKey = process.env.SERPAPI_API_KEY;
   if (!apiKey) {
@@ -589,26 +637,35 @@ export async function runSerpQueryEngine(
   const deduped: SerpEnrichedJobResult[] = deduplicateJobs(enrichedByBucket);
 
   // Map EnrichedJobResult into the legacy HuntResult shape used by the rest of Sentinel.
-  const huntResults: HuntResult[] = deduped.map((job) => {
-    const applyUrl =
-      job.applyUrl ||
-      job.apply_options?.[0]?.link ||
-      "";
-    const brand = extractBrandFromUrl(applyUrl);
-    const snippet =
-      job.fullDescription?.slice(0, 1200) ||
-      job.description?.slice(0, 400) ||
-      "";
-    const source = job.source || job.bucket;
-    return {
-      title: job.title || "Job",
-      url: applyUrl || "",
-      snippet,
-      source: String(source),
-      company: job.company_name?.trim() || brand || null,
-      bucket: job.bucket,
-    };
-  }).filter((r) => r.url);
+  const huntResults: HuntResult[] = deduped
+    .map((job) => {
+      const applyUrl =
+        job.applyUrl ||
+        job.apply_options?.[0]?.link ||
+        "";
+
+      // Drop obviously bad / non-Indian / expired links
+      if (applyUrl && !isValidApplyUrl(applyUrl)) {
+        return null;
+      }
+
+      const brand = extractBrandFromUrl(applyUrl);
+      const snippet =
+        job.fullDescription?.slice(0, 1200) ||
+        job.description?.slice(0, 400) ||
+        "";
+      const source = job.source || job.bucket;
+
+      return {
+        title: job.title || "Job",
+        url: applyUrl || "",
+        snippet,
+        source: String(source),
+        company: job.company_name?.trim() || brand || null,
+        bucket: job.bucket,
+      } as HuntResult | null;
+    })
+    .filter((r): r is HuntResult => !!(r && r.url));
 
   return huntResults;
 }
