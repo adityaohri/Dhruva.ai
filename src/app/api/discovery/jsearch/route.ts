@@ -1,17 +1,67 @@
 import { NextRequest, NextResponse } from "next/server";
 
-const JSEARCH_DEFAULT_HOST = "https://jsearch.p.rapidapi.com";
-const JSEARCH_PATH = "/search";
+type JSearchProvider = "openwebninja" | "rapidapi";
 
-function getJSearchConfig(): { apiKey: string; baseUrl: string } | null {
-  const key =
+interface JSearchConfig {
+  apiKey: string;
+  baseUrl: string;
+  provider: JSearchProvider;
+}
+
+function getJSearchConfig(): JSearchConfig | null {
+  // Check all possible env var names
+  const openWebNinjaKey =
+    process.env.OPENWEBNINJA_API_KEY?.trim() ||
     process.env.JSEARCH_API_KEY?.trim() ||
-    process.env.RAPIDAPI_KEY?.trim() ||
     "";
-  if (!key) return null;
-  const baseUrl =
-    process.env.JSEARCH_BASE_URL?.trim()?.replace(/\/$/, "") || JSEARCH_DEFAULT_HOST;
-  return { apiKey: key, baseUrl };
+  const rapidApiKey = process.env.RAPIDAPI_KEY?.trim() || "";
+
+  console.log("[jsearch] Config check - JSEARCH_API_KEY exists:", Boolean(process.env.JSEARCH_API_KEY));
+  console.log("[jsearch] Config check - OPENWEBNINJA_API_KEY exists:", Boolean(process.env.OPENWEBNINJA_API_KEY));
+  console.log("[jsearch] Config check - RAPIDAPI_KEY exists:", Boolean(process.env.RAPIDAPI_KEY));
+
+  // If user explicitly set JSEARCH_PROVIDER, use that
+  const providerHint = (process.env.JSEARCH_PROVIDER ?? "").toLowerCase();
+
+  if (providerHint === "rapidapi" && rapidApiKey) {
+    console.log("[jsearch] Using RapidAPI (explicit)");
+    return {
+      apiKey: rapidApiKey,
+      baseUrl: "https://jsearch.p.rapidapi.com/search",
+      provider: "rapidapi",
+    };
+  }
+
+  if (providerHint === "openwebninja" && openWebNinjaKey) {
+    console.log("[jsearch] Using OpenWebNinja (explicit)");
+    return {
+      apiKey: openWebNinjaKey,
+      baseUrl: "https://api.openwebninja.com/jsearch/search",
+      provider: "openwebninja",
+    };
+  }
+
+  // Auto-detect: prefer OpenWeb Ninja if key is set
+  if (openWebNinjaKey) {
+    console.log("[jsearch] Using OpenWebNinja (auto-detected)");
+    return {
+      apiKey: openWebNinjaKey,
+      baseUrl: "https://api.openwebninja.com/jsearch/search",
+      provider: "openwebninja",
+    };
+  }
+
+  if (rapidApiKey) {
+    console.log("[jsearch] Using RapidAPI (auto-detected)");
+    return {
+      apiKey: rapidApiKey,
+      baseUrl: "https://jsearch.p.rapidapi.com/search",
+      provider: "rapidapi",
+    };
+  }
+
+  console.log("[jsearch] No API key found!");
+  return null;
 }
 
 function getExperienceTerms(experience: string): string {
@@ -35,39 +85,47 @@ function getJobTypeParam(jobType: string): string {
 }
 
 async function jsearchRequest(
-  config: { apiKey: string; baseUrl: string },
+  config: JSearchConfig,
   query: string,
   employmentType: string
 ): Promise<any[]> {
-  const endpoint = config.baseUrl.endsWith(JSEARCH_PATH)
-    ? config.baseUrl
-    : `${config.baseUrl}${JSEARCH_PATH}`;
-  const url = new URL(endpoint);
+  const url = new URL(config.baseUrl);
   url.searchParams.set("query", query);
   url.searchParams.set("num_pages", "3");
   url.searchParams.set("date_posted", "month");
   url.searchParams.set("employment_types", employmentType);
   url.searchParams.set("country", "IN");
 
-  const host =
-    config.baseUrl.includes("rapidapi") ? "jsearch.p.rapidapi.com" : new URL(config.baseUrl).host;
+  // Build headers based on provider
+  const headers: Record<string, string> =
+    config.provider === "openwebninja"
+      ? { "x-api-key": config.apiKey }
+      : {
+          "X-RapidAPI-Key": config.apiKey,
+          "X-RapidAPI-Host": "jsearch.p.rapidapi.com",
+        };
+
+  console.log("[jsearch] Making request to:", url.toString());
+  console.log("[jsearch] Provider:", config.provider);
+  console.log("[jsearch] API Key prefix:", config.apiKey.slice(0, 10) + "...");
 
   try {
     const res = await fetch(url.toString(), {
       method: "GET",
-      headers: {
-        "X-RapidAPI-Key": config.apiKey,
-        "X-RapidAPI-Host": host,
-      },
+      headers,
       cache: "no-store",
     });
 
+    console.log("[jsearch] Response status:", res.status);
+
     if (!res.ok) {
-      console.warn("[jsearch] request failed", res.status, await res.text());
+      const errorText = await res.text();
+      console.warn("[jsearch] request failed", res.status, errorText);
       return [];
     }
 
     const json = (await res.json()) as { data?: any[] };
+    console.log("[jsearch] Results count:", json.data?.length ?? 0);
     return json.data ?? [];
   } catch (e) {
     console.warn("[jsearch] request error", e);
@@ -79,6 +137,7 @@ export async function POST(req: NextRequest) {
   const config = getJSearchConfig();
   const headers = new Headers();
   headers.set("X-JSearch-Configured", config ? "true" : "false");
+  headers.set("X-JSearch-Provider", config?.provider ?? "none");
 
   try {
     const body = (await req.json()) as {
@@ -92,10 +151,14 @@ export async function POST(req: NextRequest) {
 
     if (!config) {
       console.warn(
-        "[jsearch] No API key: set JSEARCH_API_KEY or RAPIDAPI_KEY in env (and redeploy on Vercel)"
+        "[jsearch] No API key: set JSEARCH_API_KEY (OpenWeb Ninja) or RAPIDAPI_KEY in env (and redeploy on Vercel)"
       );
       return NextResponse.json(
-        { jobs: [], _debug: "JSEARCH_API_KEY or RAPIDAPI_KEY not set in server env" },
+        {
+          jobs: [],
+          _debug:
+            "Set JSEARCH_API_KEY (for OpenWeb Ninja) or RAPIDAPI_KEY (for RapidAPI) in server env",
+        },
         { status: 200, headers }
       );
     }
