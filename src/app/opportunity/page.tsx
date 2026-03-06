@@ -1211,9 +1211,14 @@ export default function OpportunityPage() {
           snippet: String(s.snippet ?? ""),
           source: String(s.source ?? "News"),
           isDirect: false,
-          company: null,
+          company: (s.companyName ?? "").trim() || null,
           bucket: "E",
-        })
+          location: "India",
+          posted_at: s.postedAgo ?? null,
+          ...(s.signalLabel && { signalLabel: s.signalLabel }),
+          ...(s.signalCategory && { signalCategory: s.signalCategory }),
+          ...(s.postedAgo && { postedAgo: s.postedAgo }),
+        } as OpportunityResult)
       );
 
       const hiringData = hiringResults ?? {};
