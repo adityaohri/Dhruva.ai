@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import Exa from "exa-js";
+import { getSignalKeywords, type IndustryName } from "@/lib/industryKeywords";
 
 const exa = new Exa(process.env.EXA_API_KEY || "");
 
@@ -168,10 +169,22 @@ export async function POST(req: NextRequest) {
     sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
     const startPublishedDate = sixMonthsAgo.toISOString().split("T")[0];
 
-    const industryQuery = `${industry} company ${location} funding expansion hiring new office 2025 2026`;
+    const industryKey = (industry || "Other") as IndustryName;
+    const signalKeywords = getSignalKeywords(industryKey);
+    const signalsPart = signalKeywords
+      .slice(0, 5)
+      .map((s) => `"${s}"`)
+      .join(" OR ");
+    const basePositive =
+      'funding OR raises OR "new office" OR expands OR hiring OR headcount OR investment OR launches OR appoints';
+    const triggerQuery = [signalsPart, basePositive]
+      .filter(Boolean)
+      .join(" OR ");
+
+    const industryQuery = `(${triggerQuery}) ${industry} ${location} 2025 2026`;
     const companiesPart = topCompanies.slice(0, 6).join(" OR ");
     const companyQuery = companiesPart
-      ? `${companiesPart} hiring expansion funding ${location} 2025 2026`
+      ? `(${companiesPart}) (${triggerQuery}) ${location} 2025 2026`
       : industryQuery;
 
     const [industrySearch, companySearch] = await Promise.all([

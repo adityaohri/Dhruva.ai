@@ -405,7 +405,7 @@ const CREDIBLE_ALLOWLIST = [
   "amazon.jobs",
   "metacareers.com",
   "jobs.apple.com",
-  "linkedin.com/jobs",
+  "linkedin.com",
 
   // Quality Indian job boards
   "naukri.com",
@@ -1046,10 +1046,17 @@ export default function OpportunityPage() {
       }
       const baseResults: OpportunityResult[] = data.results || [];
 
-      // Remove legacy Bucket C/E signals coming from SerpApi – will be replaced by Exa.
       const withoutLegacySignals = baseResults.filter(
         (r) => r.bucket !== "C" && r.bucket !== "E"
       );
+
+      const serpHiringSignals: OpportunityResult[] = baseResults
+        .filter((r) => r.bucket === "C")
+        .map((r) => ({ ...r, source: r.source ?? "LinkedIn" }));
+
+      const serpRadarSignals: OpportunityResult[] = baseResults
+        .filter((r) => r.bucket === "E")
+        .map((r) => ({ ...r, source: r.source ?? "News" }));
 
       const radarSignals: OpportunityResult[] = (radarResults?.signals ?? []).map(
         (s: any) => ({
@@ -1165,8 +1172,12 @@ export default function OpportunityPage() {
       const merged: OpportunityResult[] = [
         ...withoutLegacySignals,
         ...linkedInJobsMapped,
+        // On The Radar — Exa + SerpApi merged
         ...radarSignals,
+        ...serpRadarSignals,
+        // Hiring Signals — Exa + SerpApi merged
         ...hiringSignalsFromApi,
+        ...serpHiringSignals,
       ];
 
       const withIndex = merged.map((r, idx) => ({

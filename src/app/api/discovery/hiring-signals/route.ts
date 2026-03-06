@@ -10,7 +10,7 @@ const LINKEDIN_JOB_PATHS = [
   "/job-apply/",
 ];
 
-const POST_PATHS = ["/posts/", "/pulse/", "/feed/", "/in/"];
+const POST_PATHS = ["/posts/", "/pulse/", "/feed/update/"];
 
 function isLinkedInPost(url: string): boolean {
   const lower = url.toLowerCase();
@@ -141,9 +141,29 @@ export async function POST(req: NextRequest) {
     const jobTypeTerms = getJobTypeTerms(jobType);
     const locationTerm = location || "India";
 
-    const companyQuery = `${companiesPart} "we are hiring" OR "looking for" OR "open role" OR "join our team" ${locationTerm} ${primaryRole} LinkedIn post`;
+    // Broad industry-wide hiring intent — not limited to top companies
+    const companyQuery = [
+      `("we are hiring" OR "we're hiring" OR "now hiring" OR`,
+      `"looking for a" OR "open role" OR "join our team" OR`,
+      `"apply now" OR "drop your CV" OR "DM me")`,
+      rolesPart,
+      locationTerm,
+      industry,
+    ]
+      .filter(Boolean)
+      .join(" ");
 
-    const roleQuery = `"referral" OR "DM me" OR "drop your CV" OR "hiring now" ${rolesPart} ${locationTerm} 2025 2026`;
+    // Referral and mid-tier / startup hiring posts
+    const roleQuery = [
+      `("hiring" OR "referral" OR "open position" OR`,
+      `"we need a" OR "know someone" OR "tag someone")`,
+      rolesPart,
+      locationTerm,
+      `(startup OR "series a" OR "series b" OR "growing team" OR`,
+      `"fast growing" OR "${industry}")`,
+    ]
+      .filter(Boolean)
+      .join(" ");
 
     const jobsQueryParts = [
       roleVariants
@@ -162,26 +182,22 @@ export async function POST(req: NextRequest) {
     const jobsQuery = jobsQueryParts.join(" ");
 
     const [companySearch, roleSearch, jobsSearch] = await Promise.all([
-      exa.search(companyQuery, {
+      exa.searchAndContents(companyQuery, {
         type: "auto",
         numResults: 25,
         includeDomains: ["linkedin.com"],
         startPublishedDate: threeMonthsAgoISODate,
-        contents: {
-          highlights: {
-            maxCharacters: 4000,
-          },
+        highlights: {
+          maxCharacters: 4000,
         },
       } as any),
-      exa.search(roleQuery, {
+      exa.searchAndContents(roleQuery, {
         type: "auto",
         numResults: 25,
         includeDomains: ["linkedin.com"],
         startPublishedDate: threeMonthsAgoISODate,
-        contents: {
-          highlights: {
-            maxCharacters: 4000,
-          },
+        highlights: {
+          maxCharacters: 4000,
         },
       } as any),
       exa.searchAndContents(jobsQuery, {
@@ -216,8 +232,73 @@ export async function POST(req: NextRequest) {
       r?.url && POST_PATHS.some((p) => String(r.url).includes(p))
     );
 
+    const OPINION_PATTERNS = [
+      "just bragged",
+      "called bullshit",
+      "nobody's saying",
+      "hot take",
+      "unpopular opinion",
+      "went viral",
+      "25,000",
+      "fired back",
+      "comments",
+      "reactions to",
+      "what nobody tells",
+      "the truth about",
+    ];
+
+    const hasHiringIntent = (title: string, snippet: string): boolean => {
+      const combined = `${title} ${snippet}`.toLowerCase();
+      const HIRING_WORDS = [
+        "hiring",
+        "looking for",
+        "open role",
+        "open position",
+        "join us",
+        "apply",
+        "referral",
+        "vacancy",
+        "recruit",
+        "we need",
+        "opportunity",
+        "drop your cv",
+        "dm me",
+      ];
+      return HIRING_WORDS.some((w) => combined.includes(w));
+    };
+
+    const filteredPostSignals = allPostSignals.filter((r: any) => {
+      const url = String(r.url ?? "").toLowerCase();
+      const title = String(r.title ?? "").toLowerCase();
+      const highlight =
+        Array.isArray(r.highlights) && r.highlights.length > 0
+          ? String(r.highlights[0])
+          : String((r as any).text ?? "");
+      const snippet = cleanSnippet(highlight);
+      const combined = `${title} ${snippet}`;
+
+      // Block profile pages — /in/ with no post sub-path
+      if (
+        url.includes("linkedin.com/in/") &&
+        !POST_PATHS.some((p) => url.includes(p))
+      ) {
+        return false;
+      }
+
+      // Block opinion / viral posts
+      if (OPINION_PATTERNS.some((p) => combined.includes(p))) return false;
+
+      // Must have hiring intent
+      if (!hasHiringIntent(title, snippet)) return false;
+
+      // Must have real snippet content
+      if (snippet.length < 60) return false;
+
+      return true;
+    });
+
     const seenSignalUrls = new Set<string>();
-    const signals = allPostSignals
+    const signals = filteredPostSignals
       .filter((r: any) => {
         if (!r?.url) return false;
         const url = String(r.url);
