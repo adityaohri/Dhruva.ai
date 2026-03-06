@@ -1595,43 +1595,14 @@ export default function OpportunityPage() {
     8
   ).map((c) => c.toLowerCase());
 
-  const hiringSignalsSorted = [...hiringSignals].sort((a, b) => {
-    const aText = `${(a.title ?? "")} ${(a.company ?? "")} ${(a.snippet ?? "")}`.toLowerCase();
-    const bText = `${(b.title ?? "")} ${(b.company ?? "")} ${(b.snippet ?? "")}`.toLowerCase();
-
-    const aIsTier1 = TIER1_SIGNAL_COMPANIES.some((c) => aText.includes(c));
-    const bIsTier1 = TIER1_SIGNAL_COMPANIES.some((c) => bText.includes(c));
-    if (aIsTier1 && !bIsTier1) return -1;
-    if (!aIsTier1 && bIsTier1) return 1;
-
-    const bp = benchmarkProfile;
-    const sa = scoreResult(
-      a,
-      filters.industry,
-      filters.jobType,
-      filters.experience,
-      bp?.top_skills ?? null,
-      bp?.latest_company ?? null
-    );
-    const sb = scoreResult(
-      b,
-      filters.industry,
-      filters.jobType,
-      filters.experience,
-      bp?.top_skills ?? null,
-      bp?.latest_company ?? null
-    );
-    return sb - sa;
-  });
-
-  const scoreResult = (
+  function scoreResult(
     r: OpportunityResult,
     industry: string,
     jobType: string,
     experience: string,
     cvSkills?: string | null,
     cvExperience?: string | null
-  ): number => {
+  ): number {
     const text = `${r.title ?? ""} ${r.snippet ?? ""} ${r.company ?? ""}`.toLowerCase();
     let score = 0;
 
@@ -1721,7 +1692,36 @@ export default function OpportunityPage() {
     }
 
     return score;
-  };
+  }
+
+  const hiringSignalsSorted = [...hiringSignals].sort((a, b) => {
+    const aText = `${(a.title ?? "")} ${(a.company ?? "")} ${(a.snippet ?? "")}`.toLowerCase();
+    const bText = `${(b.title ?? "")} ${(b.company ?? "")} ${(b.snippet ?? "")}`.toLowerCase();
+
+    const aIsTier1 = TIER1_SIGNAL_COMPANIES.some((c) => aText.includes(c));
+    const bIsTier1 = TIER1_SIGNAL_COMPANIES.some((c) => bText.includes(c));
+    if (aIsTier1 && !bIsTier1) return -1;
+    if (!aIsTier1 && bIsTier1) return 1;
+
+    const bp = benchmarkProfile;
+    const sa = scoreResult(
+      a,
+      filters.industry,
+      filters.jobType,
+      filters.experience,
+      bp?.top_skills ?? null,
+      bp?.latest_company ?? null
+    );
+    const sb = scoreResult(
+      b,
+      filters.industry,
+      filters.jobType,
+      filters.experience,
+      bp?.top_skills ?? null,
+      bp?.latest_company ?? null
+    );
+    return sb - sa;
+  });
 
   const getSourceTier = (r: OpportunityResult): number => {
     try {
