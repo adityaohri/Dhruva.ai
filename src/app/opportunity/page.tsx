@@ -1422,9 +1422,13 @@ export default function OpportunityPage() {
       });
 
       const jsearchJobs = (jsearchResults as any)?.jobs ?? [];
-      if (process.env.NODE_ENV === "development" && jsearchJobs.length === 0 && (jsearchResults as any)?._debug) {
-        console.warn("[Opportunity] JSearch:", (jsearchResults as any)._debug);
-      }
+      const jsearchMeta = (jsearchResults as any)?._meta;
+      
+      // Always log JSearch response for debugging
+      console.log("[Opportunity] JSearch response:", {
+        jobsCount: jsearchJobs.length,
+        meta: jsearchMeta,
+      });
       const jsearchMapped: OpportunityResult[] = jsearchJobs.map(
         (job: any, idx: number) => ({
           ...(job as OpportunityResult),

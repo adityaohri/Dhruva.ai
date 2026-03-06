@@ -362,10 +362,25 @@ export async function POST(req: NextRequest) {
       };
     });
 
-    const payload: { jobs: any[]; _meta?: { raw: number; afterDedup: number; afterFilters: number } } = { jobs };
-    if (jobs.length === 0) {
-      payload._meta = { raw: rawCount, afterDedup: dedupedByUrl.length, afterFilters };
-    }
+    // Always include debug meta for troubleshooting
+    const payload = {
+      jobs,
+      _meta: {
+        raw: rawCount,
+        afterDedup: dedupedByUrl.length,
+        afterFilters,
+        finalCount: jobs.length,
+        queries: [query1.slice(0, 50), query2.slice(0, 50), query3.slice(0, 50)],
+      },
+    };
+    
+    console.log("[jsearch] Final response:", {
+      raw: rawCount,
+      afterDedup: dedupedByUrl.length,
+      afterFilters,
+      finalJobs: jobs.length,
+    });
+    
     return NextResponse.json(payload, { headers });
   } catch (e: unknown) {
     console.warn("[jsearch] handler error", e);
