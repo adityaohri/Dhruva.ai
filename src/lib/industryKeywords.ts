@@ -1235,3 +1235,11 @@ export function getSignalKeywords(industry: IndustryName): string[] {
 export function getIndustryAliases(industry: IndustryName): string[] {
   return INDUSTRY_KEYWORDS[industry]?.aliases ?? [];
 }
+
+/**
+ * Returns industry skills for query building and relevance matching.
+ * Used by radar signals to find emerging companies using skill-based queries.
+ */
+export function getIndustrySkills(industry: IndustryName): string[] {
+  return INDUSTRY_KEYWORDS[industry]?.skills ?? [];
+}

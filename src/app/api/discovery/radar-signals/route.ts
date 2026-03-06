@@ -5,6 +5,8 @@ import {
   getRoleVariants,
   getSignalKeywords,
   getIndustryAliases,
+  getIndustrySkills,
+  scoreAgainstIndustry,
   type IndustryName,
 } from "@/lib/industryKeywords";
 
@@ -153,11 +155,14 @@ const ARTICLE_PATTERNS = [
 
 const CATEGORY_PRIORITY: Record<string, number> = {
   funding: 1,
-  expansion: 2,
-  hiring: 3,
-  leadership: 4,
-  deal: 5,
-  industry: 6,
+  startup: 2,      // Startup/seed funding — high signal
+  expansion: 3,
+  hiring: 4,
+  emerging: 5,     // Emerging players
+  leadership: 6,
+  deal: 7,
+  skills: 8,       // Industry skills demand
+  industry: 9,
 };
 
 function getHighlightText(r: any): string {
@@ -193,6 +198,7 @@ export async function POST(req: NextRequest) {
     const roleVariants = getRoleVariants(industryName).slice(0, 4);
     const signalKeywords = getSignalKeywords(industryName) ?? [];
     const industryAliases = getIndustryAliases(industryName) ?? [];
+    const industrySkills = getIndustrySkills(industryName).slice(0, 6);
 
     const sixMonthsAgo = new Date();
     sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
@@ -206,6 +212,10 @@ export async function POST(req: NextRequest) {
 
     const repoSignals =
       signalKeywords.slice(0, 8).join(" OR ") || "expansion hiring growth";
+
+    // Skills and roles for emerging company queries
+    const skillsQuery = industrySkills.slice(0, 4).map(s => `"${s}"`).join(" OR ");
+    const rolesQuery = roleVariants.slice(0, 3).map(r => `"${r}"`).join(" OR ");
 
     const commonParams = {
       type: "auto" as const,
@@ -230,6 +240,13 @@ export async function POST(req: NextRequest) {
 
     const query6 = `"${industryLabel}" ${location} (${repoSignals}) ("hiring" OR "growth" OR "talent" OR "expanding" OR "new roles" OR "jobs" OR "headcount") 2025 2026`;
 
+    // NEW: Emerging/startup company queries (not limited to top 20)
+    const query7 = `"${industryLabel}" ${location} ("startup" OR "seed funding" OR "angel investment" OR "early stage" OR "pre-series" OR "bootstrapped" OR "founded" OR "launches" OR "emerges" OR "new player") ("hiring" OR "expansion" OR "team" OR "growing") 2025 2026`;
+
+    const query8 = `${location} (${rolesQuery}) ("new firm" OR "boutique" OR "emerging" OR "fast-growing" OR "disruptor" OR "challenger" OR "unicorn" OR "soonicorn" OR "D2C" OR "B2B SaaS" OR "fintech" OR "edtech" OR "healthtech") ("hiring" OR "raises" OR "expands") 2025 2026`;
+
+    const query9 = `${location} (${skillsQuery}) ("company" OR "firm" OR "startup" OR "venture") ("hiring" OR "looking for" OR "building team" OR "scaling" OR "expanding" OR "new office" OR "headcount") 2025 2026`;
+
     const settled = await Promise.allSettled([
       exa.searchAndContents(query1, commonParams as any),
       exa.searchAndContents(query2, commonParams as any),
@@ -237,6 +254,10 @@ export async function POST(req: NextRequest) {
       exa.searchAndContents(query4, commonParams as any),
       exa.searchAndContents(query5, commonParams as any),
       exa.searchAndContents(query6, commonParams as any),
+      // Emerging company queries
+      exa.searchAndContents(query7, { ...commonParams, numResults: 20 } as any),
+      exa.searchAndContents(query8, { ...commonParams, numResults: 20 } as any),
+      exa.searchAndContents(query9, { ...commonParams, numResults: 15 } as any),
     ]);
 
     const [
@@ -246,6 +267,9 @@ export async function POST(req: NextRequest) {
       leadershipResults,
       dealResults,
       industryResults,
+      startupResults,
+      emergingResults,
+      skillBasedResults,
     ] = settled.map((res) =>
       res.status === "fulfilled" ? (res.value as any) : { results: [] }
     );
@@ -276,6 +300,10 @@ export async function POST(req: NextRequest) {
         "industry",
         "📈 Industry Growth Signal"
       ),
+      // Emerging company signals
+      ...tag(startupResults.results, "startup", "🚀 Startup / Early Stage"),
+      ...tag(emergingResults.results, "emerging", "⭐ Emerging Player"),
+      ...tag(skillBasedResults.results, "skills", "💡 Industry Skills Demand"),
     ];
 
     const allPositive = [...UNIVERSAL_POSITIVE, ...signalKeywords];
@@ -290,11 +318,13 @@ export async function POST(req: NextRequest) {
           return true;
         }
       })
-      // Gate 2: Must name a company OR an industry term.
-      // Accept any result that mentions the industry name, an alias,
-      // OR passes a basic "looks like a company signal" check.
-      // Do NOT restrict to only the top 20 companies — this blocks
-      // valid signals from Tier 2 and emerging companies.
+      // Gate 2: Industry relevance check (EXPANDED for emerging companies)
+      // Accept results that:
+      // - Mention industry name/aliases
+      // - Mention top companies
+      // - Score positively on industry keywords (roles, skills, signals)
+      // - Look like company-specific signals (proper noun + signal verb)
+      // - Mention startup/emerging company indicators
       .filter((r) => {
         const rawText = `${r.title ?? ""} ${getHighlightText(r)}`;
         const text = rawText.toLowerCase();
@@ -304,15 +334,43 @@ export async function POST(req: NextRequest) {
           return true;
         if (text.includes(industry.toLowerCase())) return true;
 
-        // Pass if it mentions any of the top companies (bonus, not requirement)
+        // Pass if it mentions any of the top companies
         if (topCompanies.some((c) => text.includes(c.toLowerCase())))
+          return true;
+
+        // NEW: Pass if it scores positively on industry relevance
+        // This catches emerging companies using industry-specific terms
+        const industryScore = scoreAgainstIndustry(rawText, industryName);
+        if (industryScore >= 8) return true;
+
+        // NEW: Pass if mentions industry skills
+        if (industrySkills.some((s) => text.includes(s.toLowerCase())))
+          return true;
+
+        // NEW: Pass if mentions role variants
+        if (roleVariants.some((r) => text.includes(r.toLowerCase())))
+          return true;
+
+        // NEW: Pass if it's a startup/emerging company signal category
+        // (these queries are specifically for new companies)
+        if (["startup", "emerging", "skills"].includes(r.signalCategory))
           return true;
 
         // Pass if it looks like a company-specific signal:
         // Has a proper noun followed by a signal word
         const HAS_COMPANY_SIGNAL =
-          /[A-Z][a-zA-Z&\s]{2,30}\s(raises|expands|hires|appoints|wins|launches|opens|secures|acquires|partners|backs)/;
+          /[A-Z][a-zA-Z&\s]{2,30}\s(raises|expands|hires|appoints|wins|launches|opens|secures|acquires|partners|backs|founded|launched|started)/;
         if (HAS_COMPANY_SIGNAL.test(rawText)) return true;
+
+        // NEW: Pass if mentions startup/emerging keywords
+        const EMERGING_KEYWORDS = [
+          "startup", "seed", "angel", "pre-series", "early stage",
+          "bootstrapped", "founded", "new venture", "emerging",
+          "disruptor", "challenger", "unicorn", "soonicorn",
+          "fintech", "edtech", "healthtech", "deeptech", "agritech",
+          "cleantech", "d2c", "b2b saas", "b2c", "boutique"
+        ];
+        if (EMERGING_KEYWORDS.some((kw) => text.includes(kw))) return true;
 
         return false;
       })
@@ -354,20 +412,45 @@ export async function POST(req: NextRequest) {
 
     function extractCompanyFromResult(r: any): string | null {
       const text = `${r.title ?? ""} ${getHighlightText(r)}`;
+      const textLower = text.toLowerCase();
 
       // First check against known top companies
       for (const company of topCompanies) {
-        if (text.toLowerCase().includes(company.toLowerCase())) {
+        if (textLower.includes(company.toLowerCase())) {
           return company;
         }
       }
 
-      // Fallback: extract first capitalised multi-word phrase before
-      // a signal verb as the company name
-      const match = text.match(
-        /([A-Z][a-zA-Z&\s]{2,30}?)\s(?:raises|expands|hires|appoints|wins|launches|opens|secures|acquires|partners)/
+      // Pattern 1: Capitalised phrase before signal verb
+      const signalMatch = text.match(
+        /([A-Z][a-zA-Z&\s]{2,30}?)\s(?:raises|expands|hires|appoints|wins|launches|opens|secures|acquires|partners|founded|started|announces|bags|gets)/
       );
-      return match?.[1]?.trim() ?? null;
+      if (signalMatch?.[1]?.trim()) return signalMatch[1].trim();
+
+      // Pattern 2: "XYZ, a/an [industry] startup" pattern
+      const startupMatch = text.match(
+        /([A-Z][a-zA-Z0-9&\-]{2,25}),?\s+(?:a|an|the)\s+(?:[\w\s]{1,30})?(?:startup|firm|company|venture|platform)/i
+      );
+      if (startupMatch?.[1]?.trim()) return startupMatch[1].trim();
+
+      // Pattern 3: "XYZ raises/secures $X" startup funding pattern
+      const fundingMatch = text.match(
+        /([A-Z][a-zA-Z0-9&\-]{2,25})\s+(?:raises|secures|closes|bags|gets)\s+(?:\$|₹|Rs\.?|INR|USD)/i
+      );
+      if (fundingMatch?.[1]?.trim()) return fundingMatch[1].trim();
+
+      // Pattern 4: "XYZ's founder/CEO" pattern
+      const founderMatch = text.match(
+        /([A-Z][a-zA-Z0-9&\-]{2,25})(?:'s|'s)\s+(?:founder|co-founder|CEO|CTO|team|office)/i
+      );
+      if (founderMatch?.[1]?.trim()) return founderMatch[1].trim();
+
+      // Pattern 5: Title often starts with company name
+      const title = String(r.title ?? "");
+      const titleMatch = title.match(/^([A-Z][a-zA-Z0-9&\-\s]{2,25}?)(?:\s+raises|\s+expands|\s+hires|\s+launches|\s+to|\s+bags|\s+gets|\s+secures|:)/);
+      if (titleMatch?.[1]?.trim()) return titleMatch[1].trim();
+
+      return null;
     }
 
     const companyMap = new Map<string, any>();
