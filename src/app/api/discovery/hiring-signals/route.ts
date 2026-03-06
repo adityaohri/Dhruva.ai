@@ -434,9 +434,45 @@ export async function POST(req: NextRequest) {
       "closed to applications",
     ];
 
+    // Non-India locations to filter out
+    const NON_INDIA_LOCATIONS = [
+      "usa", "united states", "uk", "united kingdom", "london",
+      "singapore", "dubai", "uae", "germany", "berlin", "munich",
+      "france", "paris", "switzerland", "zurich", "geneva",
+      "netherlands", "amsterdam", "canada", "toronto", "vancouver",
+      "australia", "sydney", "melbourne", "hong kong", "japan", "tokyo",
+      "philippines", "manila", "pasig", "makati", "quezon", "cebu",
+      "thailand", "bangkok", "vietnam", "malaysia", "kuala lumpur",
+      "indonesia", "jakarta", "new york", "california", "texas", "boston",
+      "chicago", "seattle", "san francisco", "remote (us)", "remote (uk)",
+      "europe", "european",
+    ];
+
+    // India indicators for positive check
+    const INDIA_INDICATORS = [
+      "india", "mumbai", "delhi", "bangalore", "bengaluru",
+      "hyderabad", "chennai", "pune", "kolkata", "ahmedabad",
+      "gurgaon", "gurugram", "noida", "ncr",
+    ];
+
     const openLinkedInJobs = scoredLinkedInJobs.filter((job) => {
-      const snippet = String(job.snippet ?? "").toLowerCase();
-      return !CLOSED_JOB_PATTERNS.some((p) => snippet.includes(p));
+      const combined = `${job.title ?? ""} ${job.snippet ?? ""}`.toLowerCase();
+      
+      // Reject closed jobs
+      if (CLOSED_JOB_PATTERNS.some((p) => combined.includes(p))) return false;
+      
+      // Reject non-India locations
+      if (NON_INDIA_LOCATIONS.some((loc) => combined.includes(loc))) return false;
+      
+      // Must have India indicator (for ATS/job board results)
+      const hasIndiaIndicator = INDIA_INDICATORS.some((ind) => combined.includes(ind));
+      
+      // If it's a formal job listing (not a post), require India indicator
+      const url = (job.url ?? "").toLowerCase();
+      const isJobListing = /\/jobs\/|greenhouse|lever\.co|workday/i.test(url);
+      if (isJobListing && !hasIndiaIndicator) return false;
+      
+      return true;
     });
 
     const CLOSED_PATTERNS = [
@@ -473,8 +509,19 @@ export async function POST(req: NextRequest) {
         };
       })
       .filter((job) => {
-        const snippet = job.snippet.toLowerCase();
-        return !CLOSED_PATTERNS.some((p) => snippet.includes(p));
+        const combined = `${job.title ?? ""} ${job.snippet ?? ""}`.toLowerCase();
+        
+        // Reject closed jobs
+        if (CLOSED_PATTERNS.some((p) => combined.includes(p))) return false;
+        
+        // Reject non-India locations
+        if (NON_INDIA_LOCATIONS.some((loc) => combined.includes(loc))) return false;
+        
+        // Must have India indicator for ATS jobs
+        const hasIndiaIndicator = INDIA_INDICATORS.some((ind) => combined.includes(ind));
+        if (!hasIndiaIndicator) return false;
+        
+        return true;
       });
 
     return NextResponse.json({

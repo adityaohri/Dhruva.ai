@@ -469,29 +469,81 @@ const CAREER_LANDING_PATTERNS = [
 
 // Non-India location strings — results with these should be excluded for India-tailored results
 const NON_INDIA_LOCATION_STRINGS = [
-  "georgia",
-  "usa",
-  "united states",
-  "uk",
-  "united kingdom",
-  "london",
-  "singapore",
-  "dubai",
-  "uae",
-  "new york",
-  "california",
-  "texas",
-  "boston",
-  "chicago",
-  "australia",
-  "sydney",
-  "melbourne",
-  "germany",
-  "france",
-  "europe",
-  "hong kong",
-  "remote (us)",
-  "remote (uk)",
+  // North America
+  "usa", "united states", "u.s.", "u.s.a",
+  "new york", "california", "texas", "boston", "chicago", "seattle",
+  "san francisco", "los angeles", "atlanta", "denver", "miami",
+  "washington dc", "toronto", "vancouver", "canada", "mexico",
+  // Europe
+  "uk", "united kingdom", "london", "manchester", "birmingham",
+  "germany", "berlin", "munich", "frankfurt", "hamburg",
+  "france", "paris", "lyon",
+  "switzerland", "zurich", "geneva", "basel",
+  "netherlands", "amsterdam", "rotterdam",
+  "spain", "madrid", "barcelona",
+  "italy", "milan", "rome",
+  "ireland", "dublin",
+  "portugal", "lisbon",
+  "sweden", "stockholm",
+  "norway", "oslo",
+  "denmark", "copenhagen",
+  "finland", "helsinki",
+  "austria", "vienna",
+  "belgium", "brussels",
+  "poland", "warsaw",
+  "czech", "prague",
+  "europe", "european",
+  // Asia-Pacific (non-India)
+  "singapore", "hong kong", "japan", "tokyo", "osaka",
+  "china", "beijing", "shanghai", "shenzhen",
+  "south korea", "seoul",
+  "taiwan", "taipei",
+  "thailand", "bangkok",
+  "vietnam", "hanoi", "ho chi minh",
+  "indonesia", "jakarta",
+  "malaysia", "kuala lumpur",
+  "philippines", "manila", "pasig", "makati", "quezon", "cebu", "antipolo",
+  "australia", "sydney", "melbourne", "brisbane", "perth",
+  "new zealand", "auckland", "wellington",
+  // Middle East & Africa
+  "dubai", "uae", "abu dhabi", "saudi arabia", "riyadh", "jeddah",
+  "qatar", "doha", "bahrain", "kuwait", "oman",
+  "israel", "tel aviv",
+  "egypt", "cairo",
+  "south africa", "johannesburg", "cape town",
+  "nigeria", "lagos",
+  "kenya", "nairobi",
+  // Latin America
+  "brazil", "sao paulo", "rio de janeiro",
+  "argentina", "buenos aires",
+  "chile", "santiago",
+  "colombia", "bogota",
+  // US States (abbreviated)
+  ", ga", ", tx", ", ca", ", ny", ", fl", ", wa", ", ma", ", il",
+  // Remote non-India patterns
+  "remote (us)", "remote (uk)", "remote - us", "remote - uk",
+  "remote usa", "remote europe", "us remote", "uk remote",
+  // Country codes in location
+  ", ph", ", sg", ", my", ", th", ", vn", ", id",
+];
+
+// Positive India indicators — jobs must have at least one of these to pass India filter
+const INDIA_LOCATION_INDICATORS = [
+  "india", "indian",
+  // Major cities
+  "mumbai", "delhi", "new delhi", "ncr", "bangalore", "bengaluru",
+  "hyderabad", "chennai", "pune", "kolkata", "ahmedabad",
+  "gurgaon", "gurugram", "noida", "greater noida", "ghaziabad",
+  "lucknow", "jaipur", "chandigarh", "kochi", "thiruvananthapuram",
+  "coimbatore", "mysore", "mysuru", "nagpur", "indore", "bhopal",
+  "patna", "ranchi", "bhubaneswar", "visakhapatnam", "vizag",
+  "vadodara", "surat", "rajkot", "nashik", "aurangabad",
+  // State names
+  "maharashtra", "karnataka", "telangana", "tamil nadu", "kerala",
+  "west bengal", "gujarat", "rajasthan", "uttar pradesh", "madhya pradesh",
+  // Indian job board indicators in URL
+  "naukri.com", "iimjobs.com", "internshala.com", "instahyre.com",
+  "hirist.com", "cutshort.io", "foundit.in",
 ];
 
 const isJobListing = (
@@ -513,11 +565,35 @@ const isJobListing = (
     return false;
   }
 
-  // Gate 0d: India-only — reject if location or content clearly indicates non-India
+  // Gate 0d: India-only — strict location enforcement
   const locationStr = (r.location ?? "").toLowerCase();
   const combinedForLocation = `${locationStr} ${(r.title ?? "").toLowerCase()} ${(r.snippet ?? "").toLowerCase()}`;
+  const urlForLocation = (r.url ?? "").toLowerCase();
+  
+  // Step 1: Hard reject if clearly non-India
   if (NON_INDIA_LOCATION_STRINGS.some((s) => combinedForLocation.includes(s))) {
     return false;
+  }
+  
+  // Step 2: Must have positive India indicator (location, content, or Indian job board URL)
+  const hasIndiaIndicator = INDIA_LOCATION_INDICATORS.some((ind) => 
+    combinedForLocation.includes(ind) || urlForLocation.includes(ind)
+  );
+  
+  // If job has a location field but no India indicator, reject it
+  // (Jobs with empty location from Indian sources like Naukri, IIMJobs still pass)
+  if (locationStr && !hasIndiaIndicator) {
+    return false;
+  }
+  
+  // If snippet mentions a specific non-Indian city/country pattern, reject
+  // even if it slipped past the blocklist
+  const suspiciousLocationPattern = /(?:based in|located in|office in|position in|role in)\s+(?!india|mumbai|delhi|bangalore|bengaluru|hyderabad|chennai|pune|kolkata|gurgaon|gurugram|noida)/i;
+  if (suspiciousLocationPattern.test(combinedForLocation)) {
+    // Double-check it's not actually India
+    if (!hasIndiaIndicator) {
+      return false;
+    }
   }
 
   // Gate 0e: IIM Jobs (and similar) category/aggregator snippets — keyword lists, not job descriptions
@@ -1237,36 +1313,30 @@ export default function OpportunityPage() {
         bucket: "C",
       }));
 
-      // India-only for LinkedIn jobs: exclude listings that clearly indicate non-India location
-      const LINKEDIN_NON_INDIA = [
-        "georgia",
-        "usa",
-        "united states",
-        "uk",
-        "london",
-        "singapore",
-        "dubai",
-        "uae",
-        "new york",
-        "california",
-        "australia",
-        "sydney",
-        "melbourne",
-        "germany",
-        "france",
-        "europe",
-        "hong kong",
-      ];
-
+      // India-only for LinkedIn jobs: use the global blocklist + require positive India indicator
       const linkedInJobsMapped: OpportunityResult[] = (
         hiringData.linkedInJobs ?? []
       )
         .filter((job: any) => {
           const rawSnippet = String(job.snippet ?? "");
           const rawTitle = String(job.title ?? "");
+          const rawUrl = String(job.url ?? "").toLowerCase();
           const combined = `${rawTitle} ${rawSnippet}`.toLowerCase();
-          const hasNonIndia = LINKEDIN_NON_INDIA.some((s) => combined.includes(s));
-          return !hasNonIndia;
+          
+          // Hard reject if non-India location detected
+          const hasNonIndia = NON_INDIA_LOCATION_STRINGS.some((s) => combined.includes(s));
+          if (hasNonIndia) return false;
+          
+          // Must have positive India indicator or be from Indian job board
+          const hasIndiaIndicator = INDIA_LOCATION_INDICATORS.some((ind) =>
+            combined.includes(ind) || rawUrl.includes(ind)
+          );
+          
+          // If URL is from ATS platforms (Greenhouse, Lever, etc.) without India indicator, reject
+          const isATSUrl = /greenhouse|lever\.co|workday|ashby|smartrecruiters/i.test(rawUrl);
+          if (isATSUrl && !hasIndiaIndicator) return false;
+          
+          return true;
         })
         .map((job: any, idx: number) => {
         const rawTitle = String(job.title ?? "");
