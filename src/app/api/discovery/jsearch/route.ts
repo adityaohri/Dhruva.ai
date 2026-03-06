@@ -91,7 +91,7 @@ async function jsearchRequest(
 ): Promise<any[]> {
   const url = new URL(config.baseUrl);
   url.searchParams.set("query", query);
-  url.searchParams.set("num_pages", "3");
+  url.searchParams.set("num_pages", "5");
   url.searchParams.set("date_posted", "month");
   url.searchParams.set("employment_types", employmentType);
   url.searchParams.set("country", "IN");

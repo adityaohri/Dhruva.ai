@@ -223,6 +223,7 @@ export async function POST(req: NextRequest) {
       startPublishedDate: sixMonthsAgoISO,
       highlights: { maxCharacters: 3000 },
       excludeDomains: PORTAL_DOMAINS,
+      numResults: 30,
     };
 
     const query1 = `(${companies_1_6}) OR "${industryLabel}" ${location}
@@ -250,14 +251,14 @@ export async function POST(req: NextRequest) {
     const settled = await Promise.allSettled([
       exa.searchAndContents(query1, commonParams as any),
       exa.searchAndContents(query2, commonParams as any),
-      exa.searchAndContents(query3, { ...commonParams, numResults: 25 } as any),
+      exa.searchAndContents(query3, { ...commonParams, numResults: 40 } as any),
       exa.searchAndContents(query4, commonParams as any),
       exa.searchAndContents(query5, commonParams as any),
       exa.searchAndContents(query6, commonParams as any),
       // Emerging company queries
-      exa.searchAndContents(query7, { ...commonParams, numResults: 20 } as any),
-      exa.searchAndContents(query8, { ...commonParams, numResults: 20 } as any),
-      exa.searchAndContents(query9, { ...commonParams, numResults: 15 } as any),
+      exa.searchAndContents(query7, { ...commonParams, numResults: 35 } as any),
+      exa.searchAndContents(query8, { ...commonParams, numResults: 35 } as any),
+      exa.searchAndContents(query9, { ...commonParams, numResults: 30 } as any),
     ]);
 
     const [
@@ -607,9 +608,9 @@ export async function POST(req: NextRequest) {
             : 0;
           return db - da;
         });
-      sorted = [...sorted, ...fallback].slice(0, 40);
+      sorted = [...sorted, ...fallback].slice(0, 60);
     } else {
-      sorted = sorted.slice(0, 40);
+      sorted = sorted.slice(0, 60);
     }
 
     // FINAL PASS: Strict company-level deduplication

@@ -434,6 +434,39 @@ const CREDIBLE_ALLOWLIST = [
   "apna.co",
   "hirist.com",
   "angel.co",
+  
+  // Additional job sources
+  "careerbuilder.com",
+  "dice.com",
+  "reed.co.uk",
+  "seek.com",
+  "jora.com",
+  "adzuna.com",
+  "adzuna.in",
+  "jobgrin.com",
+  "naukrigulf.com",
+  "firstnaukri.com",
+  "rozee.pk",
+  "bayt.com",
+  "jobstreet.com",
+  "jobsdb.com",
+  "jobs.ch",
+  "stepstone.com",
+  "xing.com",
+  "totaljobs.com",
+  "cwjobs.co.uk",
+  "talent.com",
+  "zippia.com",
+  "builtin.com",
+  "flexjobs.com",
+  "remoteco.com",
+  "weworkremotely.com",
+  "remoteok.com",
+  "authenticjobs.com",
+  "dribbble.com/jobs",
+  "behance.net/joblist",
+  "stackoverflow.com/jobs",
+  "github.com/jobs",
 ];
 
 const isCareerSubdomain = (host: string): boolean => {
@@ -479,6 +512,31 @@ const CLOSED_OR_EMPTY_JOB_PATTERNS = [
   "listing has expired",
   "removed by the administrator",
   "application closed",
+  "applications closed",
+  "this job is closed",
+  "this position is closed",
+  "this role has been filled",
+  "role has been filled",
+  "vacancy closed",
+  "vacancy filled",
+  "not accepting applications",
+  "job expired",
+  "posting expired",
+  "job has expired",
+  "opening has been filled",
+  "job requisition has been closed",
+  "requisition closed",
+  "over 100 applicants",
+  "we've paused",
+  "paused accepting",
+  "currently not hiring",
+  "hiring paused",
+  "applications are closed",
+  "job posting has ended",
+  "application deadline passed",
+  "deadline has passed",
+  "this opening is closed",
+  "this opportunity is closed",
 ];
 
 // Career-site landing/search page text — we want actual job URLs, not "Search Jobs" pages
@@ -600,13 +658,19 @@ const isJobListing = (
   }
   
   // Step 2: Must have positive India indicator (location, content, or Indian job board URL)
-  const hasIndiaIndicator = INDIA_LOCATION_INDICATORS.some((ind) => 
+  const hasIndiaIndicator = INDIA_LOCATION_INDICATORS.some((ind) =>
     combinedForLocation.includes(ind) || urlForLocation.includes(ind)
   );
+
+  // Check if URL is from a trusted Indian job board
+  const isFromIndianJobBoard = /naukri\.com|iimjobs\.com|internshala\.com|instahyre\.com|hirist\.com|cutshort\.io|foundit\.in|jobrapido\.com|freshersworld\.com|shine\.com|timesjobs\.com/i.test(urlForLocation);
   
+  // Check if URL is from JSearch (already filtered for India)
+  const isJSearchVerified = r.isVerified === true && r.bucket === "B";
+
   // If job has a location field but no India indicator, reject it
-  // (Jobs with empty location from Indian sources like Naukri, IIMJobs still pass)
-  if (locationStr && !hasIndiaIndicator) {
+  // UNLESS it's from a trusted Indian source or JSearch-verified
+  if (locationStr && !hasIndiaIndicator && !isFromIndianJobBoard && !isJSearchVerified) {
     return false;
   }
   
@@ -1114,7 +1178,7 @@ export default function OpportunityPage() {
     null
   );
   const [signalsLimit, setSignalsLimit] = useState(20);
-  const [radarLimit, setRadarLimit] = useState(10);
+  const [radarLimit, setRadarLimit] = useState(15);
   const [radarReasonByUrl, setRadarReasonByUrl] = useState<Record<string, string>>(
     {}
   );
