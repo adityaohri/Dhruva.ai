@@ -1021,6 +1021,7 @@ export default function OpportunityPage() {
   const [loadingRadarReasonUrl, setLoadingRadarReasonUrl] = useState<string | null>(
     null
   );
+
   const [benchmarkProfile, setBenchmarkProfile] = useState<{
     top_skills?: string | null;
     latest_company?: string | null;
@@ -1349,12 +1350,16 @@ export default function OpportunityPage() {
         } as OpportunityResult;
       });
 
-      const jsearchMapped: OpportunityResult[] = (
-        (jsearchResults as any)?.jobs ?? []
-      ).map((job: any, idx: number) => ({
-        ...(job as OpportunityResult),
-        originalIndex: idx,
-      }));
+      const jsearchJobs = (jsearchResults as any)?.jobs ?? [];
+      if (process.env.NODE_ENV === "development" && jsearchJobs.length === 0 && (jsearchResults as any)?._debug) {
+        console.warn("[Opportunity] JSearch:", (jsearchResults as any)._debug);
+      }
+      const jsearchMapped: OpportunityResult[] = jsearchJobs.map(
+        (job: any, idx: number) => ({
+          ...(job as OpportunityResult),
+          originalIndex: idx,
+        })
+      );
 
       const merged: OpportunityResult[] = [
         ...withoutLegacySignals,
@@ -2001,6 +2006,21 @@ export default function OpportunityPage() {
     return isPositiveSignal(r);
   });
 
+  // Serialize radar explanation requests: only one Anthropic call at a time to avoid 429 rate limits
+  useEffect(() => {
+    if (loadingRadarReasonUrl != null) return;
+    const next = onTheRadar.find((r) => {
+      const company = resolveCompany(r);
+      if (!company || company.toLowerCase() === "unknown company") return false;
+      if (radarReasonByUrl[r.url]) return false;
+      return true;
+    });
+    if (next) {
+      const company = resolveCompany(next)!;
+      fetchRadarReason(next, company);
+    }
+  }, [loadingRadarReasonUrl, radarReasonByUrl, fetchRadarReason, onTheRadar.length]);
+
   const TIER1_SIGNAL_COMPANIES = getTopCompanies(
     filters.industry as IndustryName,
     8
@@ -2436,14 +2456,7 @@ export default function OpportunityPage() {
                       : rawTitle.replace(/^unknown company:\s*/i, "").trim() ||
                         "Signal";
                   const resolvedRadarCompany = (company || "").trim();
-
-                  if (
-                    resolvedRadarCompany &&
-                    !radarReasonByUrl[r.url] &&
-                    loadingRadarReasonUrl !== r.url
-                  ) {
-                    fetchRadarReason(r, resolvedRadarCompany);
-                  }
+                  // Radar reasons are fetched one-at-a-time by the effect above to avoid Anthropic 429 rate limits
 
                   return (
                     <>

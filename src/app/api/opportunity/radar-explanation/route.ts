@@ -129,7 +129,20 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ reason });
   } catch (e: unknown) {
-    const message = e instanceof Error ? e.message : "Unknown error";
+    const message = e instanceof Error ? e.message : String(e);
+    const is429 =
+      message.includes("429") ||
+      message.includes("rate_limit") ||
+      (e as { status?: number })?.status === 429;
+    if (is429) {
+      return NextResponse.json(
+        {
+          error:
+            "Too many requests. Please wait a moment and try again, or refresh the page.",
+        },
+        { status: 429 }
+      );
+    }
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

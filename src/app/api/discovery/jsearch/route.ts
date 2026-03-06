@@ -1,6 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 
-const JSEARCH_ENDPOINT = "https://jsearch.p.rapidapi.com/search";
+const JSEARCH_DEFAULT_HOST = "https://jsearch.p.rapidapi.com";
+const JSEARCH_PATH = "/search";
+
+function getJSearchConfig(): { apiKey: string; baseUrl: string } | null {
+  const key =
+    process.env.JSEARCH_API_KEY?.trim() ||
+    process.env.RAPIDAPI_KEY?.trim() ||
+    "";
+  if (!key) return null;
+  const baseUrl =
+    process.env.JSEARCH_BASE_URL?.trim()?.replace(/\/$/, "") || JSEARCH_DEFAULT_HOST;
+  return { apiKey: key, baseUrl };
+}
 
 function getExperienceTerms(experience: string): string {
   const exp = (experience ?? "").toLowerCase();
@@ -22,31 +34,30 @@ function getJobTypeParam(jobType: string): string {
   return "FULLTIME";
 }
 
-// JSearch is only invoked when JSEARCH_API_KEY is set (e.g. in Vercel env or .env.local).
-// If the RapidAPI dashboard shows 0 requests, add JSEARCH_API_KEY to your deployment environment.
 async function jsearchRequest(
+  config: { apiKey: string; baseUrl: string },
   query: string,
   employmentType: string
 ): Promise<any[]> {
-  const apiKey = process.env.JSEARCH_API_KEY?.trim();
-  if (!apiKey) {
-    console.warn("[jsearch] JSEARCH_API_KEY is not set — add it to env to enable JSearch results");
-    return [];
-  }
-
-  const url = new URL(JSEARCH_ENDPOINT);
+  const endpoint = config.baseUrl.endsWith(JSEARCH_PATH)
+    ? config.baseUrl
+    : `${config.baseUrl}${JSEARCH_PATH}`;
+  const url = new URL(endpoint);
   url.searchParams.set("query", query);
   url.searchParams.set("num_pages", "3");
   url.searchParams.set("date_posted", "month");
   url.searchParams.set("employment_types", employmentType);
   url.searchParams.set("country", "IN");
 
+  const host =
+    config.baseUrl.includes("rapidapi") ? "jsearch.p.rapidapi.com" : new URL(config.baseUrl).host;
+
   try {
     const res = await fetch(url.toString(), {
       method: "GET",
       headers: {
-        "X-RapidAPI-Key": apiKey,
-        "X-RapidAPI-Host": "jsearch.p.rapidapi.com",
+        "X-RapidAPI-Key": config.apiKey,
+        "X-RapidAPI-Host": host,
       },
       cache: "no-store",
     });
@@ -65,6 +76,10 @@ async function jsearchRequest(
 }
 
 export async function POST(req: NextRequest) {
+  const config = getJSearchConfig();
+  const headers = new Headers();
+  headers.set("X-JSearch-Configured", config ? "true" : "false");
+
   try {
     const body = (await req.json()) as {
       industry: string;
@@ -74,6 +89,16 @@ export async function POST(req: NextRequest) {
       location: string;
       topCompanies: string[];
     };
+
+    if (!config) {
+      console.warn(
+        "[jsearch] No API key: set JSEARCH_API_KEY or RAPIDAPI_KEY in env (and redeploy on Vercel)"
+      );
+      return NextResponse.json(
+        { jobs: [], _debug: "JSEARCH_API_KEY or RAPIDAPI_KEY not set in server env" },
+        { status: 200, headers }
+      );
+    }
 
     const industry = (body.industry ?? "").trim();
     const roleVariants = Array.isArray(body.roleVariants)
@@ -106,9 +131,9 @@ export async function POST(req: NextRequest) {
     const query3 = query3Parts.join(" ");
 
     const [data1, data2, data3] = await Promise.all([
-      jsearchRequest(query1, employmentType),
-      jsearchRequest(query2, employmentType),
-      jsearchRequest(query3, employmentType),
+      jsearchRequest(config, query1, employmentType),
+      jsearchRequest(config, query2, employmentType),
+      jsearchRequest(config, query3, employmentType),
     ]);
 
     const combined = [...data1, ...data2, ...data3];
@@ -266,10 +291,10 @@ export async function POST(req: NextRequest) {
       };
     });
 
-    return NextResponse.json({ jobs });
+    return NextResponse.json({ jobs }, { headers });
   } catch (e: unknown) {
     console.warn("[jsearch] handler error", e);
-    return NextResponse.json({ jobs: [] });
+    return NextResponse.json({ jobs: [] }, { status: 200, headers });
   }
 }
 
