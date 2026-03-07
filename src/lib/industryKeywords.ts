@@ -41,6 +41,10 @@ export type IndustryName =
   | "Human Resources"
   | "Real Estate"
   | "Logistics & Supply Chain"
+  | "E-commerce & D2C"
+  | "Edtech"
+  | "Banking & Financial Services"
+  | "Manufacturing & Automotive"
   | "Other";
 
 export const INDUSTRY_KEYWORDS: Record<IndustryName, IndustryKeywordSet> = {
@@ -1082,6 +1086,280 @@ export const INDUSTRY_KEYWORDS: Record<IndustryName, IndustryKeywordSet> = {
     negatives: [
       "delivery boy", "courier boy", "truck driver",
       "warehouse packer", "loading unloading",
+    ],
+  },
+
+  // ─────────────────────────────────────────────────────────────────────────
+  "E-commerce & D2C": {
+    roles: [
+      "category manager", "key account manager", "marketplace manager",
+      "seller success manager", "vendor manager", "growth manager",
+      "e-commerce manager", "d2c manager", "brand manager ecommerce",
+      "performance marketing manager", "digital marketing manager",
+      "customer acquisition manager", "retention manager", "crm manager",
+      "demand planner", "inventory planner", "merchandiser",
+      "catalogue manager", "listing specialist", "amazon specialist",
+      "flipkart specialist", "quick commerce manager", "dark store manager",
+      "supply chain analyst", "last mile manager", "logistics coordinator",
+      "e-commerce analyst", "revenue analyst", "pricing analyst",
+      "account executive ecommerce", "business development ecommerce",
+      "customer experience manager", "returns manager",
+      "ecommerce intern", "growth intern", "category intern",
+    ],
+    companies: [
+      // Horizontal marketplaces
+      "Flipkart", "Amazon India", "Meesho", "Snapdeal", "Shopclues",
+      "Myntra", "Ajio", "Tata Cliq", "Reliance Retail", "JioMart",
+      // Quick commerce
+      "Zepto", "Blinkit", "Swiggy Instamart", "BigBasket", "BB Now",
+      "Dunzo", "Milkbasket",
+      // D2C brands
+      "Nykaa", "Mamaearth", "Boat", "Lenskart", "Wakefit", "Pepperfry",
+      "Urban Ladder", "Fabindia", "Mensa Brands", "GlobalBees",
+      "Purplle", "Sugar Cosmetics", "WOW Skin Science", "MCaffeine",
+      "Atomberg", "Noise", "Fire-Boltt", "Ambrane",
+      "Country Delight", "Licious", "FreshToHome", "Ninjacart",
+      // B2B ecommerce
+      "Udaan", "Moglix", "Zetwerk", "Ofbusiness", "Power2SME",
+      "IndiaMART", "TradeIndia", "Bizongo",
+      // Enablers
+      "Shiprocket", "Pickrr", "Eshipz", "Unicommerce", "Vinculum",
+      "GoKwik", "Razorpay", "Cashfree", "Paytm", "PhonePe",
+    ],
+    skills: [
+      "amazon seller central", "flipkart seller hub", "meesho supplier",
+      "google analytics", "meta ads", "google ads", "performance marketing",
+      "sql", "excel", "tableau", "data studio",
+      "inventory management", "demand forecasting", "category strategy",
+      "pricing strategy", "assortment planning", "gmv growth",
+      "customer acquisition cost", "cac", "lifetime value", "ltv",
+      "return on ad spend", "roas", "conversion rate optimisation", "cro",
+      "a/b testing", "cohort analysis", "funnel analysis",
+      "shopify", "woocommerce", "magento", "unicommerce",
+      "marketplace operations", "account management", "vendor negotiation",
+    ],
+    signals: [
+      "ecommerce", "e-commerce", "d2c", "direct to consumer",
+      "marketplace", "quick commerce", "q-commerce", "dark store",
+      "category growth", "seller success", "gmv",
+    ],
+    aliases: [
+      "ecom", "e-com", "d2c", "direct to consumer", "online retail",
+      "marketplace", "quick commerce",
+    ],
+    negatives: [
+      "retail store manager", "offline retail", "kirana",
+      "field sales fmcg", "distributor sales",
+    ],
+  },
+
+  // ─────────────────────────────────────────────────────────────────────────
+  Edtech: {
+    roles: [
+      "academic counsellor", "admissions counsellor", "sales counsellor",
+      "business development associate", "bda", "bde edtech",
+      "curriculum developer", "instructional designer", "content writer edtech",
+      "subject matter expert", "sme", "tutor", "mentor",
+      "academic coordinator", "program manager edtech",
+      "student success manager", "learner success manager",
+      "product manager edtech", "growth manager edtech",
+      "b2b sales manager", "school sales manager", "institutional sales",
+      "partnerships manager edtech", "university relations",
+      "operations manager edtech", "centre manager",
+      "video editor edtech", "content producer",
+      "data analyst edtech", "marketing manager edtech",
+      "edtech intern", "counsellor intern", "content intern",
+    ],
+    companies: [
+      // Large players
+      "BYJU'S", "Byjus", "Unacademy", "upGrad", "Physics Wallah", "PW",
+      "Vedantu", "Simplilearn", "Great Learning", "Emeritus",
+      "WhiteHat Jr", "Toppr", "Meritnation",
+      // Growing players
+      "Scaler", "Scaler Academy", "InterviewBit", "Coding Ninjas",
+      "Newton School", "Masai School", "Apna College",
+      "Classplus", "Teachmint", "Extramarks", "Lido Learning",
+      "Leverage Edu", "Collegedunia", "Shiksha", "Careers360",
+      // International with India ops
+      "Coursera", "Udemy", "LinkedIn Learning", "edX",
+      // Test prep
+      "Aakash Institute", "Allen Career Institute", "T.I.M.E.",
+      "IMS Learning", "Career Launcher", "CL Educate",
+      // K12 and schools
+      "LEAD School", "Orchids International", "Zee Learn",
+    ],
+    skills: [
+      "sales", "inside sales", "consultative selling", "crm",
+      "leadsquared", "freshsales", "salesforce",
+      "curriculum design", "instructional design", "bloom's taxonomy",
+      "lms", "moodle", "canvas", "teachable",
+      "video production", "after effects", "premiere pro",
+      "python", "data structures", "algorithms", "competitive programming",
+      "student engagement", "nps", "csat", "learner outcomes",
+      "b2b sales", "institutional partnerships", "school relations",
+      "content creation", "course creation", "assessment design",
+      "google classroom", "zoom", "microsoft teams",
+    ],
+    signals: [
+      "edtech", "ed-tech", "education technology", "online learning",
+      "e-learning", "upskilling", "reskilling", "test prep",
+      "k12", "higher education", "skill development",
+    ],
+    aliases: [
+      "edtech", "ed tech", "education technology", "online education",
+      "e-learning", "learning and development",
+    ],
+    negatives: [
+      "school teacher", "college professor", "private tutor offline",
+      "coaching centre owner", "driving instructor",
+    ],
+  },
+
+  // ─────────────────────────────────────────────────────────────────────────
+  "Banking & Financial Services": {
+    roles: [
+      "relationship manager", "rm", "branch manager", "branch banking",
+      "personal banker", "wealth manager", "private banker",
+      "credit analyst", "credit manager", "underwriter",
+      "risk analyst", "risk manager", "compliance officer",
+      "treasury analyst", "treasury manager", "forex dealer",
+      "trade finance officer", "loan officer", "mortgage advisor",
+      "product manager banking", "digital banking manager",
+      "fintech analyst", "payments analyst", "upi product",
+      "npa manager", "collections manager", "recovery officer",
+      "kyc analyst", "aml analyst", "fraud analyst",
+      "bancassurance manager", "insurance sales manager",
+      "equity research analyst", "fixed income analyst",
+      "portfolio manager", "fund manager", "dealer",
+      "operations manager banking", "back office banking",
+      "banking intern", "credit intern", "rm trainee",
+    ],
+    companies: [
+      // Private banks
+      "HDFC Bank", "ICICI Bank", "Axis Bank", "Kotak Mahindra Bank",
+      "IndusInd Bank", "Yes Bank", "Federal Bank", "RBL Bank",
+      "IDFC First Bank", "Bandhan Bank", "South Indian Bank",
+      "Karur Vysya Bank", "City Union Bank",
+      // PSU banks
+      "State Bank of India", "SBI", "Bank of Baroda", "Punjab National Bank",
+      "PNB", "Canara Bank", "Union Bank of India", "Bank of India",
+      "Indian Bank", "Central Bank of India",
+      // NBFCs
+      "Bajaj Finance", "Bajaj Finserv", "Muthoot Finance",
+      "Manappuram Finance", "Shriram Finance", "Cholamandalam",
+      "Mahindra Finance", "L&T Finance", "Tata Capital",
+      "Aditya Birla Finance", "HDB Financial Services",
+      // Fintechs
+      "Paytm", "PhonePe", "Razorpay", "CRED", "BharatPe", "MobiKwik",
+      "Groww", "Zerodha", "Upstox", "Angel One", "5Paisa",
+      "PolicyBazaar", "Acko", "Digit Insurance",
+      "Slice", "Jupiter", "Fi Money", "Niyo", "Open",
+      // Insurance
+      "LIC", "HDFC Life", "ICICI Prudential", "SBI Life",
+      "Max Life", "Bajaj Allianz", "New India Assurance",
+    ],
+    skills: [
+      "credit analysis", "financial analysis", "loan origination",
+      "risk assessment", "portfolio management", "treasury management",
+      "forex", "derivatives", "fixed income", "equity research",
+      "kyc", "aml", "compliance", "rbi regulations", "sebi regulations",
+      "banking operations", "core banking", "finacle", "temenos",
+      "salesforce", "crm", "relationship management",
+      "excel", "financial modelling", "bloomberg", "reuters",
+      "npa management", "collections", "recovery",
+      "upi", "payment gateway", "neft", "rtgs", "imps",
+      "insurance products", "mutual funds", "wealth management",
+    ],
+    signals: [
+      "banking", "financial services", "bfsi", "nbfc", "fintech",
+      "wealth management", "credit", "lending", "payments",
+      "insurance", "asset management", "capital markets",
+    ],
+    aliases: [
+      "bfsi", "banking", "financial services", "fintech",
+      "nbfc", "insurance", "wealth management",
+    ],
+    negatives: [
+      "bank peon", "bank guard", "cash van attendant",
+      "atm cash replenishment", "data entry banking",
+    ],
+  },
+
+  // ─────────────────────────────────────────────────────────────────────────
+  "Manufacturing & Automotive": {
+    roles: [
+      "plant manager", "production manager", "manufacturing engineer",
+      "process engineer", "quality engineer", "quality manager",
+      "maintenance engineer", "maintenance manager",
+      "industrial engineer", "manufacturing analyst",
+      "supply chain manager", "procurement manager", "sourcing manager",
+      "vendor development manager", "supplier quality engineer",
+      "lean manager", "six sigma black belt", "continuous improvement",
+      "operations manager manufacturing", "factory manager",
+      "general manager operations", "vp manufacturing",
+      "automotive engineer", "vehicle dynamics engineer",
+      "powertrain engineer", "chassis engineer", "body engineer",
+      "adas engineer", "ev engineer", "battery engineer",
+      "embedded software engineer automotive", "can bus engineer",
+      "sales manager automotive", "regional sales manager auto",
+      "dealer development manager", "after sales manager",
+      "service manager", "spare parts manager",
+      "ehs manager", "environment health safety",
+      "tool design engineer", "die design", "jig fixture",
+      "manufacturing intern", "plant trainee", "GET", "MT",
+    ],
+    companies: [
+      // Automotive OEMs
+      "Tata Motors", "Mahindra & Mahindra", "Maruti Suzuki",
+      "Hyundai India", "Kia India", "Honda Cars India",
+      "Toyota Kirloskar", "Renault India", "Nissan India",
+      "Ford India", "Volkswagen India", "Skoda India",
+      "Hero MotoCorp", "Bajaj Auto", "TVS Motor", "Royal Enfield",
+      "Yamaha India", "Suzuki Motorcycle",
+      // EV players
+      "Ola Electric", "Ather Energy", "Revolt Motors", "Ultraviolette",
+      "Tata EV", "MG Motor", "BYD India",
+      // Auto components
+      "Bosch India", "Motherson Sumi", "Minda Industries",
+      "Varroc Engineering", "Endurance Technologies", "Suprajit Engineering",
+      "Sandhar Technologies", "Lumax Industries", "Fiem Industries",
+      "Exide Industries", "Amara Raja Batteries",
+      // Heavy manufacturing
+      "L&T", "Larsen & Toubro", "Bharat Forge", "Thermax",
+      "Cummins India", "ABB India", "Siemens India", "Honeywell India",
+      "3M India", "Saint-Gobain India", "Asahi India Glass",
+      // FMCG/industrial manufacturing
+      "ITC Manufacturing", "Hindustan Unilever Manufacturing",
+      "Godrej Industries", "Dabur", "Emami",
+      // Defence & aerospace
+      "HAL", "DRDO", "BEL", "BEML", "Bharat Electronics",
+      "L&T Defence", "Tata Advanced Systems",
+    ],
+    skills: [
+      "lean manufacturing", "six sigma", "kaizen", "5s", "tpm",
+      "quality management", "iatf 16949", "iso 9001", "ts 16949",
+      "autocad", "catia", "solidworks", "nx unigraphics",
+      "fmea", "apqp", "ppap", "spc", "msa",
+      "erp", "sap pp", "sap mm", "oracle manufacturing",
+      "production planning", "capacity planning", "oee",
+      "supplier development", "vendor audits", "incoming quality",
+      "can bus", "autosar", "matlab simulink", "dspace",
+      "battery management system", "bms", "ev powertrain",
+      "ehs", "iso 14001", "ohsas 18001",
+      "tooling", "die casting", "injection moulding", "stamping",
+    ],
+    signals: [
+      "manufacturing", "automotive", "automobile", "plant",
+      "production", "factory", "industrial", "ev", "electric vehicle",
+      "auto component", "oem", "tier 1 supplier",
+    ],
+    aliases: [
+      "auto", "automobile", "automotive", "manufacturing",
+      "industrial", "plant operations", "factory",
+    ],
+    negatives: [
+      "automobile insurance", "car loan", "auto finance",
+      "vehicle inspection app", "car washing",
     ],
   },
 

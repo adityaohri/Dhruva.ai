@@ -9,6 +9,8 @@ import {
   getRoleVariants,
   type IndustryName,
 } from "@/lib/industryKeywords";
+import type { OpportunityResult } from "@/types/opportunity";
+
 const CREAM = "#FDFBF1";
 const PURPLE = "#3C2A6A";
 
@@ -50,41 +52,6 @@ const HUNT_STATUS_MESSAGES = [
   "Checking Naukri & LinkedIn listings...",
   "Deduplicating and ranking results...",
 ];
-
-type OpportunityResult = {
-  title: string;
-  url: string;
-  snippet: string;
-  source: string;
-  isDirect: boolean;
-  company?: string | null;
-  /** Nomenclature from extractor: "Company: Role". */
-  displayName?: string;
-  /** Claude‑generated 3‑bullet job summary. */
-  summary?: string | null;
-  /** Prestige score from backend (higher = more sought after). */
-  prestige_score?: number;
-  /** Original index from backend result list, used for recency sort. */
-  originalIndex?: number;
-   /** CV-to-JD match analysis. */
-  match_score?: number;
-  match_band?: "Strong" | "Good" | "Moderate" | "Stretch";
-  match_strengths?: string[];
-  match_gaps?: string[];
-  match_action_item?: string;
-  /** Origin bucket from Serp Query Engine, when present. */
-  bucket?: "A" | "B" | "C" | "D" | "E";
-  /** Recency score for LinkedIn jobs (higher = more recent). */
-  recencyScore?: number;
-  /** True if job posted within last ~week. */
-  isFresh?: boolean;
-  /** Optional location for display. */
-  location?: string | null;
-  /** Optional human-readable posted time, e.g. "3 days ago". */
-  posted_at?: string | null;
-  /** Optional explicit verified flag (defaults to credible source). */
-  isVerified?: boolean;
-};
 
 type LazyMatch = {
   score: number;
@@ -1527,7 +1494,7 @@ export default function OpportunityPage() {
       const merged: OpportunityResult[] = [
         ...withoutLegacySignals,
         ...linkedInJobsMapped,
-        ...jsearchMapped,
+        ...(data.source === "index" ? [] : jsearchMapped),
         // On The Radar — Exa + SerpApi merged
         ...radarSignals,
         ...serpRadarSignals,

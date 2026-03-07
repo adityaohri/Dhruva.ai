@@ -13,6 +13,7 @@ import {
   standardiseAndSummariseJobs,
   type EnrichedJob,
 } from "@/lib/services/extractor";
+import { queryJobsIndex } from "@/lib/indexQuery";
 export interface SentinelResultItem extends HuntResult {
   isDirect: boolean;
   company: string | null;
@@ -188,6 +189,11 @@ export async function POST(req: NextRequest) {
       companies: body.companies,
       roles: body.roles,
     };
+
+    const indexResults = await queryJobsIndex(industry);
+    if (indexResults.length >= 20) {
+      return NextResponse.json({ results: indexResults, source: "index" });
+    }
 
     // Use Serp Query Engine (buckets A–D) with two-step deep fetch.
     const rawResults = await runSerpQueryEngine(filters);
