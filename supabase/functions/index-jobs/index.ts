@@ -14,6 +14,21 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
+const EXPERIENCE_TIERS = [
+  {
+    jsearchValue: "no_experience",
+    label: "fresher",
+  },
+  {
+    jsearchValue: "under_3_years_experience",
+    label: "junior",
+  },
+  {
+    jsearchValue: "more_than_3_years_experience",
+    label: "mid-senior",
+  },
+] as const;
+
 const RAPIDAPI_URL = "https://jsearch.p.rapidapi.com/search";
 const OPENWEBNINJA_URL = "https://api.openwebninja.com/jsearch/search";
 
@@ -94,16 +109,49 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    const [res1, res2] = await Promise.all([
-      jsearchFetch(apiKey, `${industry} jobs India`),
-      jsearchFetch(apiKey, `${industry} careers India`),
-    ]);
+    const queries = [
+      `${industry} jobs India`,
+      `${industry} careers India`,
+    ];
 
-    const raw1 = Array.isArray(res1?.data) ? res1.data : [];
-    const raw2 = Array.isArray(res2?.data) ? res2.data : [];
+    const { url: baseUrl, headers } = getJSearchConfig(apiKey);
+    const allResults: any[] = [];
+
+    for (const tier of EXPERIENCE_TIERS) {
+      const tierFetches = queries.map((query) => {
+        const url = new URL(baseUrl);
+        url.searchParams.set("query", query);
+        url.searchParams.set("country", "IN");
+        url.searchParams.set("date_posted", "month");
+        url.searchParams.set("num_pages", "5");
+        url.searchParams.set("job_requirements", tier.jsearchValue);
+
+        return fetch(url.toString(), {
+          method: "GET",
+          headers,
+        })
+          .then((r) => r.json())
+          .then((data) => ({
+            results: data.data ?? [],
+            experienceLabel: tier.label,
+          }));
+      });
+
+      const tierResults = await Promise.all(tierFetches);
+
+      for (const { results, experienceLabel } of tierResults) {
+        for (const job of results) {
+          allResults.push({ ...job, _experienceLabel: experienceLabel });
+        }
+      }
+
+      // Pause between tiers to avoid rate limiting
+      await new Promise((r) => setTimeout(r, 500));
+    }
+
     const seen = new Set<string>();
     const combined: any[] = [];
-    for (const job of [...raw1, ...raw2]) {
+    for (const job of allResults) {
       const link = job?.job_apply_link;
       if (link && typeof link === "string" && !seen.has(link)) {
         seen.add(link);
@@ -125,7 +173,7 @@ Deno.serve(async (req: Request) => {
               : null,
           source: job.job_publisher ?? null,
           industry,
-          experience_level: null,
+          experience_level: job._experienceLabel ?? "unknown",
           location:
             job.job_city || job.job_country || "India",
           bucket: "B",

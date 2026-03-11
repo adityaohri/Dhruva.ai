@@ -18,7 +18,7 @@ import {
  *
  * Architecture:
  *   Bucket A — Elite Core          (direct company career sites)
- *   Bucket B — ATS Deep-Web        (Workday, Greenhouse, Lever, SmartRecruiters)
+ *   Bucket B — ATS Deep-Web        (Workda y, Greenhouse, Lever, SmartRecruiters)
  *   Bucket C — Hidden Market       (LinkedIn posts, informal hiring signals)
  *   Bucket D — Mass Aggregators    (Naukri, Indeed, Shine, Internshala)
  *   Bucket E — Signal Intelligence (funding news, expansion signals)
