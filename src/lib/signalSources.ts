@@ -139,6 +139,7 @@ export const INDIAN_SIGNAL_SOURCES: string[] = [
   "makeinindia.com",
   "startupindia.gov.in",
   "ibef.org",
+  "pib.gov.in",
 
   // ── VC & PE ecosystem ─────────────────────────────────────────────────────
   "pevcinsights.com",
@@ -146,6 +147,16 @@ export const INDIAN_SIGNAL_SOURCES: string[] = [
   "blume.vc",
   "accel.com",
   "sequoiacap.com",
+  "chiratae.com",
+  "100x.vc",
+  "indiaquodient.com",
+  "kalaari.com",
+  "nexusvp.com",
+  "elevationcapital.com",
+  "kedaara.com",
+  "truenorth.co.in",
+  "chryscapital.com",
+  
 ]
 
 // ─────────────────────────────────────────────────────────────────────────────

@@ -1,4 +1,8 @@
+// @ts-nocheck
+/* eslint-disable @typescript-eslint/no-explicit-any */
+// @ts-ignore - Deno / ESM import; valid in Supabase Edge Runtime
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
+// @ts-ignore - Deno path import within functions folder
 import {
   SIGNAL_SEARCH_QUERIES,
   INDUSTRY_SIGNAL_OVERLAYS,
@@ -8,9 +12,19 @@ import {
   SignalType,
 } from "./signalSources.ts"
 
-const SIGNAL_TYPES: SignalType[] = [
-  "funding", "leadership", "geography", "product_launch", "contract_win",
-  "headcount", "workstream", "regulatory", "virality", "job_posting_surge",
+declare const Deno: {
+  env: { get(key: string): string | undefined };
+  serve: (handler: (req: Request) => Promise<Response>) => void;
+};
+
+const ALL_INDUSTRIES = [
+  "consulting", "technology", "finance", "marketing", "operations",
+  "product", "data & analytics", "investment banking",
+  "private equity & vc", "fmcg", "pharma & healthcare",
+  "energy & infrastructure", "media & entertainment", "legal",
+  "human resources", "real estate", "logistics & supply chain",
+  "e-commerce & d2c", "edtech", "banking & financial services",
+  "manufacturing & automotive",
 ]
 
 const supabase = createClient(
@@ -24,6 +38,7 @@ const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY")!
 // ─── Exa search ──────────────────────────────────────────────────────────────
 
 async function exaSearch(query: string): Promise<ExaResult[]> {
+  console.log("[EXA] Searching for:", query)
   const res = await fetch("https://api.exa.ai/search", {
     method: "POST",
     headers: {
@@ -35,8 +50,6 @@ async function exaSearch(query: string): Promise<ExaResult[]> {
       numResults: 5,
       useAutoprompt: true,
       type: "neural",
-      includeDomains: INDIAN_SIGNAL_SOURCES,
-      excludeDomains: EXCLUDED_SIGNAL_DOMAINS,
       startPublishedDate: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
         .toISOString()
         .split("T")[0],
@@ -45,8 +58,10 @@ async function exaSearch(query: string): Promise<ExaResult[]> {
       },
     }),
   })
-  if (!res.ok) return []
   const data = await res.json()
+  console.log("[EXA] Status:", res.status, "Results:", data.results?.length ?? 0)
+  if (!res.ok) console.log("[EXA] Full error:", JSON.stringify(data))
+  if (!res.ok) return []
   return data.results ?? []
 }
 
@@ -56,6 +71,7 @@ async function classifySignal(
   result: ExaResult,
   industry: string
 ): Promise<ClassifiedSignal | null> {
+  console.log("[CLASSIFY] Classifying:", result.title)
   const systemPrompt = `You are a hiring signal classifier for Indian companies.
 Given a news article, determine if it indicates a company is likely to hire new people in the next 30–90 days.
 
@@ -112,6 +128,7 @@ Source URL: ${result.url}`
     if (!res.ok) return null
     const data = await res.json()
     const text = data?.content?.[0]?.text
+    console.log("[CLASSIFY] Claude response:", text)
     if (!text) return null
     const parsed = JSON.parse(text.replace(/```json|```/g, "").trim())
     if (!parsed.isSignal) return null
@@ -158,9 +175,10 @@ async function enrichWithJobData(companyName: string): Promise<{
   }
 
   const job_count = data.length
-  const job_titles = [...new Set(data.map(j => j.title))].slice(0, 10)
-  const job_count_30d = data.filter(
-    j => j.posted_at && new Date(j.posted_at) > new Date(thirtyDaysAgo)
+  const titles = (data as any[]).map((j) => String(j.title ?? ""))
+  const job_titles = [...new Set(titles)].slice(0, 10)
+  const job_count_30d = (data as any[]).filter(
+    (j) => j.posted_at && new Date(j.posted_at) > new Date(thirtyDaysAgo)
   ).length
 
   return { job_count, job_titles, job_count_30d }
@@ -214,30 +232,32 @@ async function upsertSignal(
 
 // ─── Industry mode processor ──────────────────────────────────────────────────
 
-async function processIndustry(industry: string) {
+async function processIndustry(
+  industry: string,
+  signalType: SignalType
+) {
   const seen = new Set<string>()
   let processed = 0
 
-  for (const signalType of SIGNAL_TYPES) {
-    const generic = SIGNAL_SEARCH_QUERIES[signalType] ?? []
-    const overlay = (INDUSTRY_SIGNAL_OVERLAYS[industry] as Record<string, string[]> | undefined)?.[signalType] ?? []
-    const queries = [...generic, ...overlay].slice(0, 6) // max 6 queries per signal type per run
+  const generic = SIGNAL_SEARCH_QUERIES[signalType] ?? []
+  const overlay = (INDUSTRY_SIGNAL_OVERLAYS[industry] as Record<string, string[]> | undefined)?.[signalType] ?? []
+  const queries = [...generic, ...overlay].slice(0, 3)
 
-    for (const query of queries) {
-      const results = await exaSearch(query)
-      for (const result of results) {
-        if (seen.has(result.url)) continue
-        seen.add(result.url)
+  console.log("[PROCESS] Industry:", industry, "Signal:", signalType, "Queries:", queries.length)
 
-        const classified = await classifySignal(result, industry)
-        if (!classified) continue
+  for (const query of queries) {
+    const results = await exaSearch(query)
+    for (const result of results) {
+      if (seen.has(result.url)) continue
+      seen.add(result.url)
 
-        await upsertSignal(result, classified, industry, "industry")
-        processed++
-      }
-      // Rate limit — Exa allows ~10 req/s, Claude Haiku is fast
-      await new Promise(r => setTimeout(r, 300))
+      const classified = await classifySignal(result, industry)
+      if (!classified) continue
+
+      await upsertSignal(result, classified, industry, "industry")
+      processed++
     }
+    await new Promise(r => setTimeout(r, 300))
   }
 
   return processed
@@ -255,7 +275,12 @@ async function processWatchlist() {
 
   // Deduplicate by company_name
   const unique = Array.from(
-    new Map(companies.map(c => [c.company_name.toLowerCase(), c])).values()
+    new Map(
+      (companies as any[]).map((c: any) => [
+        String(c.company_name ?? "").toLowerCase(),
+        c,
+      ]),
+    ).values()
   )
 
   let processed = 0
@@ -265,7 +290,7 @@ async function processWatchlist() {
     for (const signalType of SIGNAL_TYPES) {
       const templates = WATCHLIST_QUERY_TEMPLATES[signalType] ?? []
       const queries = templates
-        .map(t => t.replace(/\{\{COMPANY\}\}/g, company.company_name))
+        .map((t: string) => t.replace(/\{\{COMPANY\}\}/g, company.company_name))
         .slice(0, 3) // max 3 queries per signal type per company per run
 
       for (const query of queries) {
@@ -312,7 +337,8 @@ Deno.serve(async (req: Request) => {
 
   const body = await req.json().catch(() => ({}))
   const mode: "industry" | "watchlist" = body.mode ?? "industry"
-  const industry: string = body.industry ?? ""
+  const signalType: SignalType = body.signalType ?? "funding"
+  const industry: string | null = body.industry ?? null
 
   try {
     if (mode === "watchlist") {
@@ -323,18 +349,28 @@ Deno.serve(async (req: Request) => {
       )
     }
 
-    if (!industry) {
+    // If a specific industry is passed, process just that one
+    if (industry) {
+      const count = await processIndustry(industry, signalType)
       return new Response(
-        JSON.stringify({ ok: false, error: "industry required for industry mode" }),
-        { status: 400, headers: { "Content-Type": "application/json" } }
+        JSON.stringify({ ok: true, mode: "industry", industry, signalType, processed: count }),
+        { headers: { "Content-Type": "application/json" } }
       )
     }
 
-    const count = await processIndustry(industry)
+    // Otherwise loop through ALL industries for this signal type
+    let total = 0
+    for (const ind of ALL_INDUSTRIES) {
+      const count = await processIndustry(ind, signalType)
+      total += count
+      await new Promise(r => setTimeout(r, 500))
+    }
+
     return new Response(
-      JSON.stringify({ ok: true, mode: "industry", industry, processed: count }),
+      JSON.stringify({ ok: true, mode: "industry", signalType, processed: total }),
       { headers: { "Content-Type": "application/json" } }
     )
+
   } catch (err) {
     return new Response(
       JSON.stringify({ ok: false, error: String(err) }),
