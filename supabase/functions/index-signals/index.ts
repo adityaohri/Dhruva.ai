@@ -11,6 +11,12 @@ import {
   EXCLUDED_SIGNAL_DOMAINS,
   SignalType,
 } from "./signalSources.ts"
+import {
+  enrichWithJobData,
+  updateCompanySignalHistory,
+  calculateBoostedStrength,
+  normaliseCompanyName,
+} from "./enrichSignal.ts"
 
 declare const Deno: {
   env: { get(key: string): string | undefined };
@@ -125,8 +131,21 @@ Source URL: ${result.url}`
         messages: [{ role: "user", content: userPrompt }],
       }),
     })
+
+    const raw = await res.text()
+    console.log("[CLASSIFY] Claude status:", res.status)
+    console.log("[CLASSIFY] Claude raw:", raw)
+
     if (!res.ok) return null
-    const data = await res.json()
+
+    let data: any
+    try {
+      data = JSON.parse(raw)
+    } catch (err) {
+      console.log("[CLASSIFY] JSON parse error:", String(err))
+      return null
+    }
+
     const text = data?.content?.[0]?.text
     console.log("[CLASSIFY] Claude response:", text)
     if (!text) return null
@@ -153,37 +172,6 @@ Source URL: ${result.url}`
   }
 }
 
-// ─── Enrich with job frequency data from jobs_index ───────────────────────────
-
-async function enrichWithJobData(companyName: string): Promise<{
-  job_count: number
-  job_titles: string[]
-  job_count_30d: number
-}> {
-  if (!companyName) return { job_count: 0, job_titles: [], job_count_30d: 0 }
-
-  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
-
-  const { data } = await supabase
-    .from("jobs_index")
-    .select("title, posted_at")
-    .ilike("company", `%${companyName}%`)
-    .eq("is_active", true)
-
-  if (!data || data.length === 0) {
-    return { job_count: 0, job_titles: [], job_count_30d: 0 }
-  }
-
-  const job_count = data.length
-  const titles = (data as any[]).map((j) => String(j.title ?? ""))
-  const job_titles = [...new Set(titles)].slice(0, 10)
-  const job_count_30d = (data as any[]).filter(
-    (j) => j.posted_at && new Date(j.posted_at) > new Date(thirtyDaysAgo)
-  ).length
-
-  return { job_count, job_titles, job_count_30d }
-}
-
 // ─── Upsert signal to Supabase ────────────────────────────────────────────────
 
 async function upsertSignal(
@@ -193,23 +181,42 @@ async function upsertSignal(
   mode: "industry" | "watchlist",
   watchlistCompany?: string
 ) {
-  // Enrich with live job data from jobs_index
   const jobData = classified.companyName
     ? await enrichWithJobData(classified.companyName)
-    : { job_count: 0, job_titles: [], job_count_30d: 0 }
+    : { job_count: 0, job_titles: [], job_count_30d: 0, canonical_company_name: null }
 
-  // Boost signal strength if company is also actively hiring
-  let boostedStrength = classified.signalStrength
-  if (jobData.job_count >= 20) boostedStrength = Math.min(boostedStrength + 8, 98)
-  else if (jobData.job_count >= 10) boostedStrength = Math.min(boostedStrength + 5, 98)
-  else if (jobData.job_count >= 5) boostedStrength = Math.min(boostedStrength + 2, 98)
+  const signalHistory = classified.companyName
+    ? await updateCompanySignalHistory(
+        classified.companyName,
+        classified.companyDomain,
+        classified.signalType ?? "",
+        industry
+      )
+    : 0
+
+  const boostedStrength = calculateBoostedStrength(
+    classified.signalStrength,
+    jobData.job_count,
+    signalHistory
+  )
+
+  // Use canonical company name from jobs_index if available
+  const finalCompanyName = jobData.canonical_company_name ?? classified.companyName
+
+  console.log(
+    "[UPSERT] Company:", finalCompanyName,
+    "| Signal:", classified.signalType,
+    "| Strength:", boostedStrength,
+    "| Jobs:", jobData.job_count,
+    "| History:", signalHistory
+  )
 
   await supabase.from("signals_index").upsert(
     {
       title: result.title,
       url: result.url,
       snippet: (result.text ?? "").slice(0, 300),
-      company_name: classified.companyName,
+      company_name: finalCompanyName,
       company_domain: classified.companyDomain,
       signal_type: classified.signalType,
       signal_strength: boostedStrength,
@@ -241,7 +248,7 @@ async function processIndustry(
 
   const generic = SIGNAL_SEARCH_QUERIES[signalType] ?? []
   const overlay = (INDUSTRY_SIGNAL_OVERLAYS[industry] as Record<string, string[]> | undefined)?.[signalType] ?? []
-  const queries = [...generic, ...overlay].slice(0, 3)
+  const queries = [...generic, ...overlay].slice(0, 6)
 
   console.log("[PROCESS] Industry:", industry, "Signal:", signalType, "Queries:", queries.length)
 

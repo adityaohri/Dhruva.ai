@@ -999,7 +999,7 @@ function OpportunityCard({
     <div className="flex flex-col rounded-2xl border border-[#E5E7EB] bg-white p-5 shadow-none transition-shadow hover:shadow-sm">
       <div className="flex items-start justify-between gap-3">
         <div className="flex-1">
-          <h3 className="font-semibold text-[#3C2A6A] line-clamp-2">
+      <h3 className="font-semibold text-[#3C2A6A] line-clamp-2">
             {(() => {
               const company = resolveCompany(r);
               const role = resolveTitle(r, company);
@@ -1009,19 +1009,19 @@ function OpportunityCard({
               if (!company) return role;
               return `${company}: ${role}`;
             })()}
-          </h3>
+      </h3>
           {resolveCompany(r) && (
-            <p className="mt-1.5 text-sm font-medium text-[#3C2A6A]/90">
+        <p className="mt-1.5 text-sm font-medium text-[#3C2A6A]/90">
               {resolveCompany(r)}
             </p>
           )}
           {r.location && (
             <p className="mt-0.5 text-xs text-slate-500">
               📍 {r.location}
-            </p>
-          )}
-          <p className="mt-1 text-xs text-slate-500 line-clamp-1">
-            {getSourceBadge(r.url)}
+        </p>
+      )}
+      <p className="mt-1 text-xs text-slate-500 line-clamp-1">
+        {getSourceBadge(r.url)}
             {r.posted_at && (
               <span className="ml-2 text-slate-400">· {r.posted_at}</span>
             )}
@@ -1098,14 +1098,14 @@ function OpportunityCard({
             {loadingMatch ? "Checking…" : "Check Profile Match"}
           </button>
         ) : null}
-        <a
-          href={r.url}
-          target="_blank"
-          rel="noopener noreferrer"
+      <a
+        href={r.url}
+        target="_blank"
+        rel="noopener noreferrer"
           className="inline-flex w-full justify-center rounded-full bg-[#3C2A6A] py-2.5 text-sm font-medium text-[#FDFBF1] hover:bg-[#4a347f]"
-        >
-          Apply now
-        </a>
+      >
+        Apply now
+      </a>
       </div>
     </div>
   );
@@ -1239,23 +1239,23 @@ export default function OpportunityPage() {
 
     try {
       const sentinelPayload = {
-        industry: filters.industry,
-        jobType: filters.jobType,
-        experience: filters.experience,
-        location: filters.location || undefined,
-        pay: filters.pay || undefined,
-        companies: filters.companies
+          industry: filters.industry,
+          jobType: filters.jobType,
+          experience: filters.experience,
+          location: filters.location || undefined,
+          pay: filters.pay || undefined,
+          companies: filters.companies
           ? filters.companies
               .split(",")
               .map((s) => s.trim())
               .filter(Boolean)
-          : undefined,
-        roles: filters.roles
+            : undefined,
+          roles: filters.roles
           ? filters.roles
               .split(",")
               .map((s) => s.trim())
               .filter(Boolean)
-          : undefined,
+            : undefined,
       };
 
       const [res, radarResults, hiringResults, jsearchResults] =
@@ -2423,13 +2423,13 @@ export default function OpportunityPage() {
               <option value="recency">Recency</option>
             </select>
           </div>
-          <button
-            type="button"
-            onClick={resetFilters}
-            className="rounded-full border border-[#3C2A6A]/30 bg-white px-5 py-2 text-sm font-medium text-[#3C2A6A] hover:bg-[#3C2A6A]/5"
-          >
-            Reset filters
-          </button>
+        <button
+          type="button"
+          onClick={resetFilters}
+          className="rounded-full border border-[#3C2A6A]/30 bg-white px-5 py-2 text-sm font-medium text-[#3C2A6A] hover:bg-[#3C2A6A]/5"
+        >
+          Reset filters
+        </button>
         </div>
       </div>
 
@@ -2473,10 +2473,10 @@ export default function OpportunityPage() {
         <>
           {/* Flat list (Your Matches) */}
           <div className="mt-8 space-y-4">
-            <h2 className="font-serif text-lg font-semibold text-[#3C2A6A]">
+              <h2 className="font-serif text-lg font-semibold text-[#3C2A6A]">
               Your Matches
-            </h2>
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              </h2>
+                    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {sortedMatches.map((r, i) => (
                 <OpportunityCard
                   key={`${r.url}-${i}`}
@@ -2485,9 +2485,9 @@ export default function OpportunityPage() {
                   loadingMatch={loadingMatchUrl === r.url}
                   onCheckMatch={() => fetchMatchForJob(r)}
                 />
-              ))}
-            </div>
-          </div>
+                      ))}
+                    </div>
+                  </div>
         </>
       )}
 
@@ -2496,7 +2496,7 @@ export default function OpportunityPage() {
           <h2 className="font-serif text-lg font-semibold text-[#3C2A6A]">
             Hiring Signals
           </h2>
-          <div className="space-y-3">
+                <div className="space-y-3">
           {hiringSignalsSorted.slice(0, signalsLimit).map((r, i) => (
               <div
                 key={`${r.url}-${i}`}
@@ -2550,8 +2550,8 @@ export default function OpportunityPage() {
                   >
                     View Post
                   </a>
+                  </div>
                 </div>
-              </div>
             ))}
             {hiringSignals.length > signalsLimit && (
               <button
@@ -2565,14 +2565,14 @@ export default function OpportunityPage() {
               </button>
             )}
           </div>
-        </div>
-      )}
+            </div>
+          )}
 
       {results.length > 0 && activeSection === "radar" && (
         <div className="mt-6 space-y-4">
-          <h2 className="font-serif text-lg font-semibold text-[#3C2A6A]">
+            <h2 className="font-serif text-lg font-semibold text-[#3C2A6A]">
             On The Radar
-          </h2>
+            </h2>
           <div className="space-y-3">
             {onTheRadar.slice(0, radarLimit).map((r, i) => (
               <div
@@ -2683,8 +2683,8 @@ export default function OpportunityPage() {
                   );
                 })()}
               </div>
-            ))}
-          </div>
+              ))}
+            </div>
           {onTheRadar.length > radarLimit && (
             <button
               type="button"
@@ -2696,7 +2696,7 @@ export default function OpportunityPage() {
               Load more signals
             </button>
           )}
-        </div>
+          </div>
       )}
     </div>
   );
