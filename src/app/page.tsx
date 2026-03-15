@@ -1,8 +1,6 @@
-import Link from "next/link";
-import Image from "next/image";
 import { createClient } from "@/lib/supabase/server";
-import { Button } from "@/components/ui/button";
 import { HeroClient } from "@/app/components/HeroClient";
+import { GetStartedButton } from "@/app/components/GetStartedButton";
 import { StatsClient } from "@/app/components/StatsClient";
 import { ScrollAnimator } from "@/app/components/ScrollAnimator";
 import { GridBackground } from "@/components/GridBackground";
@@ -209,15 +207,7 @@ export default async function Home() {
                 Human-led, AI-powered. Built in New Delhi.
               </p>
               <div className="mt-6 flex justify-center">
-                <Button
-                  asChild
-                  size="lg"
-                  className="rounded-full bg-[#FDFBF1] px-8 text-sm font-medium text-[#3C2A6A] hover:bg-[#E5E7EB]"
-                >
-                  <Link href={isAuthed ? "/dashboard" : "/login"}>
-                    {isAuthed ? "Go to Profile Audit" : "Get Started"}
-                  </Link>
-                </Button>
+                <GetStartedButton isAuthed={isAuthed} />
               </div>
             </div>
           </div>

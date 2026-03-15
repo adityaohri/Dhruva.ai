@@ -1,6 +1,6 @@
 'use client';
 
-import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { GridBackground } from "@/components/GridBackground";
 
@@ -13,6 +13,7 @@ export function HeroClient({
   isAuthed: boolean;
   logos: Logo[];
 }) {
+  const router = useRouter();
   return (
     <section
       id="hero"
@@ -55,13 +56,12 @@ export function HeroClient({
               }}
             />
             <Button
-              asChild
+              type="button"
               size="lg"
               className="rounded-full bg-[#3C2A6A] px-10 text-sm font-medium text-[#FDFBF1] hover:bg-[#4a347f]"
+              onClick={() => router.push("/onboard")}
             >
-              <Link href={isAuthed ? "/dashboard" : "/login"}>
-                {isAuthed ? "Go to Profile Audit" : "Get Started"}
-              </Link>
+              {isAuthed ? "Go to Profile Audit" : "Get Started"}
             </Button>
           </div>
           <span className="text-xs text-[rgba(60,42,106,0.6)]">
