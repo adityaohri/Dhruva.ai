@@ -103,13 +103,13 @@ export async function POST(req: NextRequest) {
   const profileContext = JSON.stringify(profile);
 
   const anthropic = new Anthropic({ apiKey: ANTHROPIC_API_KEY });
-  const messagesForApi: Anthropic.MessageParam[] = [
+  const messagesForApi = [
     ...messages.map((m) => ({
-      role: m.role as "user" | "assistant",
+      role: (m.role === "assistant" ? "assistant" : "user") as "user" | "assistant",
       content: m.content,
     })),
-    { role: "user", content: userMessage },
-  ].filter((m) => m.content);
+    { role: "user" as const, content: userMessage },
+  ].filter((m) => m.content) as Anthropic.MessageParam[];
 
   try {
     const response = await anthropic.messages.create({
