@@ -9,7 +9,51 @@ import { ArrowUp, Paperclip } from "lucide-react";
 const FIRST_MESSAGE =
   "Hi! I'm Dhruva. I'm going to ask you a few questions to personalise your experience. Let's start — please upload your CV (PDF works best).";
 
-type Message = { role: "user" | "assistant"; content: string };
+type Message = {
+  role: "user" | "assistant";
+  content: string;
+  profileTable?: Record<string, unknown>;
+};
+
+const PROFILE_FIELD_LABELS: Record<string, string> = {
+  name: "Name",
+  university: "University",
+  gpa: "GPA",
+  skills: "Skills",
+  internships: "Internships",
+  leadership_positions: "Leadership",
+  projects: "Projects",
+  entrepreneurship: "Entrepreneurship",
+  personal_impact: "Personal impact",
+  target_functions: "Target functions",
+  target_industries: "Target industries",
+  experience_level: "Experience level",
+  commitment_type: "Commitment",
+  work_mode: "Work mode",
+  preferred_locations: "Preferred locations",
+  aspirations_notes: "Aspirations notes",
+  focus_sections: "Focus sections",
+  profile_timeframe_weeks: "Timeframe (weeks)",
+  action_preferences: "Action preferences",
+  notification_whatsapp: "Notify via WhatsApp",
+  notification_email: "Notify via Email",
+  notification_message: "Notify via Message",
+  notify_signals: "Notify: Signals",
+  notify_opportunities: "Notify: Opportunities",
+  notify_hidden_jobs: "Notify: Hidden jobs",
+  preferred_signals: "Preferred signals",
+  writing_style: "Writing style",
+  custom_writing_sample: "Custom writing sample",
+  whatsapp_linked: "WhatsApp linked",
+  email_linked: "Email linked",
+};
+
+function formatTableValue(v: unknown): string {
+  if (v == null) return "—";
+  if (Array.isArray(v)) return v.map(String).join(", ");
+  if (typeof v === "object") return JSON.stringify(v);
+  return String(v);
+}
 
 const SECTION_LABELS = {
   profile: ["name", "university", "gpa", "skills", "internships", "leadership_positions", "projects", "entrepreneurship", "personal_impact"],
@@ -67,10 +111,14 @@ export function OnboardingChat({ userId }: { userId: string }) {
   );
 
   const sendMessage = useCallback(
-    async (text: string) => {
+    async (
+      text: string,
+      options?: { displayContent?: string }
+    ) => {
       if (!text || isLoading) return;
 
-      setMessages((prev) => [...prev, { role: "user", content: text }]);
+      const displayContent = options?.displayContent ?? text;
+      setMessages((prev) => [...prev, { role: "user", content: displayContent }]);
       setIsLoading(true);
 
       try {
@@ -101,8 +149,20 @@ export function OnboardingChat({ userId }: { userId: string }) {
           isComplete: boolean;
         };
 
-        setMessages((prev) => [...prev, { role: "assistant", content: data.reply }]);
         const updates = data.profileUpdates ?? {};
+        const hasProfileTable = Object.keys(updates).length > 0;
+        const assistantContent = hasProfileTable
+          ? "I've extracted your profile from your CV. Please confirm or edit below."
+          : data.reply;
+
+        setMessages((prev) => [
+          ...prev,
+          {
+            role: "assistant",
+            content: assistantContent,
+            ...(hasProfileTable && { profileTable: updates }),
+          },
+        ]);
         if (Object.keys(updates).length > 0) {
           const nextProfile = { ...profile, ...updates };
           setProfile(nextProfile);
@@ -156,7 +216,8 @@ export function OnboardingChat({ userId }: { userId: string }) {
           const data = (await res.json()) as { text?: string; error?: string };
           if (res.ok && data.text) {
             await sendMessage(
-              `I've uploaded my CV. Please extract my profile details from this content and use them for the rest of the onboarding:\n\n---\n${data.text}\n---`
+              `I've uploaded my CV. Please extract my profile details from this content and use them for the rest of the onboarding:\n\n---\n${data.text}\n---`,
+              { displayContent: "I've uploaded my CV." }
             );
             return;
           }
@@ -178,7 +239,8 @@ export function OnboardingChat({ userId }: { userId: string }) {
           const text = raw?.trim();
           if (text) {
             await sendMessage(
-              `I've uploaded my CV/resume as text. Please extract my profile from this content:\n\n---\n${text}\n---`
+              `I've uploaded my CV/resume as text. Please extract my profile from this content:\n\n---\n${text}\n---`,
+              { displayContent: "I've uploaded my CV (text)." }
             );
             return;
           }
@@ -240,13 +302,34 @@ export function OnboardingChat({ userId }: { userId: string }) {
             className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}
           >
             <div
-              className={`max-w-[70%] rounded-2xl px-4 py-3 text-sm ${
+              className={`max-w-[85%] rounded-2xl px-4 py-3 text-sm ${
                 m.role === "assistant"
                   ? "border border-[rgba(60,42,106,0.1)] bg-white text-[#3c2a6a]"
                   : "bg-[#3c2a6a] text-[#fdfbf1]"
               }`}
             >
               {m.content}
+              {m.role === "assistant" && m.profileTable && Object.keys(m.profileTable).length > 0 && (
+                <div className="mt-3 overflow-hidden rounded-lg border border-[rgba(60,42,106,0.12)]">
+                  <table className="w-full text-left text-sm">
+                    <tbody>
+                      {Object.entries(m.profileTable).map(([key, value]) => (
+                        <tr
+                          key={key}
+                          className="border-b border-[rgba(60,42,106,0.08)] last:border-b-0"
+                        >
+                          <td className="py-2 pr-3 font-medium text-[rgba(60,42,106,0.7)] align-top">
+                            {PROFILE_FIELD_LABELS[key] ?? key.replace(/_/g, " ")}
+                          </td>
+                          <td className="py-2 text-[#3c2a6a]">
+                            {formatTableValue(value)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
           </div>
         ))}
