@@ -228,7 +228,7 @@ export function OnboardingChat({ userId }: { userId: string }) {
             <input
               ref={fileInputRef}
               type="file"
-              accept=\".pdf,.doc,.docx,.txt,.rtf\"
+              accept=".pdf,.doc,.docx,.txt,.rtf"
               className="hidden"
               onChange={handleFileChange}
             />
