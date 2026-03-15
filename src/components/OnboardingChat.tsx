@@ -7,7 +7,7 @@ import { createClient } from "@/lib/supabase/client";
 import { ArrowUp, Paperclip } from "lucide-react";
 
 const FIRST_MESSAGE =
-  "Hi! I'm Dhruva. I'm going to ask you a few questions to personalise your experience. Let's start — please upload your CV or paste your LinkedIn URL, whichever is more comprehensive.";
+  "Hi! I'm Dhruva. I'm going to ask you a few questions to personalise your experience. Let's start — please upload your CV (PDF works best).";
 
 type Message = { role: "user" | "assistant"; content: string };
 
@@ -140,9 +140,56 @@ export function OnboardingChat({ userId }: { userId: string }) {
     async (event: ChangeEvent<HTMLInputElement>) => {
       const file = event.target.files?.[0];
       if (!file) return;
-      const text = `I've uploaded my CV file: ${file.name}. Please use it to understand my background.`;
-      await sendMessage(text);
       event.target.value = "";
+
+      const isPdf = file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
+      const isTxt = file.type === "text/plain" || file.name.toLowerCase().endsWith(".txt");
+
+      if (isPdf) {
+        const formData = new FormData();
+        formData.append("pdf", file, file.name);
+        try {
+          const res = await fetch("/api/onboard-extract-cv", {
+            method: "POST",
+            body: formData,
+          });
+          const data = (await res.json()) as { text?: string; error?: string };
+          if (res.ok && data.text) {
+            await sendMessage(
+              `I've uploaded my CV. Please extract my profile details from this content and use them for the rest of the onboarding:\n\n---\n${data.text}\n---`
+            );
+            return;
+          }
+          await sendMessage(
+            `I tried to upload my CV (${file.name}) but it couldn't be read: ${data.error ?? "unknown error"}. I'll paste my details instead.`
+          );
+        } catch (e) {
+          console.error(e);
+          await sendMessage(
+            "My CV upload failed. I'll paste my key details instead."
+          );
+        }
+        return;
+      }
+
+      if (isTxt) {
+        try {
+          const raw = await file.text();
+          const text = raw?.trim();
+          if (text) {
+            await sendMessage(
+              `I've uploaded my CV/resume as text. Please extract my profile from this content:\n\n---\n${text}\n---`
+            );
+            return;
+          }
+        } catch {
+          // fall through to generic message
+        }
+      }
+
+      await sendMessage(
+        `I uploaded ${file.name}. For best results, please use a PDF or paste your CV details here.`
+      );
     },
     [sendMessage]
   );

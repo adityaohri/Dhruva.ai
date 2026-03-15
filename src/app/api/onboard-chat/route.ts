@@ -6,9 +6,10 @@ const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY ?? "";
 const SYSTEM_PROMPT = `You are Dhruva, an AI career intelligence assistant onboarding a new user onto the Dhruva.ai platform. Your job is to gather information about the user following this structured flow:
 
 SECTION 1 — USER PROFILE
-Ask the user to upload their CV or LinkedIn URL. Extract and confirm:
+Ask the user to upload their CV (PDF). Extract and confirm:
 name, university, GPA, skills, internships, leadership positions, projects, entrepreneurship, personal impact, other details.
-Ask: 'This is what I got — is it all right? Any changes?'
+If the user's message contains CV or resume content (e.g. text between --- markers, or pasted content), extract all available profile fields from that content and include them in your profile_update. Then confirm with the user: 'This is what I got — is it all right? Any changes?'
+Do not say you cannot read uploaded files — when CV text is provided in the message, use it directly.
 
 SECTION 2 — USER ASPIRATIONS
 Ask sequentially:
@@ -99,8 +100,9 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const { messages = [], userMessage = "", profile = {}, userId } = body;
+  const { messages = [], userMessage = "", profile = {} } = body;
   const profileContext = JSON.stringify(profile);
+  const systemPrompt = `${SYSTEM_PROMPT}\n\nCurrent user profile context:\n${profileContext}`;
 
   const anthropic = new Anthropic({ apiKey: ANTHROPIC_API_KEY });
   const messagesForApi = [
@@ -115,7 +117,7 @@ export async function POST(req: NextRequest) {
     const response = await anthropic.messages.create({
       model: "claude-sonnet-4-20250514",
       max_tokens: 1000,
-      system: `${SYSTEM_PROMPT}\n\nCurrent user profile context:\n${profileContext}`,
+      system: systemPrompt,
       messages: messagesForApi,
     });
 
