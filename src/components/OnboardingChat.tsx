@@ -296,43 +296,80 @@ export function OnboardingChat({ userId }: { userId: string }) {
         ref={scrollRef}
         className="flex-1 overflow-y-auto px-4 py-6 space-y-4"
       >
-        {messages.map((m, i) => (
-          <div
-            key={i}
-            className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}
-          >
+        {messages.map((m, i) => {
+          const isLastProfileTableMessage =
+            m.role === "assistant" &&
+            m.profileTable &&
+            Object.keys(m.profileTable).length > 0 &&
+            !messages.slice(i + 1).some((x) => x.role === "assistant" && x.profileTable);
+          return (
             <div
-              className={`max-w-[85%] rounded-2xl px-4 py-3 text-sm ${
-                m.role === "assistant"
-                  ? "border border-[rgba(60,42,106,0.1)] bg-white text-[#3c2a6a]"
-                  : "bg-[#3c2a6a] text-[#fdfbf1]"
-              }`}
+              key={i}
+              className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}
             >
-              {m.content}
-              {m.role === "assistant" && m.profileTable && Object.keys(m.profileTable).length > 0 && (
-                <div className="mt-3 overflow-hidden rounded-lg border border-[rgba(60,42,106,0.12)]">
-                  <table className="w-full text-left text-sm">
-                    <tbody>
-                      {Object.entries(m.profileTable).map(([key, value]) => (
-                        <tr
-                          key={key}
-                          className="border-b border-[rgba(60,42,106,0.08)] last:border-b-0"
+              <div
+                className={`max-w-[85%] rounded-2xl px-4 py-3 text-sm ${
+                  m.role === "assistant"
+                    ? "border border-[rgba(60,42,106,0.1)] bg-white text-[#3c2a6a]"
+                    : "bg-[#3c2a6a] text-[#fdfbf1]"
+                }`}
+              >
+                {m.content}
+                {m.role === "assistant" && m.profileTable && Object.keys(m.profileTable).length > 0 && (
+                  <>
+                    <div className="mt-3 overflow-hidden rounded-lg border border-[rgba(60,42,106,0.12)]">
+                      <table className="w-full text-left text-sm">
+                        <tbody>
+                          {Object.keys(m.profileTable).map((key) => {
+                            const currentValue = profile[key] ?? m.profileTable![key];
+                            const displayValue = formatTableValue(currentValue);
+                            return (
+                              <tr
+                                key={key}
+                                className="border-b border-[rgba(60,42,106,0.08)] last:border-b-0"
+                              >
+                                <td className="py-2 pr-3 font-medium text-[rgba(60,42,106,0.7)] align-top">
+                                  {PROFILE_FIELD_LABELS[key] ?? key.replace(/_/g, " ")}
+                                </td>
+                                <td className="py-2 text-[#3c2a6a]">
+                                  <input
+                                    type="text"
+                                    value={displayValue}
+                                    onChange={(e) =>
+                                      setProfile((prev) => ({ ...prev, [key]: e.target.value }))
+                                    }
+                                    className="w-full rounded border border-[rgba(60,42,106,0.2)] bg-[#fdfbf1] px-2 py-1 text-[#3c2a6a] focus:border-[#3c2a6a] focus:outline-none focus:ring-1 focus:ring-[#3c2a6a]/30"
+                                  />
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                    {isLastProfileTableMessage && (
+                      <div className="mt-3">
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            await saveProfile(profile);
+                            await sendMessage(
+                              "I've confirmed my profile. Please guide me to the next steps."
+                            );
+                          }}
+                          disabled={isLoading}
+                          className="rounded-full bg-[#3c2a6a] px-4 py-2 text-sm font-medium text-white hover:bg-[#4a347f] disabled:opacity-50"
                         >
-                          <td className="py-2 pr-3 font-medium text-[rgba(60,42,106,0.7)] align-top">
-                            {PROFILE_FIELD_LABELS[key] ?? key.replace(/_/g, " ")}
-                          </td>
-                          <td className="py-2 text-[#3c2a6a]">
-                            {formatTableValue(value)}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
+                          Confirm & continue
+                        </button>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
         {isLoading && (
           <div className="flex justify-start">
             <div className="flex items-center gap-1 rounded-2xl border border-[rgba(60,42,106,0.1)] bg-white px-4 py-3">
