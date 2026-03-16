@@ -118,6 +118,36 @@ const BENCHMARKING_FOCUS_OPTIONS = [
   "Others",
 ] as const;
 
+const ACTION_PREFERENCE_OPTIONS = [
+  "Doing courses",
+  "Seeking out opportunities",
+  "Credentialing",
+  "Volunteering",
+  "Other",
+] as const;
+
+const SIGNAL_OPTIONS = [
+  "Funding",
+  "Leadership changes",
+  "Product launch",
+  "Contract wins",
+  "Geographic expansion",
+  "Headcount growth",
+  "Job posting surge",
+  "Regulatory changes",
+  "Virality",
+  "Workstream changes",
+] as const;
+
+const WRITING_STYLE_OPTIONS = [
+  "Normal",
+  "Learning",
+  "Concise",
+  "Formal",
+  "Explanatory",
+  "Create your own style",
+] as const;
+
 function getSectionsCompleted(profile: Record<string, unknown>): number {
   let count = 0;
   for (const section of SECTION_KEYS) {
@@ -158,6 +188,8 @@ export function OnboardingChat({ userId }: { userId: string }) {
   const [selectedIndustries, setSelectedIndustries] = useState<string[]>([]);
   const [selectedLocations, setSelectedLocations] = useState<string[]>([]);
   const [selectedBenchmarkingFocus, setSelectedBenchmarkingFocus] = useState<string[]>([]);
+  const [selectedActions, setSelectedActions] = useState<string[]>([]);
+  const [selectedSignals, setSelectedSignals] = useState<string[]>([]);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
@@ -366,6 +398,28 @@ export function OnboardingChat({ userId }: { userId: string }) {
       lastMessage.content
     );
 
+  const showActionPreferenceChoices =
+    lastIsAssistant &&
+    !!lastMessage &&
+    /(preference|preferred).*(type of )?action|action types/i.test(lastMessage.content);
+
+  const showSignalChoices =
+    lastIsAssistant &&
+    !!lastMessage &&
+    /(which )?signals (to show|you'd like us to show|you would like us to show)/i.test(
+      lastMessage.content
+    );
+
+  const showWritingStyleChoices =
+    lastIsAssistant &&
+    !!lastMessage &&
+    /(which )?writing style|preferred writing style/i.test(lastMessage.content);
+
+  const showLinkChoices =
+    lastIsAssistant &&
+    !!lastMessage &&
+    /(link).*(whatsapp).*email/i.test(lastMessage.content);
+
   const mcqQuestion =
     (showFunctionChoices && "What function do you want to work in?") ||
     (showIndustryPrompt && "Which industry do you want to work in?") ||
@@ -375,6 +429,10 @@ export function OnboardingChat({ userId }: { userId: string }) {
     (showLocationChoices && "Any preferred locations?") ||
     (showBenchmarkingFocusChoices &&
       "Which sections of your profile do you want to focus on strengthening?") ||
+    (showActionPreferenceChoices && "Do you have a preference for any particular type of action?") ||
+    (showSignalChoices && "Which signals would you like us to use for opportunity discovery?") ||
+    (showWritingStyleChoices && "Which writing style would you prefer?") ||
+    (showLinkChoices && "Would you like us to link your WhatsApp and Email?") ||
     "";
 
   return (
@@ -537,7 +595,11 @@ export function OnboardingChat({ userId }: { userId: string }) {
             showCommitmentChoices ||
             showWorkModeChoices ||
             showLocationChoices ||
-            showBenchmarkingFocusChoices) && (
+            showBenchmarkingFocusChoices ||
+            showActionPreferenceChoices ||
+            showSignalChoices ||
+            showWritingStyleChoices ||
+            showLinkChoices) && (
             <div className="rounded-2xl border border-[rgba(60,42,106,0.15)] bg-white px-3 py-2">
               {mcqQuestion && (
                 <p className="mb-2 text-xs font-medium text-[#3c2a6a]">
@@ -759,6 +821,126 @@ export function OnboardingChat({ userId }: { userId: string }) {
                   )}
                 </div>
               )}
+              {showActionPreferenceChoices && (
+                <div className="flex flex-col gap-1">
+                  {ACTION_PREFERENCE_OPTIONS.map((opt) => {
+                    const active = selectedActions.includes(opt);
+                    return (
+                      <button
+                        key={opt}
+                        type="button"
+                        onClick={() =>
+                          setSelectedActions((prev) =>
+                            prev.includes(opt) ? prev.filter((x) => x !== opt) : [...prev, opt]
+                          )
+                        }
+                        className={`flex w-full items-center justify-between rounded-xl border px-3 py-2 text-xs text-left ${
+                          active
+                            ? "border-[#3c2a6a] bg-[#3c2a6a] text-[#fdfbf1]"
+                            : "border-[rgba(60,42,106,0.25)] bg-white text-[#3c2a6a] hover:bg-[#3c2a6a]/5"
+                        }`}
+                      >
+                        {opt}
+                      </button>
+                    );
+                  })}
+                  {selectedActions.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        const label = selectedActions.join(", ");
+                        await sendMessage(
+                          `When it comes to actions, I prefer: ${label}.`
+                        );
+                        setSelectedActions([]);
+                      }}
+                      className="mt-1 rounded-lg border-2 border-[#3c2a6a] bg-white px-4 py-2 text-xs font-semibold uppercase tracking-wide text-[#3c2a6a] shadow-sm hover:bg-[#3c2a6a] hover:text-white transition"
+                    >
+                      Confirm action preferences
+                    </button>
+                  )}
+                </div>
+              )}
+              {showSignalChoices && (
+                <div className="flex flex-col gap-1">
+                  {SIGNAL_OPTIONS.map((opt) => {
+                    const active = selectedSignals.includes(opt);
+                    return (
+                      <button
+                        key={opt}
+                        type="button"
+                        onClick={() =>
+                          setSelectedSignals((prev) =>
+                            prev.includes(opt) ? prev.filter((x) => x !== opt) : [...prev, opt]
+                          )
+                        }
+                        className={`flex w-full items-center justify-between rounded-xl border px-3 py-2 text-xs text-left ${
+                          active
+                            ? "border-[#3c2a6a] bg-[#3c2a6a] text-[#fdfbf1]"
+                            : "border-[rgba(60,42,106,0.25)] bg-white text-[#3c2a6a] hover:bg-[#3c2a6a]/5"
+                        }`}
+                      >
+                        {opt}
+                      </button>
+                    );
+                  })}
+                  {selectedSignals.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        const label = selectedSignals.join(", ");
+                        await sendMessage(
+                          `For opportunity discovery, please use these signals: ${label}.`
+                        );
+                        setSelectedSignals([]);
+                      }}
+                      className="mt-1 rounded-lg border-2 border-[#3c2a6a] bg-white px-4 py-2 text-xs font-semibold uppercase tracking-wide text-[#3c2a6a] shadow-sm hover:bg-[#3c2a6a] hover:text-white transition"
+                    >
+                      Confirm signals
+                    </button>
+                  )}
+                </div>
+              )}
+              {showWritingStyleChoices && (
+                <div className="flex flex-col gap-1">
+                  {WRITING_STYLE_OPTIONS.map((opt) => (
+                    <button
+                      key={opt}
+                      type="button"
+                      onClick={() =>
+                        sendMessage(
+                          opt === "Create your own style"
+                            ? "I'd like to create my own writing style. I'll share a sample next."
+                            : `I'd prefer the "${opt}" writing style.`
+                        )
+                      }
+                      className="flex w-full items-center justify-between rounded-xl border border-[rgba(60,42,106,0.25)] bg-white px-3 py-2 text-xs text-left text-[#3c2a6a] hover:bg-[#3c2a6a]/5"
+                    >
+                      {opt}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {showLinkChoices && (
+                <div className="flex flex-col gap-1">
+                  {["Yes", "No"].map((opt) => (
+                    <button
+                      key={opt}
+                      type="button"
+                      onClick={() =>
+                        sendMessage(
+                          opt === "Yes"
+                            ? "Yes, I'd like you to link my WhatsApp and Email."
+                            : "No, I don't want to link WhatsApp and Email right now."
+                        )
+                      }
+                      className="flex w-full items-center justify-between rounded-xl border border-[rgba(60,42,106,0.25)] bg-white px-3 py-2 text-xs text-left text-[#3c2a6a] hover:bg-[#3c2a6a]/5"
+                    >
+                      {opt}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 
@@ -768,7 +950,11 @@ export function OnboardingChat({ userId }: { userId: string }) {
             showCommitmentChoices ||
             showWorkModeChoices ||
             showLocationChoices ||
-            showBenchmarkingFocusChoices) && (
+            showBenchmarkingFocusChoices ||
+            showActionPreferenceChoices ||
+            showSignalChoices ||
+            showWritingStyleChoices ||
+            showLinkChoices) && (
             <div className="flex items-center gap-2">
               <div className="flex items-center">
                 <button
