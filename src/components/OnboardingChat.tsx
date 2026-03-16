@@ -127,17 +127,43 @@ const ACTION_PREFERENCE_OPTIONS = [
 ] as const;
 
 const SIGNAL_OPTIONS = [
+  "Jobsurge",
   "Funding",
-  "Leadership changes",
-  "Product launch",
-  "Contract wins",
-  "Geographic expansion",
-  "Headcount growth",
-  "Job posting surge",
-  "Regulatory changes",
+  "Leadership",
+  "Product",
+  "Workstream",
   "Virality",
-  "Workstream changes",
+  "Geography",
+  "Contract",
+  "Headcount",
+  "Regulatory",
 ] as const;
+
+const SIGNAL_DESCRIPTIONS: Record<(typeof SIGNAL_OPTIONS)[number], string> = {
+  Jobsurge:
+    "We track companies posting multiple roles at once — a surge in job listings is often the clearest sign they're actively building a team.",
+  Funding:
+    "When a company raises fresh capital, hiring almost always follows. We catch funding announcements before the job posts go live.",
+  Leadership:
+    "A new CXO or VP joining a company means new priorities and new hires. We track leadership changes so you can get in early.",
+  Product:
+    "A new product launch means new teams to build and support it. We detect launches before the hiring wave hits.",
+  Workstream:
+    "When a company announces a new vertical, division, or strategic shift, they need new people to execute it. We catch it early.",
+  Virality:
+    "Companies gaining sudden public attention often accelerate hiring to keep up with momentum. We track the buzz.",
+  Geography:
+    "Expanding to a new city means boots on the ground. We spot geographic expansion announcements before the local roles are posted.",
+  Contract:
+    "Winning a large contract or partnership means delivery capacity needs to grow fast. We flag it the moment it's announced.",
+  Headcount:
+    "Some companies publicly announce they're growing their team. We surface those signals directly to you.",
+  Regulatory:
+    "A new licence, approval, or compliance milestone unlocks entire business lines — and the hiring that comes with them.",
+};
+
+const NOTIFICATION_MEDIA_OPTIONS = ["WhatsApp", "Email", "Message"] as const;
+const NOTIFICATION_TYPE_OPTIONS = ["Signals", "Opportunities", "Hidden Jobs"] as const;
 
 const WRITING_STYLE_OPTIONS = [
   "Normal",
@@ -189,7 +215,10 @@ export function OnboardingChat({ userId }: { userId: string }) {
   const [selectedLocations, setSelectedLocations] = useState<string[]>([]);
   const [selectedBenchmarkingFocus, setSelectedBenchmarkingFocus] = useState<string[]>([]);
   const [selectedActions, setSelectedActions] = useState<string[]>([]);
-  const [selectedSignals, setSelectedSignals] = useState<string[]>([]);
+  const [rankedSignals, setRankedSignals] = useState<string[]>([]);
+  const [notificationMatrix, setNotificationMatrix] = useState<
+    Record<string, string[]>
+  >({});
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
@@ -406,7 +435,14 @@ export function OnboardingChat({ userId }: { userId: string }) {
   const showSignalChoices =
     lastIsAssistant &&
     !!lastMessage &&
-    /(which )?signals (to show|you'd like us to show|you would like us to show)/i.test(
+    /(which )?signals?( to show| you'd like us to show| you would like us to show)?/i.test(
+      lastMessage.content
+    );
+
+  const showNotificationMatrix =
+    lastIsAssistant &&
+    !!lastMessage &&
+    /where do you want to get your notifications|notification preferences across whatsapp, email, message/i.test(
       lastMessage.content
     );
 
@@ -430,6 +466,8 @@ export function OnboardingChat({ userId }: { userId: string }) {
     (showBenchmarkingFocusChoices &&
       "Which sections of your profile do you want to focus on strengthening?") ||
     (showActionPreferenceChoices && "Do you have a preference for any particular type of action?") ||
+    (showNotificationMatrix &&
+      "Where do you want to get your notifications? Choose which media to use for each notification type.") ||
     (showSignalChoices && "Which signals would you like us to use for opportunity discovery?") ||
     (showWritingStyleChoices && "Which writing style would you prefer?") ||
     (showLinkChoices && "Would you like us to link your WhatsApp and Email?") ||
@@ -599,11 +637,19 @@ export function OnboardingChat({ userId }: { userId: string }) {
             showActionPreferenceChoices ||
             showSignalChoices ||
             showWritingStyleChoices ||
-            showLinkChoices) && (
+            showLinkChoices ||
+            showNotificationMatrix) && (
             <div className="rounded-2xl border border-[rgba(60,42,106,0.15)] bg-white px-3 py-2">
               {mcqQuestion && (
                 <p className="mb-2 text-xs font-medium text-[#3c2a6a]">
                   {mcqQuestion}
+                </p>
+              )}
+              {showSignalChoices && (
+                <p className="mb-2 text-[11px] leading-snug text-[rgba(60,42,106,0.75)]">
+                  <span className="font-semibold">Signal Intelligence —</span> We monitor the
+                  internet in real time so you hear about a company's hiring intent before they
+                  post a single job.
                 </p>
               )}
               {showFunctionChoices && (
@@ -864,13 +910,15 @@ export function OnboardingChat({ userId }: { userId: string }) {
               {showSignalChoices && (
                 <div className="flex flex-col gap-1">
                   {SIGNAL_OPTIONS.map((opt) => {
-                    const active = selectedSignals.includes(opt);
+                    const index = rankedSignals.indexOf(opt);
+                    const active = index !== -1;
+                    const label = active ? `${index + 1}. ${opt}` : opt;
                     return (
                       <button
                         key={opt}
                         type="button"
                         onClick={() =>
-                          setSelectedSignals((prev) =>
+                          setRankedSignals((prev) =>
                             prev.includes(opt) ? prev.filter((x) => x !== opt) : [...prev, opt]
                           )
                         }
@@ -879,24 +927,103 @@ export function OnboardingChat({ userId }: { userId: string }) {
                             ? "border-[#3c2a6a] bg-[#3c2a6a] text-[#fdfbf1]"
                             : "border-[rgba(60,42,106,0.25)] bg-white text-[#3c2a6a] hover:bg-[#3c2a6a]/5"
                         }`}
+                        title={SIGNAL_DESCRIPTIONS[opt]}
                       >
-                        {opt}
+                        {label}
                       </button>
                     );
                   })}
-                  {selectedSignals.length > 0 && (
+                  {rankedSignals.length > 0 && (
                     <button
                       type="button"
                       onClick={async () => {
-                        const label = selectedSignals.join(", ");
+                        const ordered = rankedSignals
+                          .map((s, idx) => `${idx + 1}. ${s}`)
+                          .join(" | ");
                         await sendMessage(
-                          `For opportunity discovery, please use these signals: ${label}.`
+                          `Here is how I'd rank the signals from highest to lowest priority: ${ordered}.`
                         );
-                        setSelectedSignals([]);
+                        setRankedSignals([]);
                       }}
                       className="mt-1 rounded-lg border-2 border-[#3c2a6a] bg-white px-4 py-2 text-xs font-semibold uppercase tracking-wide text-[#3c2a6a] shadow-sm hover:bg-[#3c2a6a] hover:text-white transition"
                     >
-                      Confirm signals
+                      Confirm signal ranking
+                    </button>
+                  )}
+                </div>
+              )}
+              {showNotificationMatrix && (
+                <div className="flex flex-col gap-2">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-xs text-[#3c2a6a]">
+                      <thead>
+                        <tr>
+                          <th className="px-2 py-1 text-left"></th>
+                          {NOTIFICATION_MEDIA_OPTIONS.map((media) => (
+                            <th key={media} className="px-2 py-1 text-center font-medium">
+                              {media}
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {NOTIFICATION_TYPE_OPTIONS.map((notif) => (
+                          <tr key={notif} className="border-t border-[rgba(60,42,106,0.1)]">
+                            <td className="px-2 py-1 font-medium">{notif}</td>
+                            {NOTIFICATION_MEDIA_OPTIONS.map((media) => {
+                              const current = notificationMatrix[notif] ?? [];
+                              const active = current.includes(media);
+                              return (
+                                <td key={media} className="px-2 py-1 text-center">
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setNotificationMatrix((prev) => {
+                                        const existing = prev[notif] ?? [];
+                                        const nextForNotif = existing.includes(media)
+                                          ? existing.filter((m) => m !== media)
+                                          : [...existing, media];
+                                        return { ...prev, [notif]: nextForNotif };
+                                      })
+                                    }
+                                    className={`inline-flex h-7 w-7 items-center justify-center rounded-full border text-[10px] ${
+                                      active
+                                        ? "border-[#3c2a6a] bg-[#3c2a6a] text-[#fdfbf1]"
+                                        : "border-[rgba(60,42,106,0.25)] bg-white text-[#3c2a6a]"
+                                    }`}
+                                  >
+                                    {active ? "✓" : ""}
+                                  </button>
+                                </td>
+                              );
+                            })}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  {Object.values(notificationMatrix).some((arr) => (arr ?? []).length > 0) && (
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        const parts = NOTIFICATION_TYPE_OPTIONS.map((notif) => {
+                          const media = notificationMatrix[notif] ?? [];
+                          if (!media.length) return null;
+                          const label = media.join(" and ");
+                          return `${notif} via ${label}`;
+                        }).filter(Boolean) as string[];
+                        const summary =
+                          parts.length > 0
+                            ? parts.join("; ")
+                            : "No notifications selected.";
+                        await sendMessage(
+                          `For notifications, I'd like: ${summary}.`
+                        );
+                        setNotificationMatrix({});
+                      }}
+                      className="mt-1 self-start rounded-lg border-2 border-[#3c2a6a] bg-white px-4 py-2 text-xs font-semibold uppercase tracking-wide text-[#3c2a6a] shadow-sm hover:bg-[#3c2a6a] hover:text-white transition"
+                    >
+                      Confirm notification settings
                     </button>
                   )}
                 </div>
@@ -954,7 +1081,8 @@ export function OnboardingChat({ userId }: { userId: string }) {
             showActionPreferenceChoices ||
             showSignalChoices ||
             showWritingStyleChoices ||
-            showLinkChoices) && (
+            showLinkChoices ||
+            showNotificationMatrix) && (
             <div className="flex items-center gap-2">
               <div className="flex items-center">
                 <button
