@@ -66,6 +66,45 @@ const SECTION_LABELS = {
 const SECTION_KEYS = ["profile", "aspirations", "benchmarking", "discovery", "outreach"] as const;
 const TOTAL_SECTIONS = SECTION_KEYS.length;
 
+const FUNCTION_OPTIONS = [
+  "Founder's Office / Strategy",
+  "Engineering & Product",
+  "Marketing & Growth",
+  "Finance & Investing",
+  "Consulting & Advisory",
+  "Design",
+  "Operations & Supply Chain",
+  "HR",
+  "Others",
+] as const;
+
+const EXPERIENCE_OPTIONS = [
+  "Entry Level",
+  "0-3 YoE",
+  "3+ YoE",
+] as const;
+
+const COMMITMENT_OPTIONS = [
+  "Full Time",
+  "Part Time",
+  "Internship",
+] as const;
+
+const WORK_MODE_OPTIONS = [
+  "Remote",
+  "Hybrid",
+  "In-Office",
+] as const;
+
+const LOCATION_OPTIONS = [
+  "Gurugram",
+  "Mumbai",
+  "Bengaluru",
+  "Kolkata",
+  "Chennai",
+  "Others",
+] as const;
+
 function getSectionsCompleted(profile: Record<string, unknown>): number {
   let count = 0;
   for (const section of SECTION_KEYS) {
@@ -258,6 +297,27 @@ export function OnboardingChat({ userId }: { userId: string }) {
 
   const sectionsCompleted = getSectionsCompleted(profile);
   const sectionsLeft = Math.max(0, TOTAL_SECTIONS - sectionsCompleted);
+  const latestAssistant = [...messages].reverse().find((m) => m.role === "assistant");
+  const showFunctionChoices =
+    !!latestAssistant &&
+    /what function do you want to work in\?/i.test(latestAssistant.content);
+  const showIndustryPrompt =
+    !!latestAssistant &&
+    /which industry do you want to work in\?/i.test(latestAssistant.content);
+  const showExperienceChoices =
+    !!latestAssistant &&
+    /experience level\?\s*\(entry level, 0-3 yoe, 3\+ yoe\)/i.test(latestAssistant.content);
+  const showCommitmentChoices =
+    !!latestAssistant &&
+    /commitment type\?\s*\(full time, part time, internship\)/i.test(latestAssistant.content);
+  const showWorkModeChoices =
+    !!latestAssistant &&
+    /work mode\?\s*\(remote, hybrid, in-office\)/i.test(latestAssistant.content);
+  const showLocationChoices =
+    !!latestAssistant &&
+    /preferred locations\?\s*\(gurugram, mumbai, bengaluru, kolkata, chennai, others\)/i.test(
+      latestAssistant.content
+    );
 
   return (
     <div className="flex min-h-[100vh] flex-col bg-[#fdfbf1] overflow-hidden">
@@ -381,6 +441,113 @@ export function OnboardingChat({ userId }: { userId: string }) {
             </div>
           );
         })}
+        {showFunctionChoices && (
+          <div className="flex justify-start">
+            <div className="flex flex-wrap gap-2">
+              {FUNCTION_OPTIONS.map((opt) => (
+                <button
+                  key={opt}
+                  type="button"
+                  onClick={() =>
+                    sendMessage(
+                      opt === "Others"
+                        ? "I want to work in some other function."
+                        : opt
+                    )
+                  }
+                  className="rounded-full border border-[rgba(60,42,106,0.25)] bg-white px-3 py-1.5 text-xs font-medium text-[#3c2a6a] hover:bg-[#3c2a6a]/5"
+                >
+                  {opt}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+        {showIndustryPrompt && (
+          <div className="flex justify-start">
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() =>
+                  sendMessage(
+                    "I'd like to type the industry I'm interested in (for example consulting, tech, VC, etc.)."
+                  )
+                }
+                className="rounded-full border border-[rgba(60,42,106,0.25)] bg-white px-3 py-1.5 text-xs font-medium text-[#3c2a6a] hover:bg-[#3c2a6a]/5"
+              >
+                I'll type the industry
+              </button>
+            </div>
+          </div>
+        )}
+        {showExperienceChoices && (
+          <div className="flex justify-start">
+            <div className="flex flex-wrap gap-2">
+              {EXPERIENCE_OPTIONS.map((opt) => (
+                <button
+                  key={opt}
+                  type="button"
+                  onClick={() => sendMessage(opt)}
+                  className="rounded-full border border-[rgba(60,42,106,0.25)] bg-white px-3 py-1.5 text-xs font-medium text-[#3c2a6a] hover:bg-[#3c2a6a]/5"
+                >
+                  {opt}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+        {showCommitmentChoices && (
+          <div className="flex justify-start">
+            <div className="flex flex-wrap gap-2">
+              {COMMITMENT_OPTIONS.map((opt) => (
+                <button
+                  key={opt}
+                  type="button"
+                  onClick={() => sendMessage(opt)}
+                  className="rounded-full border border-[rgba(60,42,106,0.25)] bg-white px-3 py-1.5 text-xs font-medium text-[#3c2a6a] hover:bg-[#3c2a6a]/5"
+                >
+                  {opt}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+        {showWorkModeChoices && (
+          <div className="flex justify-start">
+            <div className="flex flex-wrap gap-2">
+              {WORK_MODE_OPTIONS.map((opt) => (
+                <button
+                  key={opt}
+                  type="button"
+                  onClick={() => sendMessage(opt)}
+                  className="rounded-full border border-[rgba(60,42,106,0.25)] bg-white px-3 py-1.5 text-xs font-medium text-[#3c2a6a] hover:bg-[#3c2a6a]/5"
+                >
+                  {opt}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+        {showLocationChoices && (
+          <div className="flex justify-start">
+            <div className="flex flex-wrap gap-2">
+              {LOCATION_OPTIONS.map((opt) => (
+                <button
+                  key={opt}
+                  type="button"
+                  onClick={() =>
+                    sendMessage(
+                      opt === "Others" ? "I'd like to type my preferred locations." : opt
+                    )
+                  }
+                  className="rounded-full border border-[rgba(60,42,106,0.25)] bg-white px-3 py-1.5 text-xs font-medium text-[#3c2a6a] hover:bg-[#3c2a6a]/5"
+                >
+                  {opt}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
         {isLoading && (
           <div className="flex justify-start">
             <div className="flex items-center gap-1 rounded-2xl border border-[rgba(60,42,106,0.1)] bg-white px-4 py-3">
