@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { ArrowUp, Paperclip } from "lucide-react";
+import { INDUSTRY_KEYWORDS, type IndustryName } from "@/lib/industryKeywords";
 
 const FIRST_MESSAGE =
   "Hi! I'm Dhruva. I'm going to ask you a few questions to personalise your experience. Let's start — please upload your CV (PDF works best).";
@@ -78,15 +79,7 @@ const FUNCTION_OPTIONS = [
   "Others",
 ] as const;
 
-const INDUSTRY_OPTIONS = [
-  "Consulting",
-  "Technology",
-  "Finance / Investing",
-  "Startups",
-  "Consumer / FMCG",
-  "Social Impact",
-  "Others",
-] as const;
+const INDUSTRY_OPTIONS = Object.keys(INDUSTRY_KEYWORDS) as IndustryName[];
 
 const EXPERIENCE_OPTIONS = [
   "Entry Level",
@@ -316,7 +309,7 @@ export function OnboardingChat({ userId }: { userId: string }) {
     /what function do you want to work in\?/i.test(latestAssistant.content);
   const showIndustryPrompt =
     !!latestAssistant &&
-    /which industry do you want to work in\?/i.test(latestAssistant.content);
+    /which industry.*work(ing)? in\?/i.test(latestAssistant.content);
   const showExperienceChoices =
     !!latestAssistant &&
     /experience level\?\s*\(entry level, 0-3 yoe, 3\+ yoe\)/i.test(latestAssistant.content);
@@ -342,9 +335,9 @@ export function OnboardingChat({ userId }: { userId: string }) {
           <button
             type="button"
             onClick={() => router.push("/dashboard")}
-            className="text-sm text-[rgba(60,42,106,0.4)] hover:underline"
+            className="text-xs sm:text-sm text-[rgba(60,42,106,0.6)] hover:underline text-right"
           >
-            Skip for now
+            Skip for now (you can do this later, but onboarding helps us customise everything for you)
           </button>
         </div>
         <div className="px-4 pb-2">
