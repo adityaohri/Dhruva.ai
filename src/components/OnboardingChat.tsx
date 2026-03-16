@@ -394,7 +394,7 @@ export function OnboardingChat({ userId }: { userId: string }) {
   const showBenchmarkingFocusChoices =
     lastIsAssistant &&
     !!lastMessage &&
-    /which (sections|parts).*(focus|strengthen)|which sections of your profile do you want to focus on strengthening\?/i.test(
+    /profile sections.*(focus|improv|strengthen)|which (sections|parts).*(focus|improv|strengthen)/i.test(
       lastMessage.content
     );
 
