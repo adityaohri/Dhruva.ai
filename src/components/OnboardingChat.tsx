@@ -83,8 +83,8 @@ const INDUSTRY_OPTIONS = Object.keys(INDUSTRY_KEYWORDS) as IndustryName[];
 
 const EXPERIENCE_OPTIONS = [
   "Entry Level",
-  "0-3 YoE",
-  "3+ YoE",
+  "0-3 Years of Experience",
+  "3+ Years of Experience",
 ] as const;
 
 const COMMITMENT_OPTIONS = [
@@ -132,6 +132,7 @@ export function OnboardingChat({ userId }: { userId: string }) {
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [profile, setProfile] = useState<Record<string, unknown>>({});
+  const [selectedFunctions, setSelectedFunctions] = useState<string[]>([]);
   const [selectedIndustries, setSelectedIndustries] = useState<string[]>([]);
 
   useEffect(() => {
@@ -450,22 +451,42 @@ export function OnboardingChat({ userId }: { userId: string }) {
         {showFunctionChoices && (
           <div className="flex justify-start">
             <div className="flex flex-wrap gap-2">
-              {FUNCTION_OPTIONS.map((opt) => (
+              {FUNCTION_OPTIONS.map((opt) => {
+                const active = selectedFunctions.includes(opt);
+                return (
+                  <button
+                    key={opt}
+                    type="button"
+                    onClick={() =>
+                      setSelectedFunctions((prev) =>
+                        prev.includes(opt) ? prev.filter((x) => x !== opt) : [...prev, opt]
+                      )
+                    }
+                    className={`rounded-full border px-3 py-1.5 text-xs font-medium transition ${
+                      active
+                        ? "border-[#3c2a6a] bg-[#3c2a6a] text-white shadow-sm"
+                        : "border-[rgba(60,42,106,0.25)] bg-white text-[#3c2a6a] hover:bg-[#3c2a6a]/5"
+                    }`}
+                  >
+                    {opt}
+                  </button>
+                );
+              })}
+              {selectedFunctions.length > 0 && (
                 <button
-                  key={opt}
                   type="button"
-                  onClick={() =>
-                    sendMessage(
-                      opt === "Others"
-                        ? "I want to work in some other function."
-                        : opt
-                    )
-                  }
-                  className="rounded-full border border-[rgba(60,42,106,0.25)] bg-white px-3 py-1.5 text-xs font-medium text-[#3c2a6a] hover:bg-[#3c2a6a]/5"
+                  onClick={async () => {
+                    const label = selectedFunctions.join(", ");
+                    await sendMessage(
+                      `I'm interested in these functions: ${label}.`
+                    );
+                    setSelectedFunctions([]);
+                  }}
+                  className="rounded-full bg-[#3c2a6a] px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white shadow-md hover:bg-[#4a347f]"
                 >
-                  {opt}
+                  Confirm functions
                 </button>
-              ))}
+              )}
             </div>
           </div>
         )}
