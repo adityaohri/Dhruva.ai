@@ -518,10 +518,23 @@ export function OnboardingChat({ userId }: { userId: string }) {
                 <button
                   type="button"
                   onClick={async () => {
-                    const label = selectedIndustries.join(", ");
-                    await sendMessage(
-                      `I'd like to work in these industries: ${label}.`
-                    );
+                    const others = selectedIndustries.filter((i) => i === "Other");
+                    const named = selectedIndustries.filter((i) => i !== "Other");
+                    const namedLabel = named.join(", ");
+
+                    if (named.length > 0 && others.length === 0) {
+                      await sendMessage(
+                        `I'd like to work in these industries: ${namedLabel}.`
+                      );
+                    } else if (named.length > 0 && others.length > 0) {
+                      await sendMessage(
+                        `I'd like to work in these industries: ${namedLabel}, and I also have some other industries in mind that I'll type out next.`
+                      );
+                    } else {
+                      await sendMessage(
+                        "I'd like to type the industries I'm interested in — they don't fit neatly into your list."
+                      );
+                    }
                     setSelectedIndustries([]);
                   }}
                   className="rounded-full bg-[#3c2a6a] px-3 py-1.5 text-xs font-medium text-white hover:bg-[#4a347f]"
