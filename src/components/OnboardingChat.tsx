@@ -430,7 +430,9 @@ export function OnboardingChat({ userId }: { userId: string }) {
   const showActionPreferenceChoices =
     lastIsAssistant &&
     !!lastMessage &&
-    /(preference|preferred).*(type of )?action|action types/i.test(lastMessage.content);
+    /(preference|preferred).*(type of )?action|action types|types of actions would you prefer/i.test(
+      lastMessage.content
+    );
 
   const showSignalChoices =
     lastIsAssistant &&
