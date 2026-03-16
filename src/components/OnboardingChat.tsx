@@ -78,6 +78,16 @@ const FUNCTION_OPTIONS = [
   "Others",
 ] as const;
 
+const INDUSTRY_OPTIONS = [
+  "Consulting",
+  "Technology",
+  "Finance / Investing",
+  "Startups",
+  "Consumer / FMCG",
+  "Social Impact",
+  "Others",
+] as const;
+
 const EXPERIENCE_OPTIONS = [
   "Entry Level",
   "0-3 YoE",
@@ -129,6 +139,7 @@ export function OnboardingChat({ userId }: { userId: string }) {
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [profile, setProfile] = useState<Record<string, unknown>>({});
+  const [selectedIndustries, setSelectedIndustries] = useState<string[]>([]);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
@@ -189,7 +200,9 @@ export function OnboardingChat({ userId }: { userId: string }) {
         };
 
         const updates = data.profileUpdates ?? {};
-        const hasProfileTable = Object.keys(updates).length > 0;
+        const profileKeys = SECTION_LABELS.profile;
+        const hasProfileTable =
+          Object.keys(updates).some((k) => profileKeys.includes(k as (typeof profileKeys)[number]));
         const assistantContent = hasProfileTable
           ? "I've extracted your profile from your CV. Please confirm or edit below."
           : data.reply;
@@ -466,17 +479,42 @@ export function OnboardingChat({ userId }: { userId: string }) {
         {showIndustryPrompt && (
           <div className="flex justify-start">
             <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={() =>
-                  sendMessage(
-                    "I'd like to type the industry I'm interested in (for example consulting, tech, VC, etc.)."
-                  )
-                }
-                className="rounded-full border border-[rgba(60,42,106,0.25)] bg-white px-3 py-1.5 text-xs font-medium text-[#3c2a6a] hover:bg-[#3c2a6a]/5"
-              >
-                I'll type the industry
-              </button>
+              {INDUSTRY_OPTIONS.map((opt) => {
+                const active = selectedIndustries.includes(opt);
+                return (
+                  <button
+                    key={opt}
+                    type="button"
+                    onClick={() =>
+                      setSelectedIndustries((prev) =>
+                        prev.includes(opt) ? prev.filter((x) => x !== opt) : [...prev, opt]
+                      )
+                    }
+                    className={`rounded-full border px-3 py-1.5 text-xs font-medium ${
+                      active
+                        ? "border-[#3c2a6a] bg-[#3c2a6a] text-white"
+                        : "border-[rgba(60,42,106,0.25)] bg-white text-[#3c2a6a] hover:bg-[#3c2a6a]/5"
+                    }`}
+                  >
+                    {opt}
+                  </button>
+                );
+              })}
+              {selectedIndustries.length > 0 && (
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const label = selectedIndustries.join(", ");
+                    await sendMessage(
+                      `I'd like to work in these industries: ${label}.`
+                    );
+                    setSelectedIndustries([]);
+                  }}
+                  className="rounded-full bg-[#3c2a6a] px-3 py-1.5 text-xs font-medium text-white hover:bg-[#4a347f]"
+                >
+                  Confirm industries
+                </button>
+              )}
             </div>
           </div>
         )}
