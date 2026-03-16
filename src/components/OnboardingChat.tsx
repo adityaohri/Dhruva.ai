@@ -333,19 +333,28 @@ export function OnboardingChat({ userId }: { userId: string }) {
   const showExperienceChoices =
     lastIsAssistant &&
     !!lastMessage &&
-    /experience level\?/i.test(lastMessage.content);
+    /experience/i.test(lastMessage.content);
   const showCommitmentChoices =
     lastIsAssistant &&
     !!lastMessage &&
-    /commitment (type|are you)/i.test(lastMessage.content);
+    /commitment/i.test(lastMessage.content);
   const showWorkModeChoices =
     lastIsAssistant &&
     !!lastMessage &&
-    /work mode\?/i.test(lastMessage.content);
+    /work mode/i.test(lastMessage.content);
   const showLocationChoices =
     lastIsAssistant &&
     !!lastMessage &&
-    /(preferred )?locations\?|any preferred locations/i.test(lastMessage.content);
+    /(preferred )?locations?|any preferred locations/i.test(lastMessage.content);
+
+  const mcqQuestion =
+    (showFunctionChoices && "What function do you want to work in?") ||
+    (showIndustryPrompt && "Which industry do you want to work in?") ||
+    (showExperienceChoices && "What’s your experience level?") ||
+    (showCommitmentChoices && "What commitment type are you looking for?") ||
+    (showWorkModeChoices && "What work mode do you prefer?") ||
+    (showLocationChoices && "Any preferred locations?") ||
+    "";
 
   return (
     <div className="flex min-h-[100vh] flex-col bg-[#fdfbf1] overflow-hidden">
@@ -394,7 +403,7 @@ export function OnboardingChat({ userId }: { userId: string }) {
 
       <div
         ref={scrollRef}
-        className="flex flex-1 flex-col justify-end overflow-y-auto px-4 py-4 space-y-4"
+        className="flex flex-1 flex-col justify-end overflow-y-auto px-4 py-6 space-y-4"
       >
         {messages.map((m, i) => {
           const isLastProfileTableMessage =
@@ -483,10 +492,17 @@ export function OnboardingChat({ userId }: { userId: string }) {
         })}
         {isLoading && (
           <div className="flex justify-start">
-            <div className="flex items-center gap-1 rounded-2xl border border-[rgba(60,42,106,0.1)] bg-white px-4 py-3">
-              <span className="animate-bounce [animation-delay:0ms]">.</span>
-              <span className="animate-bounce [animation-delay:150ms]">.</span>
-              <span className="animate-bounce [animation-delay:300ms]">.</span>
+            <div className="flex items-center gap-2 rounded-2xl border border-[rgba(60,42,106,0.1)] bg-white px-4 py-3">
+              <div className="relative h-5 w-5">
+                <div className="h-5 w-5 rounded-full border border-[#3c2a6a]/40" />
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <span className="text-[10px] text-[#3c2a6a]">✶</span>
+                </div>
+                <div className="pointer-events-none absolute -left-2 top-1/2 h-1 w-4 -translate-y-1/2 rounded-full bg-gradient-to-r from-[#3c2a6a]/0 via-[#3c2a6a]/60 to-[#3c2a6a] animate-[ping_0.9s_ease-out_infinite]" />
+              </div>
+              <span className="text-xs text-[rgba(60,42,106,0.7)]">
+                Dhruva is thinking…
+              </span>
             </div>
           </div>
         )}
@@ -501,9 +517,9 @@ export function OnboardingChat({ userId }: { userId: string }) {
             showWorkModeChoices ||
             showLocationChoices) && (
             <div className="rounded-2xl border border-[rgba(60,42,106,0.15)] bg-white px-3 py-2">
-              {lastIsAssistant && lastMessage && (
+              {mcqQuestion && (
                 <p className="mb-2 text-xs font-medium text-[#3c2a6a]">
-                  {lastMessage.content}
+                  {mcqQuestion}
                 </p>
               )}
               {showFunctionChoices && (
