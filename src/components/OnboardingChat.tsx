@@ -317,7 +317,7 @@ export function OnboardingChat({ userId }: { userId: string }) {
                 {m.content}
                 {m.role === "assistant" && m.profileTable && Object.keys(m.profileTable).length > 0 && (
                   <>
-                    <div className="mt-3 overflow-hidden rounded-lg border border-[rgba(60,42,106,0.12)]">
+                    <div className="mt-3 overflow-hidden rounded-lg border border-[rgba(60,42,106,0.12)] bg-[#fdfbf6]">
                       <table className="w-full text-left text-sm">
                         <tbody>
                           {Object.keys(m.profileTable).map((key) => {
@@ -332,13 +332,13 @@ export function OnboardingChat({ userId }: { userId: string }) {
                                   {PROFILE_FIELD_LABELS[key] ?? key.replace(/_/g, " ")}
                                 </td>
                                 <td className="py-2 text-[#3c2a6a]">
-                                  <input
-                                    type="text"
+                                  <textarea
                                     value={displayValue}
                                     onChange={(e) =>
                                       setProfile((prev) => ({ ...prev, [key]: e.target.value }))
                                     }
-                                    className="w-full rounded border border-[rgba(60,42,106,0.2)] bg-[#fdfbf1] px-2 py-1 text-[#3c2a6a] focus:border-[#3c2a6a] focus:outline-none focus:ring-1 focus:ring-[#3c2a6a]/30"
+                                    rows={1}
+                                    className="w-full min-h-[2.25rem] rounded border border-[rgba(60,42,106,0.2)] bg-white px-2 py-1 text-[#3c2a6a] text-sm leading-snug placeholder:text-[rgba(60,42,106,0.4)] focus:border-[#3c2a6a] focus:outline-none focus:ring-1 focus:ring-[#3c2a6a]/30 resize-y"
                                   />
                                 </td>
                               </tr>
@@ -348,7 +348,17 @@ export function OnboardingChat({ userId }: { userId: string }) {
                       </table>
                     </div>
                     {isLastProfileTableMessage && (
-                      <div className="mt-3">
+                      <div className="mt-3 flex flex-wrap items-center gap-3">
+                        <span className="text-xs text-[rgba(60,42,106,0.7)]">
+                          You can edit any field above before confirming.
+                        </span>
+                        <div className="ml-auto flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            className="rounded-full border border-[#3c2a6a]/30 px-4 py-2 text-xs font-medium text-[#3c2a6a] hover:bg-[#3c2a6a]/5"
+                          >
+                            Edit details
+                          </button>
                         <button
                           type="button"
                           onClick={async () => {
@@ -362,6 +372,7 @@ export function OnboardingChat({ userId }: { userId: string }) {
                         >
                           Confirm & continue
                         </button>
+                        </div>
                       </div>
                     )}
                   </>
