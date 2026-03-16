@@ -430,21 +430,21 @@ export function OnboardingChat({ userId }: { userId: string }) {
   const showActionPreferenceChoices =
     lastIsAssistant &&
     !!lastMessage &&
-    /(preference|preferred).*(type of )?action|action types|types of actions would you prefer/i.test(
-      lastMessage.content
-    );
-
-  const showSignalChoices =
-    lastIsAssistant &&
-    !!lastMessage &&
-    /(which )?signals?( to show| you'd like us to show| you would like us to show)?/i.test(
+    /(preference|preferred).*(type of )?action|action types|types of actions\b/i.test(
       lastMessage.content
     );
 
   const showNotificationMatrix =
     lastIsAssistant &&
     !!lastMessage &&
-    /where do you want to get your notifications|notification preferences across whatsapp, email, message/i.test(
+    /(where do you want to get your notifications|notification preferences\b)/i.test(
+      lastMessage.content
+    );
+
+  const showSignalChoices =
+    lastIsAssistant &&
+    !!lastMessage &&
+    /which signals?( would you like us to (use|show)| would you like us to use for opportunity discovery|\?)/i.test(
       lastMessage.content
     );
 
