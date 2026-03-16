@@ -313,7 +313,7 @@ export function OnboardingChat({ userId }: { userId: string }) {
     /which industry.*work(ing)? in\?/i.test(latestAssistant.content);
   const showExperienceChoices =
     !!latestAssistant &&
-    /experience level\?\s*\(entry level, 0-3 yoe, 3\+ yoe\)/i.test(latestAssistant.content);
+    /experience level\?/i.test(latestAssistant.content);
   const showCommitmentChoices =
     !!latestAssistant &&
     /commitment type\?\s*\(full time, part time, internship\)/i.test(latestAssistant.content);
