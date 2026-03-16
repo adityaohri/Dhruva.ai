@@ -317,7 +317,7 @@ export function OnboardingChat({ userId }: { userId: string }) {
                 {m.content}
                 {m.role === "assistant" && m.profileTable && Object.keys(m.profileTable).length > 0 && (
                   <>
-                    <div className="mt-3 overflow-hidden rounded-lg border border-[rgba(60,42,106,0.12)] bg-[#fdfbf6]">
+                    <div className="mt-3 overflow-hidden rounded-lg border border-[rgba(60,42,106,0.12)] bg-[#fdfbf6] px-3 py-2">
                       <table className="w-full text-left text-sm">
                         <tbody>
                           {Object.keys(m.profileTable).map((key) => {
