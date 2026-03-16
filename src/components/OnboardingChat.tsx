@@ -121,6 +121,18 @@ function getSectionsCompleted(profile: Record<string, unknown>): number {
   return count;
 }
 
+function getCurrentSection(profile: Record<string, unknown>): (typeof SECTION_KEYS)[number] {
+  for (const section of SECTION_KEYS) {
+    const keys = SECTION_LABELS[section];
+    const hasAny = keys.some((k) => {
+      const v = profile[k];
+      return v != null && String(v).trim() !== "";
+    });
+    if (!hasAny) return section;
+  }
+  return "outreach";
+}
+
 export function OnboardingChat({ userId }: { userId: string }) {
   const router = useRouter();
   const supabase = createClient();
@@ -304,6 +316,8 @@ export function OnboardingChat({ userId }: { userId: string }) {
 
   const sectionsCompleted = getSectionsCompleted(profile);
   const sectionsLeft = Math.max(0, TOTAL_SECTIONS - sectionsCompleted);
+  const currentSection = getCurrentSection(profile);
+  const progressPercent = Math.round((sectionsCompleted / TOTAL_SECTIONS) * 100);
   const latestAssistant = [...messages].reverse().find((m) => m.role === "assistant");
   const showFunctionChoices =
     !!latestAssistant &&
@@ -343,17 +357,29 @@ export function OnboardingChat({ userId }: { userId: string }) {
         </div>
         <div className="px-4 pb-2">
           <div className="flex items-center justify-between gap-2">
-            <span className="text-xs font-medium text-[rgba(60,42,106,0.6)]">
-              {sectionsLeft === 0 ? "All set!" : `${sectionsLeft} section${sectionsLeft === 1 ? "" : "s"} left`}
+            <span className="text-[11px] font-medium text-[rgba(60,42,106,0.7)]">
+              {sectionsLeft === 0
+                ? "All set — onboarding complete."
+                : `Step ${sectionsCompleted + 1} of ${TOTAL_SECTIONS} · ${
+                    currentSection === "profile"
+                      ? "Profile"
+                      : currentSection === "aspirations"
+                      ? "Aspirations"
+                      : currentSection === "benchmarking"
+                      ? "Profile benchmarking"
+                      : currentSection === "discovery"
+                      ? "Opportunity discovery"
+                      : "Outreach copilot"
+                  }`}
             </span>
-            <span className="text-xs tabular-nums text-[#3c2a6a]">
-              {sectionsCompleted}/{TOTAL_SECTIONS}
+            <span className="text-[11px] tabular-nums text-[#3c2a6a]">
+              {progressPercent}% complete
             </span>
           </div>
           <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-[rgba(60,42,106,0.1)]">
             <div
               className="h-full rounded-full bg-[#3c2a6a] transition-all duration-300 ease-out"
-              style={{ width: `${(sectionsCompleted / TOTAL_SECTIONS) * 100}%` }}
+              style={{ width: `${progressPercent}%` }}
             />
           </div>
         </div>
