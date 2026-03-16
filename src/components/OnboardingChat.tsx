@@ -424,7 +424,7 @@ export function OnboardingChat({ userId }: { userId: string }) {
 
       <div
         ref={scrollRef}
-        className="flex flex-col items-start justify-start overflow-y-auto px-4 pt-6 pb-4 space-y-4"
+        className="flex flex-col px-6 py-6 space-y-4"
       >
         {messages.map((m, i) => {
           const isLastProfileTableMessage =
@@ -529,7 +529,7 @@ export function OnboardingChat({ userId }: { userId: string }) {
         )}
       </div>
 
-      <div className="shrink-0 border-t border-[rgba(60,42,106,0.08)] bg-[#fdfbf1] px-4 py-2">
+      <div className="border-t border-[rgba(60,42,106,0.08)] bg-[#fdfbf1] px-6 py-4">
         <div className="mx-auto flex max-w-2xl flex-col gap-2">
           {(showFunctionChoices ||
             showIndustryPrompt ||
