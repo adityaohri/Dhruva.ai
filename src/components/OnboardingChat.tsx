@@ -359,7 +359,7 @@ export function OnboardingChat({ userId }: { userId: string }) {
   return (
     <div className="flex min-h-[100vh] flex-col bg-[#fdfbf1] overflow-hidden">
       <header className="flex shrink-0 flex-col border-b border-[rgba(60,42,106,0.08)] bg-[#fdfbf1]">
-        <div className="flex items-center justify-between px-4 py-3">
+        <div className="flex items-center justify-between px-3 py-2">
           <Link href="/" className="font-serif text-lg font-semibold text-[#3c2a6a]">
             dhruva.ai
           </Link>
