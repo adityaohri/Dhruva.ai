@@ -273,10 +273,12 @@ export function OnboardingChat({ userId }: { userId: string }) {
           });
           const data = (await res.json()) as { text?: string; error?: string };
           if (res.ok && data.text) {
+            const userDisplay = input.trim() || "I've uploaded my CV.";
             await sendMessage(
-              `I've uploaded my CV. Please extract my profile details from this content and use them for the rest of the onboarding:\n\n---\n${data.text}\n---`,
-              { displayContent: "I've uploaded my CV." }
+              `${userDisplay}\n\nPlease extract my profile details from this content and use them for the rest of the onboarding:\n\n---\n${data.text}\n---`,
+              { displayContent: userDisplay }
             );
+            setInput("");
             return;
           }
           await sendMessage(
@@ -296,10 +298,12 @@ export function OnboardingChat({ userId }: { userId: string }) {
           const raw = await file.text();
           const text = raw?.trim();
           if (text) {
+            const userDisplay = input.trim() || "I've uploaded my CV (text).";
             await sendMessage(
-              `I've uploaded my CV/resume as text. Please extract my profile from this content:\n\n---\n${text}\n---`,
-              { displayContent: "I've uploaded my CV (text)." }
+              `${userDisplay}\n\nPlease extract my profile from this content:\n\n---\n${text}\n---`,
+              { displayContent: userDisplay }
             );
+            setInput("");
             return;
           }
         } catch {
@@ -392,7 +396,7 @@ export function OnboardingChat({ userId }: { userId: string }) {
 
       <div
         ref={scrollRef}
-        className="flex-1 overflow-y-auto px-4 py-6 space-y-4"
+        className="flex flex-1 flex-col justify-end overflow-y-auto px-4 py-4 space-y-4"
       >
         {messages.map((m, i) => {
           const isLastProfileTableMessage =
