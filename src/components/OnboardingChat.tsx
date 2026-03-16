@@ -146,6 +146,7 @@ export function OnboardingChat({ userId }: { userId: string }) {
   const [profile, setProfile] = useState<Record<string, unknown>>({});
   const [selectedFunctions, setSelectedFunctions] = useState<string[]>([]);
   const [selectedIndustries, setSelectedIndustries] = useState<string[]>([]);
+  const [selectedLocations, setSelectedLocations] = useState<string[]>([]);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
@@ -403,7 +404,7 @@ export function OnboardingChat({ userId }: { userId: string }) {
 
       <div
         ref={scrollRef}
-        className="flex-1 overflow-y-auto px-4 py-6 space-y-4"
+        className="flex flex-1 flex-col justify-end overflow-y-auto px-4 py-6 space-y-4"
       >
         {messages.map((m, i) => {
           const isLastProfileTableMessage =
@@ -659,20 +660,42 @@ export function OnboardingChat({ userId }: { userId: string }) {
               )}
               {showLocationChoices && (
                 <div className="flex flex-col gap-1">
-                  {LOCATION_OPTIONS.map((opt) => (
+                  {LOCATION_OPTIONS.map((opt) => {
+                    const active = selectedLocations.includes(opt);
+                    return (
+                      <button
+                        key={opt}
+                        type="button"
+                        onClick={() =>
+                          setSelectedLocations((prev) =>
+                            prev.includes(opt) ? prev.filter((x) => x !== opt) : [...prev, opt]
+                          )
+                        }
+                        className={`flex w-full items-center justify-between rounded-xl border px-3 py-2 text-xs text-left ${
+                          active
+                            ? "border-[#3c2a6a] bg-[#3c2a6a] text-[#fdfbf1]"
+                            : "border-[rgba(60,42,106,0.25)] bg-white text-[#3c2a6a] hover:bg-[#3c2a6a]/5"
+                        }`}
+                      >
+                        {opt}
+                      </button>
+                    );
+                  })}
+                  {selectedLocations.length > 0 && (
                     <button
-                      key={opt}
                       type="button"
-                      onClick={() =>
-                        sendMessage(
-                          opt === "Others" ? "I'd like to type my preferred locations." : opt
-                        )
-                      }
-                      className="flex w-full items-center justify-between rounded-xl border border-[rgba(60,42,106,0.25)] bg-white px-3 py-2 text-xs text-left text-[#3c2a6a] hover:bg-[#3c2a6a]/5"
+                      onClick={async () => {
+                        const label = selectedLocations.join(", ");
+                        await sendMessage(
+                          `My preferred locations are: ${label}.`
+                        );
+                        setSelectedLocations([]);
+                      }}
+                      className="mt-1 rounded-lg border-2 border-[#3c2a6a] bg-white px-4 py-2 text-xs font-semibold uppercase tracking-wide text-[#3c2a6a] shadow-sm hover:bg-[#3c2a6a] hover:text-white transition"
                     >
-                      {opt}
+                      Confirm locations
                     </button>
-                  ))}
+                  )}
                 </div>
               )}
             </div>
