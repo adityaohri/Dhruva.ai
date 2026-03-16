@@ -108,6 +108,16 @@ const LOCATION_OPTIONS = [
   "Others",
 ] as const;
 
+const BENCHMARKING_FOCUS_OPTIONS = [
+  "GPA",
+  "Internships",
+  "Leadership",
+  "Projects",
+  "Entrepreneurship",
+  "Personal Impact",
+  "Others",
+] as const;
+
 function getSectionsCompleted(profile: Record<string, unknown>): number {
   let count = 0;
   for (const section of SECTION_KEYS) {
@@ -147,6 +157,7 @@ export function OnboardingChat({ userId }: { userId: string }) {
   const [selectedFunctions, setSelectedFunctions] = useState<string[]>([]);
   const [selectedIndustries, setSelectedIndustries] = useState<string[]>([]);
   const [selectedLocations, setSelectedLocations] = useState<string[]>([]);
+  const [selectedBenchmarkingFocus, setSelectedBenchmarkingFocus] = useState<string[]>([]);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
@@ -348,6 +359,13 @@ export function OnboardingChat({ userId }: { userId: string }) {
     !!lastMessage &&
     /(preferred )?locations?|any preferred locations/i.test(lastMessage.content);
 
+  const showBenchmarkingFocusChoices =
+    lastIsAssistant &&
+    !!lastMessage &&
+    /which (sections|parts).*(focus|strengthen)|which sections of your profile do you want to focus on strengthening\?/i.test(
+      lastMessage.content
+    );
+
   const mcqQuestion =
     (showFunctionChoices && "What function do you want to work in?") ||
     (showIndustryPrompt && "Which industry do you want to work in?") ||
@@ -355,6 +373,8 @@ export function OnboardingChat({ userId }: { userId: string }) {
     (showCommitmentChoices && "What commitment type are you looking for?") ||
     (showWorkModeChoices && "What work mode do you prefer?") ||
     (showLocationChoices && "Any preferred locations?") ||
+    (showBenchmarkingFocusChoices &&
+      "Which sections of your profile do you want to focus on strengthening?") ||
     "";
 
   return (
@@ -404,7 +424,7 @@ export function OnboardingChat({ userId }: { userId: string }) {
 
       <div
         ref={scrollRef}
-        className="flex flex-1 flex-col justify-end overflow-y-auto px-4 py-6 space-y-4"
+        className="flex flex-col items-start justify-start overflow-y-auto px-4 pt-6 pb-4 space-y-4"
       >
         {messages.map((m, i) => {
           const isLastProfileTableMessage =
@@ -516,7 +536,8 @@ export function OnboardingChat({ userId }: { userId: string }) {
             showExperienceChoices ||
             showCommitmentChoices ||
             showWorkModeChoices ||
-            showLocationChoices) && (
+            showLocationChoices ||
+            showBenchmarkingFocusChoices) && (
             <div className="rounded-2xl border border-[rgba(60,42,106,0.15)] bg-white px-3 py-2">
               {mcqQuestion && (
                 <p className="mb-2 text-xs font-medium text-[#3c2a6a]">
@@ -698,6 +719,46 @@ export function OnboardingChat({ userId }: { userId: string }) {
                   )}
                 </div>
               )}
+              {showBenchmarkingFocusChoices && (
+                <div className="flex flex-col gap-1">
+                  {BENCHMARKING_FOCUS_OPTIONS.map((opt) => {
+                    const active = selectedBenchmarkingFocus.includes(opt);
+                    return (
+                      <button
+                        key={opt}
+                        type="button"
+                        onClick={() =>
+                          setSelectedBenchmarkingFocus((prev) =>
+                            prev.includes(opt) ? prev.filter((x) => x !== opt) : [...prev, opt]
+                          )
+                        }
+                        className={`flex w-full items-center justify-between rounded-xl border px-3 py-2 text-xs text-left ${
+                          active
+                            ? "border-[#3c2a6a] bg-[#3c2a6a] text-[#fdfbf1]"
+                            : "border-[rgba(60,42,106,0.25)] bg-white text-[#3c2a6a] hover:bg-[#3c2a6a]/5"
+                        }`}
+                      >
+                        {opt}
+                      </button>
+                    );
+                  })}
+                  {selectedBenchmarkingFocus.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        const label = selectedBenchmarkingFocus.join(", ");
+                        await sendMessage(
+                          `For benchmarking, I'd like to focus on these sections: ${label}.`
+                        );
+                        setSelectedBenchmarkingFocus([]);
+                      }}
+                      className="mt-1 rounded-lg border-2 border-[#3c2a6a] bg-white px-4 py-2 text-xs font-semibold uppercase tracking-wide text-[#3c2a6a] shadow-sm hover:bg-[#3c2a6a] hover:text-white transition"
+                    >
+                      Confirm focus areas
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
           )}
 
@@ -706,7 +767,8 @@ export function OnboardingChat({ userId }: { userId: string }) {
             showExperienceChoices ||
             showCommitmentChoices ||
             showWorkModeChoices ||
-            showLocationChoices) && (
+            showLocationChoices ||
+            showBenchmarkingFocusChoices) && (
             <div className="flex items-center gap-2">
               <div className="flex items-center">
                 <button
