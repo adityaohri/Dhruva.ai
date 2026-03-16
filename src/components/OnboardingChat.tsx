@@ -146,6 +146,7 @@ export function OnboardingChat({ userId }: { userId: string }) {
   const [profile, setProfile] = useState<Record<string, unknown>>({});
   const [selectedFunctions, setSelectedFunctions] = useState<string[]>([]);
   const [selectedIndustries, setSelectedIndustries] = useState<string[]>([]);
+  const [pendingCvText, setPendingCvText] = useState<string | null>(null);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
@@ -248,11 +249,16 @@ export function OnboardingChat({ userId }: { userId: string }) {
   );
 
   const handleSend = useCallback(async () => {
-    const text = input.trim();
-    if (!text) return;
+    const base = input.trim();
+    if (!base && !pendingCvText) return;
+
+    const userText = base || "I've uploaded my CV.";
+    const fullText = pendingCvText ? `${userText}\n\n${pendingCvText}` : userText;
+
     setInput("");
-    await sendMessage(text);
-  }, [input, sendMessage]);
+    setPendingCvText(null);
+    await sendMessage(fullText);
+  }, [input, pendingCvText, sendMessage]);
 
   const handleFileChange = useCallback(
     async (event: ChangeEvent<HTMLInputElement>) => {
@@ -273,12 +279,13 @@ export function OnboardingChat({ userId }: { userId: string }) {
           });
           const data = (await res.json()) as { text?: string; error?: string };
           if (res.ok && data.text) {
-            const userDisplay = input.trim() || "I've uploaded my CV.";
-            await sendMessage(
-              `${userDisplay}\n\nPlease extract my profile details from this content and use them for the rest of the onboarding:\n\n---\n${data.text}\n---`,
-              { displayContent: userDisplay }
+            const existing = input.trim();
+            if (!existing) {
+              setInput("I've uploaded my CV.");
+            }
+            setPendingCvText(
+              `Please extract my profile details from this content and use them for the rest of the onboarding:\n\n---\n${data.text}\n---`
             );
-            setInput("");
             return;
           }
           await sendMessage(
@@ -298,12 +305,13 @@ export function OnboardingChat({ userId }: { userId: string }) {
           const raw = await file.text();
           const text = raw?.trim();
           if (text) {
-            const userDisplay = input.trim() || "I've uploaded my CV (text).";
-            await sendMessage(
-              `${userDisplay}\n\nPlease extract my profile from this content:\n\n---\n${text}\n---`,
-              { displayContent: userDisplay }
+            const existing = input.trim();
+            if (!existing) {
+              setInput("I've uploaded my CV (text).");
+            }
+            setPendingCvText(
+              `Please extract my profile from this content:\n\n---\n${text}\n---`
             );
-            setInput("");
             return;
           }
         } catch {
@@ -396,7 +404,7 @@ export function OnboardingChat({ userId }: { userId: string }) {
 
       <div
         ref={scrollRef}
-        className="flex flex-1 flex-col justify-end overflow-y-auto px-4 py-4 space-y-4"
+        className="flex-1 overflow-y-auto px-4 py-4 space-y-4"
       >
         {messages.map((m, i) => {
           const isLastProfileTableMessage =
@@ -494,7 +502,7 @@ export function OnboardingChat({ userId }: { userId: string }) {
         )}
       </div>
 
-      <div className="shrink-0 border-t border-[rgba(60,42,106,0.08)] bg-[#fdfbf1] px-4 py-3">
+      <div className="shrink-0 border-t border-[rgba(60,42,106,0.08)] bg-[#fdfbf1] px-4 py-2">
         <div className="mx-auto flex max-w-2xl flex-col gap-2">
           {(showFunctionChoices ||
             showIndustryPrompt ||
@@ -659,48 +667,55 @@ export function OnboardingChat({ userId }: { userId: string }) {
             </div>
           )}
 
-          <div className="flex items-center gap-2">
-            <div className="flex items-center">
-            <button
-              type="button"
-              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-[#3c2a6a] hover:bg-[rgba(60,42,106,0.08)]"
-              aria-label="Upload file"
-              onClick={() => fileInputRef.current?.click()}
-            >
-              <Paperclip className="h-5 w-5" />
-            </button>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".pdf,.doc,.docx,.txt,.rtf"
-              className="hidden"
-              onChange={handleFileChange}
-            />
+          {!(showFunctionChoices ||
+            showIndustryPrompt ||
+            showExperienceChoices ||
+            showCommitmentChoices ||
+            showWorkModeChoices ||
+            showLocationChoices) && (
+            <div className="flex items-center gap-2">
+              <div className="flex items-center">
+                <button
+                  type="button"
+                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-[#3c2a6a] hover:bg-[rgba(60,42,106,0.08)]"
+                  aria-label="Upload file"
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  <Paperclip className="h-5 w-5" />
+                </button>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".pdf,.doc,.docx,.txt,.rtf"
+                  className="hidden"
+                  onChange={handleFileChange}
+                />
+              </div>
+              <input
+                type="text"
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    handleSend();
+                  }
+                }}
+                placeholder="Type your answer..."
+                className="flex-1 rounded-full border border-[rgba(60,42,106,0.15)] bg-white px-4 py-2.5 text-sm text-[#3c2a6a] placeholder:text-[rgba(60,42,106,0.4)] focus:outline-none focus:ring-2 focus:ring-[#3c2a6a]/20"
+                disabled={isLoading}
+              />
+              <button
+                type="button"
+                onClick={handleSend}
+                disabled={isLoading || !input.trim()}
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#3c2a6a] text-[#fdfbf1] disabled:opacity-50 hover:enabled:bg-[#4a347f]"
+                aria-label="Send"
+              >
+                <ArrowUp className="h-5 w-5" />
+              </button>
             </div>
-            <input
-            type="text"
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                handleSend();
-              }
-            }}
-            placeholder="Type your answer..."
-            className="flex-1 rounded-full border border-[rgba(60,42,106,0.15)] bg-white px-4 py-2.5 text-sm text-[#3c2a6a] placeholder:text-[rgba(60,42,106,0.4)] focus:outline-none focus:ring-2 focus:ring-[#3c2a6a]/20"
-            disabled={isLoading}
-            />
-            <button
-            type="button"
-            onClick={handleSend}
-            disabled={isLoading || !input.trim()}
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#3c2a6a] text-[#fdfbf1] disabled:opacity-50 hover:enabled:bg-[#4a347f]"
-            aria-label="Send"
-            >
-              <ArrowUp className="h-5 w-5" />
-            </button>
-          </div>
+          )}
         </div>
       </div>
     </div>
