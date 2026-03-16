@@ -146,7 +146,6 @@ export function OnboardingChat({ userId }: { userId: string }) {
   const [profile, setProfile] = useState<Record<string, unknown>>({});
   const [selectedFunctions, setSelectedFunctions] = useState<string[]>([]);
   const [selectedIndustries, setSelectedIndustries] = useState<string[]>([]);
-  const [pendingCvText, setPendingCvText] = useState<string | null>(null);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
@@ -249,16 +248,11 @@ export function OnboardingChat({ userId }: { userId: string }) {
   );
 
   const handleSend = useCallback(async () => {
-    const base = input.trim();
-    if (!base && !pendingCvText) return;
-
-    const userText = base || "I've uploaded my CV.";
-    const fullText = pendingCvText ? `${userText}\n\n${pendingCvText}` : userText;
-
+    const text = input.trim();
+    if (!text) return;
     setInput("");
-    setPendingCvText(null);
-    await sendMessage(fullText);
-  }, [input, pendingCvText, sendMessage]);
+    await sendMessage(text);
+  }, [input, sendMessage]);
 
   const handleFileChange = useCallback(
     async (event: ChangeEvent<HTMLInputElement>) => {
@@ -279,13 +273,11 @@ export function OnboardingChat({ userId }: { userId: string }) {
           });
           const data = (await res.json()) as { text?: string; error?: string };
           if (res.ok && data.text) {
-            const existing = input.trim();
-            if (!existing) {
-              setInput("I've uploaded my CV.");
-            }
-            setPendingCvText(
-              `Please extract my profile details from this content and use them for the rest of the onboarding:\n\n---\n${data.text}\n---`
+            await sendMessage(
+              `I've uploaded my CV. Please extract my profile details from this content and use them for the rest of the onboarding:\n\n---\n${data.text}\n---`,
+              { displayContent: "I've uploaded my CV." }
             );
+            setInput("");
             return;
           }
           await sendMessage(
@@ -305,13 +297,11 @@ export function OnboardingChat({ userId }: { userId: string }) {
           const raw = await file.text();
           const text = raw?.trim();
           if (text) {
-            const existing = input.trim();
-            if (!existing) {
-              setInput("I've uploaded my CV (text).");
-            }
-            setPendingCvText(
-              `Please extract my profile from this content:\n\n---\n${text}\n---`
+            await sendMessage(
+              `I've uploaded my CV/resume as text. Please extract my profile from this content:\n\n---\n${text}\n---`,
+              { displayContent: "I've uploaded my CV (text)." }
             );
+            setInput("");
             return;
           }
         } catch {
@@ -404,7 +394,7 @@ export function OnboardingChat({ userId }: { userId: string }) {
 
       <div
         ref={scrollRef}
-        className="flex-1 overflow-y-auto px-4 py-4 space-y-4"
+        className="flex flex-1 flex-col justify-end overflow-y-auto px-4 py-4 space-y-4"
       >
         {messages.map((m, i) => {
           const isLastProfileTableMessage =
@@ -511,8 +501,13 @@ export function OnboardingChat({ userId }: { userId: string }) {
             showWorkModeChoices ||
             showLocationChoices) && (
             <div className="rounded-2xl border border-[rgba(60,42,106,0.15)] bg-white px-3 py-2">
+              {lastIsAssistant && lastMessage && (
+                <p className="mb-2 text-xs font-medium text-[#3c2a6a]">
+                  {lastMessage.content}
+                </p>
+              )}
               {showFunctionChoices && (
-                <div className="flex flex-wrap gap-2">
+                <div className="flex flex-col gap-1">
                   {FUNCTION_OPTIONS.map((opt) => {
                     const active = selectedFunctions.includes(opt);
                     return (
@@ -524,9 +519,9 @@ export function OnboardingChat({ userId }: { userId: string }) {
                             prev.includes(opt) ? prev.filter((x) => x !== opt) : [...prev, opt]
                           )
                         }
-                        className={`rounded-full border px-3 py-1.5 text-xs font-medium transition ${
+                        className={`flex w-full items-center justify-between rounded-xl border px-3 py-2 text-xs text-left transition ${
                           active
-                            ? "border-[#3c2a6a] bg-[#3c2a6a] text-white shadow-sm"
+                            ? "border-[#3c2a6a] bg-[#3c2a6a] text-[#fdfbf1] shadow-sm"
                             : "border-[rgba(60,42,106,0.25)] bg-white text-[#3c2a6a] hover:bg-[#3c2a6a]/5"
                         }`}
                       >
@@ -544,7 +539,7 @@ export function OnboardingChat({ userId }: { userId: string }) {
                         );
                         setSelectedFunctions([]);
                       }}
-                      className="rounded-lg border-2 border-[#3c2a6a] bg-white px-4 py-2 text-xs font-semibold uppercase tracking-wide text-[#3c2a6a] shadow-sm hover:bg-[#3c2a6a] hover:text-white transition"
+                      className="mt-1 rounded-lg border-2 border-[#3c2a6a] bg-white px-4 py-2 text-xs font-semibold uppercase tracking-wide text-[#3c2a6a] shadow-sm hover:bg-[#3c2a6a] hover:text-white transition"
                     >
                       Confirm functions
                     </button>
@@ -552,7 +547,7 @@ export function OnboardingChat({ userId }: { userId: string }) {
                 </div>
               )}
               {showIndustryPrompt && (
-                <div className="flex flex-wrap gap-2">
+                <div className="flex flex-col gap-1">
                   {INDUSTRY_OPTIONS.map((opt) => {
                     const active = selectedIndustries.includes(opt);
                     return (
@@ -564,9 +559,9 @@ export function OnboardingChat({ userId }: { userId: string }) {
                             prev.includes(opt) ? prev.filter((x) => x !== opt) : [...prev, opt]
                           )
                         }
-                        className={`rounded-full border px-3 py-1.5 text-xs font-medium ${
+                        className={`flex w-full items-center justify-between rounded-xl border px-3 py-2 text-xs text-left ${
                           active
-                            ? "border-[#3c2a6a] bg-[#3c2a6a] text-white"
+                            ? "border-[#3c2a6a] bg-[#3c2a6a] text-[#fdfbf1]"
                             : "border-[rgba(60,42,106,0.25)] bg-white text-[#3c2a6a] hover:bg-[#3c2a6a]/5"
                         }`}
                       >
@@ -597,7 +592,7 @@ export function OnboardingChat({ userId }: { userId: string }) {
                         }
                         setSelectedIndustries([]);
                       }}
-                      className="rounded-lg border-2 border-[#3c2a6a] bg-white px-4 py-2 text-xs font-semibold uppercase tracking-wide text-[#3c2a6a] shadow-sm hover:bg-[#3c2a6a] hover:text-white transition"
+                      className="mt-1 rounded-lg border-2 border-[#3c2a6a] bg-white px-4 py-2 text-xs font-semibold uppercase tracking-wide text-[#3c2a6a] shadow-sm hover:bg-[#3c2a6a] hover:text-white transition"
                     >
                       Confirm industries
                     </button>
@@ -605,13 +600,13 @@ export function OnboardingChat({ userId }: { userId: string }) {
                 </div>
               )}
               {showExperienceChoices && (
-                <div className="flex flex-wrap gap-2">
+                <div className="flex flex-col gap-1">
                   {EXPERIENCE_OPTIONS.map((opt) => (
                     <button
                       key={opt}
                       type="button"
                       onClick={() => sendMessage(opt)}
-                      className="rounded-full border border-[rgba(60,42,106,0.25)] bg-white px-3 py-1.5 text-xs font-medium text-[#3c2a6a] hover:bg-[#3c2a6a]/5"
+                      className="flex w-full items-center justify-between rounded-xl border border-[rgba(60,42,106,0.25)] bg-white px-3 py-2 text-xs text-left text-[#3c2a6a] hover:bg-[#3c2a6a]/5"
                     >
                       {opt}
                     </button>
@@ -619,13 +614,13 @@ export function OnboardingChat({ userId }: { userId: string }) {
                 </div>
               )}
               {showCommitmentChoices && (
-                <div className="flex flex-wrap gap-2">
+                <div className="flex flex-col gap-1">
                   {COMMITMENT_OPTIONS.map((opt) => (
                     <button
                       key={opt}
                       type="button"
                       onClick={() => sendMessage(opt)}
-                      className="rounded-full border border-[rgba(60,42,106,0.25)] bg-white px-3 py-1.5 text-xs font-medium text-[#3c2a6a] hover:bg-[#3c2a6a]/5"
+                      className="flex w-full items-center justify-between rounded-xl border border-[rgba(60,42,106,0.25)] bg-white px-3 py-2 text-xs text-left text-[#3c2a6a] hover:bg-[#3c2a6a]/5"
                     >
                       {opt}
                     </button>
@@ -633,13 +628,13 @@ export function OnboardingChat({ userId }: { userId: string }) {
                 </div>
               )}
               {showWorkModeChoices && (
-                <div className="flex flex-wrap gap-2">
+                <div className="flex flex-col gap-1">
                   {WORK_MODE_OPTIONS.map((opt) => (
                     <button
                       key={opt}
                       type="button"
                       onClick={() => sendMessage(opt)}
-                      className="rounded-full border border-[rgba(60,42,106,0.25)] bg-white px-3 py-1.5 text-xs font-medium text-[#3c2a6a] hover:bg-[#3c2a6a]/5"
+                      className="flex w-full items-center justify-between rounded-xl border border-[rgba(60,42,106,0.25)] bg-white px-3 py-2 text-xs text-left text-[#3c2a6a] hover:bg-[#3c2a6a]/5"
                     >
                       {opt}
                     </button>
@@ -647,7 +642,7 @@ export function OnboardingChat({ userId }: { userId: string }) {
                 </div>
               )}
               {showLocationChoices && (
-                <div className="flex flex-wrap gap-2">
+                <div className="flex flex-col gap-1">
                   {LOCATION_OPTIONS.map((opt) => (
                     <button
                       key={opt}
@@ -657,7 +652,7 @@ export function OnboardingChat({ userId }: { userId: string }) {
                           opt === "Others" ? "I'd like to type my preferred locations." : opt
                         )
                       }
-                      className="rounded-full border border-[rgba(60,42,106,0.25)] bg-white px-3 py-1.5 text-xs font-medium text-[#3c2a6a] hover:bg-[#3c2a6a]/5"
+                      className="flex w-full items-center justify-between rounded-xl border border-[rgba(60,42,106,0.25)] bg-white px-3 py-2 text-xs text-left text-[#3c2a6a] hover:bg-[#3c2a6a]/5"
                     >
                       {opt}
                     </button>
