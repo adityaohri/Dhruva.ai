@@ -318,27 +318,32 @@ export function OnboardingChat({ userId }: { userId: string }) {
   const sectionsLeft = Math.max(0, TOTAL_SECTIONS - sectionsCompleted);
   const currentSection = getCurrentSection(profile);
   const progressPercent = Math.round((sectionsCompleted / TOTAL_SECTIONS) * 100);
-  const latestAssistant = [...messages].reverse().find((m) => m.role === "assistant");
+  const lastMessage = messages[messages.length - 1];
+  const lastIsAssistant = lastMessage?.role === "assistant";
   const showFunctionChoices =
-    !!latestAssistant &&
-    /what function do you want to work in\?/i.test(latestAssistant.content);
+    lastIsAssistant &&
+    !!lastMessage &&
+    /what function do you want to work in\?/i.test(lastMessage.content);
   const showIndustryPrompt =
-    !!latestAssistant &&
-    /which industry.*work(ing)? in\?/i.test(latestAssistant.content);
+    lastIsAssistant &&
+    !!lastMessage &&
+    /which industry.*work(ing)? in\?/i.test(lastMessage.content);
   const showExperienceChoices =
-    !!latestAssistant &&
-    /experience level\?/i.test(latestAssistant.content);
+    lastIsAssistant &&
+    !!lastMessage &&
+    /experience level\?/i.test(lastMessage.content);
   const showCommitmentChoices =
-    !!latestAssistant &&
-    /commitment type\?\s*\(full time, part time, internship\)/i.test(latestAssistant.content);
+    lastIsAssistant &&
+    !!lastMessage &&
+    /commitment (type|are you)/i.test(lastMessage.content);
   const showWorkModeChoices =
-    !!latestAssistant &&
-    /work mode\?\s*\(remote, hybrid, in-office\)/i.test(latestAssistant.content);
+    lastIsAssistant &&
+    !!lastMessage &&
+    /work mode\?/i.test(lastMessage.content);
   const showLocationChoices =
-    !!latestAssistant &&
-    /preferred locations\?\s*\(gurugram, mumbai, bengaluru, kolkata, chennai, others\)/i.test(
-      latestAssistant.content
-    );
+    lastIsAssistant &&
+    !!lastMessage &&
+    /(preferred )?locations\?|any preferred locations/i.test(lastMessage.content);
 
   return (
     <div className="flex min-h-[100vh] flex-col bg-[#fdfbf1] overflow-hidden">
@@ -461,7 +466,7 @@ export function OnboardingChat({ userId }: { userId: string }) {
                             );
                           }}
                           disabled={isLoading}
-                          className="rounded-full bg-[#3c2a6a] px-4 py-2 text-sm font-medium text-white hover:bg-[#4a347f] disabled:opacity-50"
+                          className="rounded-lg border-2 border-[#3c2a6a] bg-white px-4 py-2 text-xs font-semibold uppercase tracking-wide text-[#3c2a6a] shadow-sm hover:bg-[#3c2a6a] hover:text-white disabled:opacity-50 transition"
                         >
                           Confirm & continue
                         </button>
@@ -474,171 +479,6 @@ export function OnboardingChat({ userId }: { userId: string }) {
             </div>
           );
         })}
-        {showFunctionChoices && (
-          <div className="flex justify-start">
-            <div className="flex flex-wrap gap-2">
-              {FUNCTION_OPTIONS.map((opt) => {
-                const active = selectedFunctions.includes(opt);
-                return (
-                  <button
-                    key={opt}
-                    type="button"
-                    onClick={() =>
-                      setSelectedFunctions((prev) =>
-                        prev.includes(opt) ? prev.filter((x) => x !== opt) : [...prev, opt]
-                      )
-                    }
-                    className={`rounded-full border px-3 py-1.5 text-xs font-medium transition ${
-                      active
-                        ? "border-[#3c2a6a] bg-[#3c2a6a] text-white shadow-sm"
-                        : "border-[rgba(60,42,106,0.25)] bg-white text-[#3c2a6a] hover:bg-[#3c2a6a]/5"
-                    }`}
-                  >
-                    {opt}
-                  </button>
-                );
-              })}
-              {selectedFunctions.length > 0 && (
-                <button
-                  type="button"
-                  onClick={async () => {
-                    const label = selectedFunctions.join(", ");
-                    await sendMessage(
-                      `I'm interested in these functions: ${label}.`
-                    );
-                    setSelectedFunctions([]);
-                  }}
-                  className="rounded-full bg-[#3c2a6a] px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white shadow-md hover:bg-[#4a347f]"
-                >
-                  Confirm functions
-                </button>
-              )}
-            </div>
-          </div>
-        )}
-        {showIndustryPrompt && (
-          <div className="flex justify-start">
-            <div className="flex flex-wrap gap-2">
-              {INDUSTRY_OPTIONS.map((opt) => {
-                const active = selectedIndustries.includes(opt);
-                return (
-                  <button
-                    key={opt}
-                    type="button"
-                    onClick={() =>
-                      setSelectedIndustries((prev) =>
-                        prev.includes(opt) ? prev.filter((x) => x !== opt) : [...prev, opt]
-                      )
-                    }
-                    className={`rounded-full border px-3 py-1.5 text-xs font-medium ${
-                      active
-                        ? "border-[#3c2a6a] bg-[#3c2a6a] text-white"
-                        : "border-[rgba(60,42,106,0.25)] bg-white text-[#3c2a6a] hover:bg-[#3c2a6a]/5"
-                    }`}
-                  >
-                    {opt}
-                  </button>
-                );
-              })}
-              {selectedIndustries.length > 0 && (
-                <button
-                  type="button"
-                  onClick={async () => {
-                    const others = selectedIndustries.filter((i) => i === "Other");
-                    const named = selectedIndustries.filter((i) => i !== "Other");
-                    const namedLabel = named.join(", ");
-
-                    if (named.length > 0 && others.length === 0) {
-                      await sendMessage(
-                        `I'd like to work in these industries: ${namedLabel}.`
-                      );
-                    } else if (named.length > 0 && others.length > 0) {
-                      await sendMessage(
-                        `I'd like to work in these industries: ${namedLabel}, and I also have some other industries in mind that I'll type out next.`
-                      );
-                    } else {
-                      await sendMessage(
-                        "I'd like to type the industries I'm interested in — they don't fit neatly into your list."
-                      );
-                    }
-                    setSelectedIndustries([]);
-                  }}
-                  className="rounded-full bg-[#3c2a6a] px-3 py-1.5 text-xs font-medium text-white hover:bg-[#4a347f]"
-                >
-                  Confirm industries
-                </button>
-              )}
-            </div>
-          </div>
-        )}
-        {showExperienceChoices && (
-          <div className="flex justify-start">
-            <div className="flex flex-wrap gap-2">
-              {EXPERIENCE_OPTIONS.map((opt) => (
-                <button
-                  key={opt}
-                  type="button"
-                  onClick={() => sendMessage(opt)}
-                  className="rounded-full border border-[rgba(60,42,106,0.25)] bg-white px-3 py-1.5 text-xs font-medium text-[#3c2a6a] hover:bg-[#3c2a6a]/5"
-                >
-                  {opt}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-        {showCommitmentChoices && (
-          <div className="flex justify-start">
-            <div className="flex flex-wrap gap-2">
-              {COMMITMENT_OPTIONS.map((opt) => (
-                <button
-                  key={opt}
-                  type="button"
-                  onClick={() => sendMessage(opt)}
-                  className="rounded-full border border-[rgba(60,42,106,0.25)] bg-white px-3 py-1.5 text-xs font-medium text-[#3c2a6a] hover:bg-[#3c2a6a]/5"
-                >
-                  {opt}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-        {showWorkModeChoices && (
-          <div className="flex justify-start">
-            <div className="flex flex-wrap gap-2">
-              {WORK_MODE_OPTIONS.map((opt) => (
-                <button
-                  key={opt}
-                  type="button"
-                  onClick={() => sendMessage(opt)}
-                  className="rounded-full border border-[rgba(60,42,106,0.25)] bg-white px-3 py-1.5 text-xs font-medium text-[#3c2a6a] hover:bg-[#3c2a6a]/5"
-                >
-                  {opt}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-        {showLocationChoices && (
-          <div className="flex justify-start">
-            <div className="flex flex-wrap gap-2">
-              {LOCATION_OPTIONS.map((opt) => (
-                <button
-                  key={opt}
-                  type="button"
-                  onClick={() =>
-                    sendMessage(
-                      opt === "Others" ? "I'd like to type my preferred locations." : opt
-                    )
-                  }
-                  className="rounded-full border border-[rgba(60,42,106,0.25)] bg-white px-3 py-1.5 text-xs font-medium text-[#3c2a6a] hover:bg-[#3c2a6a]/5"
-                >
-                  {opt}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
         {isLoading && (
           <div className="flex justify-start">
             <div className="flex items-center gap-1 rounded-2xl border border-[rgba(60,42,106,0.1)] bg-white px-4 py-3">
@@ -651,8 +491,172 @@ export function OnboardingChat({ userId }: { userId: string }) {
       </div>
 
       <div className="shrink-0 border-t border-[rgba(60,42,106,0.08)] bg-[#fdfbf1] px-4 py-3">
-        <div className="mx-auto flex max-w-2xl items-center gap-2">
-          <div className="flex items-center">
+        <div className="mx-auto flex max-w-2xl flex-col gap-2">
+          {(showFunctionChoices ||
+            showIndustryPrompt ||
+            showExperienceChoices ||
+            showCommitmentChoices ||
+            showWorkModeChoices ||
+            showLocationChoices) && (
+            <div className="rounded-2xl border border-[rgba(60,42,106,0.15)] bg-white px-3 py-2">
+              {showFunctionChoices && (
+                <div className="flex flex-wrap gap-2">
+                  {FUNCTION_OPTIONS.map((opt) => {
+                    const active = selectedFunctions.includes(opt);
+                    return (
+                      <button
+                        key={opt}
+                        type="button"
+                        onClick={() =>
+                          setSelectedFunctions((prev) =>
+                            prev.includes(opt) ? prev.filter((x) => x !== opt) : [...prev, opt]
+                          )
+                        }
+                        className={`rounded-full border px-3 py-1.5 text-xs font-medium transition ${
+                          active
+                            ? "border-[#3c2a6a] bg-[#3c2a6a] text-white shadow-sm"
+                            : "border-[rgba(60,42,106,0.25)] bg-white text-[#3c2a6a] hover:bg-[#3c2a6a]/5"
+                        }`}
+                      >
+                        {opt}
+                      </button>
+                    );
+                  })}
+                  {selectedFunctions.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        const label = selectedFunctions.join(", ");
+                        await sendMessage(
+                          `I'm interested in these functions: ${label}.`
+                        );
+                        setSelectedFunctions([]);
+                      }}
+                      className="rounded-lg border-2 border-[#3c2a6a] bg-white px-4 py-2 text-xs font-semibold uppercase tracking-wide text-[#3c2a6a] shadow-sm hover:bg-[#3c2a6a] hover:text-white transition"
+                    >
+                      Confirm functions
+                    </button>
+                  )}
+                </div>
+              )}
+              {showIndustryPrompt && (
+                <div className="flex flex-wrap gap-2">
+                  {INDUSTRY_OPTIONS.map((opt) => {
+                    const active = selectedIndustries.includes(opt);
+                    return (
+                      <button
+                        key={opt}
+                        type="button"
+                        onClick={() =>
+                          setSelectedIndustries((prev) =>
+                            prev.includes(opt) ? prev.filter((x) => x !== opt) : [...prev, opt]
+                          )
+                        }
+                        className={`rounded-full border px-3 py-1.5 text-xs font-medium ${
+                          active
+                            ? "border-[#3c2a6a] bg-[#3c2a6a] text-white"
+                            : "border-[rgba(60,42,106,0.25)] bg-white text-[#3c2a6a] hover:bg-[#3c2a6a]/5"
+                        }`}
+                      >
+                        {opt}
+                      </button>
+                    );
+                  })}
+                  {selectedIndustries.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        const others = selectedIndustries.filter((i) => i === "Other");
+                        const named = selectedIndustries.filter((i) => i !== "Other");
+                        const namedLabel = named.join(", ");
+
+                        if (named.length > 0 && others.length === 0) {
+                          await sendMessage(
+                            `I'd like to work in these industries: ${namedLabel}.`
+                          );
+                        } else if (named.length > 0 && others.length > 0) {
+                          await sendMessage(
+                            `I'd like to work in these industries: ${namedLabel}, and I also have some other industries in mind that I'll type out next.`
+                          );
+                        } else {
+                          await sendMessage(
+                            "I'd like to type the industries I'm interested in — they don't fit neatly into your list."
+                          );
+                        }
+                        setSelectedIndustries([]);
+                      }}
+                      className="rounded-lg border-2 border-[#3c2a6a] bg-white px-4 py-2 text-xs font-semibold uppercase tracking-wide text-[#3c2a6a] shadow-sm hover:bg-[#3c2a6a] hover:text-white transition"
+                    >
+                      Confirm industries
+                    </button>
+                  )}
+                </div>
+              )}
+              {showExperienceChoices && (
+                <div className="flex flex-wrap gap-2">
+                  {EXPERIENCE_OPTIONS.map((opt) => (
+                    <button
+                      key={opt}
+                      type="button"
+                      onClick={() => sendMessage(opt)}
+                      className="rounded-full border border-[rgba(60,42,106,0.25)] bg-white px-3 py-1.5 text-xs font-medium text-[#3c2a6a] hover:bg-[#3c2a6a]/5"
+                    >
+                      {opt}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {showCommitmentChoices && (
+                <div className="flex flex-wrap gap-2">
+                  {COMMITMENT_OPTIONS.map((opt) => (
+                    <button
+                      key={opt}
+                      type="button"
+                      onClick={() => sendMessage(opt)}
+                      className="rounded-full border border-[rgba(60,42,106,0.25)] bg-white px-3 py-1.5 text-xs font-medium text-[#3c2a6a] hover:bg-[#3c2a6a]/5"
+                    >
+                      {opt}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {showWorkModeChoices && (
+                <div className="flex flex-wrap gap-2">
+                  {WORK_MODE_OPTIONS.map((opt) => (
+                    <button
+                      key={opt}
+                      type="button"
+                      onClick={() => sendMessage(opt)}
+                      className="rounded-full border border-[rgba(60,42,106,0.25)] bg-white px-3 py-1.5 text-xs font-medium text-[#3c2a6a] hover:bg-[#3c2a6a]/5"
+                    >
+                      {opt}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {showLocationChoices && (
+                <div className="flex flex-wrap gap-2">
+                  {LOCATION_OPTIONS.map((opt) => (
+                    <button
+                      key={opt}
+                      type="button"
+                      onClick={() =>
+                        sendMessage(
+                          opt === "Others" ? "I'd like to type my preferred locations." : opt
+                        )
+                      }
+                      className="rounded-full border border-[rgba(60,42,106,0.25)] bg-white px-3 py-1.5 text-xs font-medium text-[#3c2a6a] hover:bg-[#3c2a6a]/5"
+                    >
+                      {opt}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          <div className="flex items-center gap-2">
+            <div className="flex items-center">
             <button
               type="button"
               className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-[#3c2a6a] hover:bg-[rgba(60,42,106,0.08)]"
@@ -668,8 +672,8 @@ export function OnboardingChat({ userId }: { userId: string }) {
               className="hidden"
               onChange={handleFileChange}
             />
-          </div>
-          <input
+            </div>
+            <input
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
@@ -682,16 +686,17 @@ export function OnboardingChat({ userId }: { userId: string }) {
             placeholder="Type your answer..."
             className="flex-1 rounded-full border border-[rgba(60,42,106,0.15)] bg-white px-4 py-2.5 text-sm text-[#3c2a6a] placeholder:text-[rgba(60,42,106,0.4)] focus:outline-none focus:ring-2 focus:ring-[#3c2a6a]/20"
             disabled={isLoading}
-          />
-          <button
+            />
+            <button
             type="button"
             onClick={handleSend}
             disabled={isLoading || !input.trim()}
             className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#3c2a6a] text-[#fdfbf1] disabled:opacity-50 hover:enabled:bg-[#4a347f]"
             aria-label="Send"
-          >
-            <ArrowUp className="h-5 w-5" />
-          </button>
+            >
+              <ArrowUp className="h-5 w-5" />
+            </button>
+          </div>
         </div>
       </div>
     </div>

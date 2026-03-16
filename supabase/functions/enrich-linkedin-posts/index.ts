@@ -19,6 +19,130 @@ const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
+async function shouldKeepLowIntentPost(
+  companyName: string | null,
+  posterTitle: string | null,
+  scrapedAt: string | null,
+  enrichmentConfidence: string | null
+): Promise<boolean> {
+  // Rule 1 — Keep if enrichment confidence is low
+  if (enrichmentConfidence === "low") return true;
+
+  // Rule 2 — Keep if post is less than 3 days old
+  if (scrapedAt) {
+    const age = Date.now() - new Date(scrapedAt).getTime();
+    const threeDays = 3 * 24 * 60 * 60 * 1000;
+    if (age < threeDays) return true;
+  }
+
+  // Rule 3 — Keep if poster is a senior decision-maker
+  if (posterTitle) {
+    const seniorKeywords = [
+      "founder",
+      "co-founder",
+      "cofounder",
+      "ceo",
+      "cto",
+      "coo",
+      "cfo",
+      "chief",
+      "vice president",
+      "vp ",
+      "v.p.",
+      "director",
+      "head of",
+      "partner",
+      "managing director",
+      "md ",
+      "president",
+    ];
+    const titleLower = posterTitle.toLowerCase();
+    if (seniorKeywords.some((k) => titleLower.includes(k))) return true;
+  }
+
+  // Rules 4, 5, 6 require a company name to check
+  if (!companyName) return false;
+
+  // Rule 4 — Keep if company exists in jobs_index
+  const { count: jobCount } = await supabase
+    .from("jobs_index")
+    .select("*", { count: "exact", head: true })
+    .ilike("company", `%${companyName}%`)
+    .eq("is_active", true);
+
+  if (jobCount && jobCount > 0) return true;
+
+  // Rule 5 — Keep if company has recent signals in signals_index
+  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+
+  const { count: signalCount } = await supabase
+    .from("signals_index")
+    .select("*", { count: "exact", head: true })
+    .ilike("company_name", `%${companyName}%`)
+    .in("signal_type", ["funding", "headcount", "leadership", "product_launch", "contract_win"])
+    .gte("scraped_at", thirtyDaysAgo)
+    .eq("is_active", true);
+
+  if (signalCount && signalCount > 0) return true;
+
+  // Rule 6 — Keep if company is tracked in company_signal_profiles
+  const { count: profileCount } = await supabase
+    .from("company_signal_profiles")
+    .select("*", { count: "exact", head: true })
+    .ilike("company_name", `%${companyName}%`);
+
+  if (profileCount && profileCount > 0) return true;
+
+  // Failed all keep rules — safe to delete
+  return false;
+}
+
+async function deleteLowIntentPosts(): Promise<number> {
+  const threeDaysAgo = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString();
+
+  const { data: candidates } = await supabase
+    .from("linkedin_hiring_posts")
+    .select("id, company_name, poster_title, scraped_at, enrichment_confidence")
+    .eq("hiring_intent", "low")
+    .eq("is_enriched", true)
+    .lt("scraped_at", threeDaysAgo);
+
+  if (!candidates || candidates.length === 0) return 0;
+
+  const toDelete: string[] = [];
+
+  for (const post of candidates as {
+    id: string;
+    company_name: string | null;
+    poster_title: string | null;
+    scraped_at: string | null;
+    enrichment_confidence: string | null;
+  }[]) {
+    const keep = await shouldKeepLowIntentPost(
+      post.company_name,
+      post.poster_title,
+      post.scraped_at,
+      post.enrichment_confidence
+    );
+    if (!keep) toDelete.push(post.id);
+    await new Promise((r) => setTimeout(r, 50));
+  }
+
+  if (toDelete.length === 0) return 0;
+
+  let deleted = 0;
+  for (let i = 0; i < toDelete.length; i += 50) {
+    const batch = toDelete.slice(i, i + 50);
+    const { error } = await supabase.from("linkedin_hiring_posts").delete().in("id", batch);
+    if (!error) deleted += batch.length;
+  }
+
+  console.log(
+    `[enrich-linkedin-posts] Deleted ${deleted} low-intent posts not found in any internal table`
+  );
+  return deleted;
+}
+
 type PostRow = {
   id: string;
   title: string | null;
@@ -51,13 +175,20 @@ Return a JSON object with exactly these fields:
   "apply_method": "DM / email / link / not specified",
   "is_india_role": true or false,
   "enriched_industry": "map to one of: consulting, technology, finance, marketing, operations, product, data & analytics, investment banking, private equity & vc, fmcg, pharma & healthcare, energy & infrastructure, media & entertainment, legal, human resources, real estate, logistics & supply chain, e-commerce & d2c, edtech, banking & financial services, manufacturing & automotive — or null if unclear",
-  "enrichment_confidence": "high / medium / low"
+  "enrichment_confidence": "high / medium / low",
+  "hiring_intent": "high / medium / low",
+  "enriched_snippet": "1–2 sentence, clear natural-language summary of what the post is about, suitable to show directly to a user"
 }
 
 Rules:
 - is_india_role: true only if post mentions India, Indian cities, or Indian companies
 - If snippet is too short or unclear, set enrichment_confidence to "low"
 - Never guess — use null if not clearly inferable from the text
+
+Hiring intent classification rules:
+- "high": Post is directly and explicitly about hiring a specific person or role. Contains clear signals like "we are hiring", "looking for a [role]", "join our team", "apply now", "DM me for this role", job description details, or a direct call to apply. The primary purpose of the post is recruitment.
+- "medium": Post suggests the organisation may be hiring or growing but does not directly solicit applications. Includes posts about team expansion, company growth milestones, "exciting things ahead", general culture posts, or posts where hiring is mentioned but not the primary focus.
+- "low": Post is clearly NOT about recruiting someone. Includes event participation announcements, reflections on hiring experiences, commentary on job market trends, celebrating a hire that already happened, or any post where the organisation is not actively seeking candidates.
 `;
 
   try {
@@ -98,7 +229,11 @@ Rules:
   }
 }
 
-async function processBatch(batchSize: number = 50): Promise<number> {
+async function processBatch(batchSize: number = 50): Promise<{ enriched: number; deleted: number }> {
+  // Process a single batch of unenriched posts.
+  // We no longer artificially sleep between calls; with typical batch sizes
+  // (≤ 20) and short snippets this stays comfortably within Claude's
+  // Tier 1 rate limits and avoids hitting the Edge runtime wall-clock limit.
   const { data: rows, error: fetchError } = await supabase
     .from("linkedin_hiring_posts")
     .select("id, title, snippet, industry, posted_at")
@@ -112,9 +247,12 @@ async function processBatch(batchSize: number = 50): Promise<number> {
     throw fetchError;
   }
 
-  if (!rows?.length) return 0;
+  if (!rows?.length) {
+    const deletedCountIfAny = await deleteLowIntentPosts();
+    return { enriched: 0, deleted: deletedCountIfAny };
+  }
 
-  let enrichedCount = 0;
+  let totalEnriched = 0;
 
   for (const row of rows as PostRow[]) {
     const result = await enrichPost(row);
@@ -134,6 +272,8 @@ async function processBatch(batchSize: number = 50): Promise<number> {
           is_india_role: result.is_india_role ?? null,
           enriched_industry: result.enriched_industry ?? null,
           enrichment_confidence: result.enrichment_confidence ?? null,
+          hiring_intent: result.hiring_intent ?? null,
+          enriched_snippet: result.enriched_snippet ?? null,
           is_enriched: true,
         })
         .eq("id", row.id);
@@ -141,7 +281,7 @@ async function processBatch(batchSize: number = 50): Promise<number> {
       if (updateError) {
         console.error("[enrich-linkedin-posts] update error:", updateError.message);
       } else {
-        enrichedCount++;
+        totalEnriched++;
       }
     } else {
       await supabase
@@ -150,10 +290,11 @@ async function processBatch(batchSize: number = 50): Promise<number> {
         .eq("id", row.id);
     }
 
-    await new Promise((r) => setTimeout(r, 1300));
   }
 
-  return enrichedCount;
+  const deletedCount = await deleteLowIntentPosts();
+
+  return { enriched: totalEnriched, deleted: deletedCount };
 }
 
 Deno.serve(async (req: Request) => {
@@ -172,8 +313,8 @@ Deno.serve(async (req: Request) => {
   const batchSize = body.batchSize ?? 50;
 
   try {
-    const count = await processBatch(batchSize);
-    return new Response(JSON.stringify({ ok: true, enriched: count }), {
+    const { enriched, deleted } = await processBatch(batchSize);
+    return new Response(JSON.stringify({ ok: true, enriched, deleted }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (err) {
