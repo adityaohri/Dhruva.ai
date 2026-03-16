@@ -333,7 +333,7 @@ export function OnboardingChat({ userId }: { userId: string }) {
   const showExperienceChoices =
     lastIsAssistant &&
     !!lastMessage &&
-    /experience/i.test(lastMessage.content);
+    /experience level\?/i.test(lastMessage.content);
   const showCommitmentChoices =
     lastIsAssistant &&
     !!lastMessage &&
@@ -403,7 +403,7 @@ export function OnboardingChat({ userId }: { userId: string }) {
 
       <div
         ref={scrollRef}
-        className="flex flex-1 flex-col justify-end overflow-y-auto px-4 py-6 space-y-4"
+        className="flex-1 overflow-y-auto px-4 py-6 space-y-4"
       >
         {messages.map((m, i) => {
           const isLastProfileTableMessage =
