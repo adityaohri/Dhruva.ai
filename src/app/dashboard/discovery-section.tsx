@@ -45,6 +45,7 @@ export function DiscoverySection({ parsed }: DiscoverySectionProps) {
   const [profileLoading, setProfileLoading] = useState(false);
   const [profileError, setProfileError] = useState<string | null>(null);
   const [profileConfirmed, setProfileConfirmed] = useState(false);
+  const [profileSuccess, setProfileSuccess] = useState<string | null>(null);
   const [profileDraft, setProfileDraft] = useState<{
     name?: string | null;
     university?: string | null;
@@ -136,6 +137,7 @@ export function DiscoverySection({ parsed }: DiscoverySectionProps) {
     setProfileLoading(true);
     setProfileError(null);
     setProfileConfirmed(false);
+    setProfileSuccess(null);
     try {
       const supabase = createSupabaseClient();
       const {
@@ -188,6 +190,48 @@ export function DiscoverySection({ parsed }: DiscoverySectionProps) {
     } catch (e) {
       setProfileError(
         e instanceof Error ? e.message : "Failed to retrieve your profile."
+      );
+    } finally {
+      setProfileLoading(false);
+    }
+  };
+
+  const handleConfirmProfile = async () => {
+    if (!profileDraft) return;
+    setProfileLoading(true);
+    setProfileError(null);
+    setProfileSuccess(null);
+    try {
+      const supabase = createSupabaseClient();
+      const {
+        data: { user },
+        error: userError,
+      } = await supabase.auth.getUser();
+      if (userError || !user) {
+        setProfileError("Please log in again to confirm your profile.");
+        setProfileLoading(false);
+        return;
+      }
+      const { error } = await supabase
+        .from("user_profiles")
+        .update({
+          name: profileDraft.name ?? null,
+          university: profileDraft.university ?? null,
+          gpa: profileDraft.gpa ?? null,
+          skills: profileDraft.skills ?? null,
+          internships: profileDraft.internships ?? null,
+        })
+        .eq("user_id", user.id);
+      if (error) {
+        setProfileError("Could not save your profile. Please try again.");
+        setProfileLoading(false);
+        return;
+      }
+      setProfileConfirmed(true);
+      setProfileSuccess("Profile confirmed and saved. You can now run discovery.");
+    } catch (e) {
+      setProfileError(
+        e instanceof Error ? e.message : "Failed to save your profile."
       );
     } finally {
       setProfileLoading(false);
@@ -349,6 +393,11 @@ export function DiscoverySection({ parsed }: DiscoverySectionProps) {
           {profileError && (
             <p className="mt-2 text-[11px] text-red-700">{profileError}</p>
           )}
+          {profileSuccess && (
+            <p className="mt-2 text-[11px] text-emerald-700">
+              {profileSuccess}
+            </p>
+          )}
           {profileDraft && (
             <div className="mt-3 overflow-hidden rounded-2xl border border-slate-200 bg-[#FDFBF1] p-3 text-[11px] text-[#3C2A6A]">
               <table className="w-full border-collapse text-left">
@@ -445,10 +494,11 @@ export function DiscoverySection({ parsed }: DiscoverySectionProps) {
                 <Button
                   type="button"
                   size="sm"
-                  onClick={() => setProfileConfirmed(true)}
-                  className="rounded-full bg-[#3C2A6A] px-4 py-1.5 text-[11px] font-medium text-[#FDFBF1] hover:bg-[#4a347f]"
+                  onClick={handleConfirmProfile}
+                  disabled={profileLoading}
+                  className="rounded-full bg-[#3C2A6A] px-4 py-1.5 text-[11px] font-medium text-[#FDFBF1] hover:bg-[#4a347f] disabled:opacity-60"
                 >
-                  Confirm profile for discovery
+                  {profileLoading ? "Saving…" : "Confirm profile for discovery"}
                 </Button>
               </div>
             </div>
