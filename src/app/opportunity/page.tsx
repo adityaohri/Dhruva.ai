@@ -14,7 +14,6 @@ import type { OpportunityResult } from "@/types/opportunity";
 const CREAM = "#FDFBF1";
 const PURPLE = "#3C2A6A";
 
-type OnboardingStep = 1 | 2;
 type FlowStep = "filters" | "confirm_profile" | "results";
 type Section = "matches" | "signals" | "radar";
 
@@ -1112,8 +1111,7 @@ function OpportunityCard({
 }
 
 export default function OpportunityPage() {
-  const [onboardingStep, setOnboardingStep] = useState<OnboardingStep>(1);
-  const [flowStep, setFlowStep] = useState<FlowStep>("filters");
+  const [flowStep, setFlowStep] = useState<FlowStep>("confirm_profile");
   const [filters, setFilters] = useState<OpportunityFilters>(initialFilters);
   const [results, setResults] = useState<OpportunityResult[]>([]);
   const [resultsByCompany, setResultsByCompany] = useState<Record<string, OpportunityResult[]>>({});
@@ -1171,6 +1169,68 @@ export default function OpportunityPage() {
       saveFilters(next);
       return next;
     });
+  }, []);
+
+  // Load core filters from user_profiles so we don't re-ask "What are you looking for?"
+  useEffect(() => {
+    const supabase = createSupabaseClient();
+    (async () => {
+      try {
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+        if (!user) return;
+
+        const { data, error } = await supabase
+          .from("user_profiles")
+          .select(
+            "target_industries, commitment_type, experience_level, preferred_locations"
+          )
+          .eq("user_id", user.id)
+          .maybeSingle();
+
+        if (error || !data) return;
+
+        const profile = data as any;
+        const fromProfile: Partial<OpportunityFilters> = {};
+
+        if (profile.target_industries) {
+          fromProfile.industry = String(profile.target_industries);
+        }
+
+        const commitment: string = profile.commitment_type ?? "";
+        if (commitment) {
+          const c = commitment.toLowerCase();
+          if (c.includes("intern")) fromProfile.jobType = "Internship";
+          else if (c.includes("part")) fromProfile.jobType = "Part-time";
+          else if (c.includes("full")) fromProfile.jobType = "Full-time";
+        }
+
+        const exp: string = profile.experience_level ?? "";
+        if (exp) {
+          const e = exp.toLowerCase();
+          if (e.includes("entry")) fromProfile.experience = "Fresher";
+          else if (e.includes("0-3")) fromProfile.experience = "0-1 years";
+          else if (e.includes("3+")) fromProfile.experience = "2-5 years";
+        }
+
+        if (profile.preferred_locations) {
+          if (Array.isArray(profile.preferred_locations)) {
+            fromProfile.location = profile.preferred_locations.join(", ");
+          } else {
+            fromProfile.location = String(profile.preferred_locations);
+          }
+        }
+
+        setFilters((prev) => {
+          const next = { ...prev, ...fromProfile };
+          saveFilters(next);
+          return next;
+        });
+      } catch {
+        // ignore; user can still run hunt with defaults
+      }
+    })();
   }, []);
 
   useEffect(() => {
@@ -1637,8 +1697,7 @@ export default function OpportunityPage() {
 
   const resetFilters = useCallback(() => {
     setFilters(initialFilters);
-    setOnboardingStep(1);
-    setFlowStep("filters");
+    setFlowStep("confirm_profile");
     setResults([]);
     setResultsByCompany({});
     setMatchByUrl({});
@@ -1665,9 +1724,6 @@ export default function OpportunityPage() {
     }
   }, [loadingRadarReasonUrl, radarReasonByUrl, fetchRadarReason, results.length]);
 
-  const canProceedFromStep1 =
-    filters.industry && filters.jobType && filters.experience;
-
   if (loading) {
     return (
       <div
@@ -1688,170 +1744,6 @@ export default function OpportunityPage() {
         <p className="mt-6 max-w-md text-center text-sm text-[#3C2A6A]/80">
           {HUNT_STATUS_MESSAGES[loadingStatusIndex]}
         </p>
-      </div>
-    );
-  }
-
-  if (flowStep === "filters") {
-    return (
-      <div
-        className="flex min-h-[calc(100vh-8rem)] flex-col items-center justify-center px-4 py-12"
-        style={{ backgroundColor: CREAM }}
-      >
-        <div className="w-full max-w-2xl">
-          <p className="text-center font-serif text-2xl font-semibold text-[#3C2A6A] sm:text-3xl">
-            {onboardingStep === 1
-              ? "What are you looking for?"
-              : "Add more details (optional)"}
-          </p>
-
-          {onboardingStep === 1 && (
-            <div className="mt-10 space-y-10">
-              <div>
-                <p className="mb-3 text-[11px] font-medium uppercase tracking-[0.18em] text-[#3C2A6A]/80">
-                  Industry
-                </p>
-                <div className="flex flex-wrap gap-2">
-                  {INDUSTRIES.map((opt) => (
-                    <button
-                      key={opt}
-                      type="button"
-                      onClick={() => updateFilter("industry", opt)}
-                      className={`rounded-xl border px-4 py-3 text-sm font-medium transition-colors ${
-                        filters.industry === opt
-                          ? "border-[#3C2A6A] bg-[#3C2A6A] text-[#FDFBF1]"
-                          : "border-[#E5E7EB] bg-white text-[#3C2A6A] hover:border-[#3C2A6A]/50"
-                      }`}
-                    >
-                      {opt}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <div>
-                <p className="mb-3 text-[11px] font-medium uppercase tracking-[0.18em] text-[#3C2A6A]/80">
-                  Job type
-                </p>
-                <div className="flex flex-wrap gap-2">
-                  {JOB_TYPES.map((opt) => (
-                    <button
-                      key={opt}
-                      type="button"
-                      onClick={() => updateFilter("jobType", opt)}
-                      className={`rounded-xl border px-4 py-3 text-sm font-medium transition-colors ${
-                        filters.jobType === opt
-                          ? "border-[#3C2A6A] bg-[#3C2A6A] text-[#FDFBF1]"
-                          : "border-[#E5E7EB] bg-white text-[#3C2A6A] hover:border-[#3C2A6A]/50"
-                      }`}
-                    >
-                      {opt}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <div>
-                <p className="mb-3 text-[11px] font-medium uppercase tracking-[0.18em] text-[#3C2A6A]/80">
-                  Experience
-                </p>
-                <div className="flex flex-wrap gap-2">
-                  {EXPERIENCE_LEVELS.map((opt) => (
-                    <button
-                      key={opt}
-                      type="button"
-                      onClick={() => updateFilter("experience", opt)}
-                      className={`rounded-xl border px-4 py-3 text-sm font-medium transition-colors ${
-                        filters.experience === opt
-                          ? "border-[#3C2A6A] bg-[#3C2A6A] text-[#FDFBF1]"
-                          : "border-[#E5E7EB] bg-white text-[#3C2A6A] hover:border-[#3C2A6A]/50"
-                      }`}
-                    >
-                      {opt}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <div className="flex justify-center pt-4">
-                <button
-                  type="button"
-                  onClick={() => setOnboardingStep(2)}
-                  disabled={!canProceedFromStep1}
-                  className="rounded-full bg-[#3C2A6A] px-8 py-3 text-sm font-medium text-[#FDFBF1] transition-opacity disabled:opacity-40 hover:bg-[#4a347f]"
-                >
-                  Continue
-                </button>
-              </div>
-            </div>
-          )}
-
-          {onboardingStep === 2 && (
-            <div className="mt-10 space-y-6">
-              <div>
-                <label className="mb-1.5 block text-[11px] font-medium uppercase tracking-[0.18em] text-[#3C2A6A]/80">
-                  Location
-                </label>
-                <input
-                  type="text"
-                  value={filters.location}
-                  onChange={(e) => updateFilter("location", e.target.value)}
-                  placeholder="e.g. India, Bangalore"
-                  className="w-full rounded-xl border border-[#E5E7EB] bg-white px-4 py-3 text-sm text-[#3C2A6A] placeholder:text-slate-400 focus:border-[#3C2A6A]/50 focus:outline-none"
-                />
-              </div>
-              <div>
-                <label className="mb-1.5 block text-[11px] font-medium uppercase tracking-[0.18em] text-[#3C2A6A]/80">
-                  Desired pay (INR)
-                </label>
-                <input
-                  type="text"
-                  value={filters.pay}
-                  onChange={(e) => updateFilter("pay", e.target.value)}
-                  placeholder="e.g. 8-12 LPA"
-                  className="w-full rounded-xl border border-[#E5E7EB] bg-white px-4 py-3 text-sm text-[#3C2A6A] placeholder:text-slate-400 focus:border-[#3C2A6A]/50 focus:outline-none"
-                />
-              </div>
-              <div>
-                <label className="mb-1.5 block text-[11px] font-medium uppercase tracking-[0.18em] text-[#3C2A6A]/80">
-                  Target company
-                </label>
-                <input
-                  type="text"
-                  value={filters.companies}
-                  onChange={(e) => updateFilter("companies", e.target.value)}
-                  placeholder="e.g. McKinsey, Apple (comma-separated)"
-                  className="w-full rounded-xl border border-[#E5E7EB] bg-white px-4 py-3 text-sm text-[#3C2A6A] placeholder:text-slate-400 focus:border-[#3C2A6A]/50 focus:outline-none"
-                />
-              </div>
-              <div>
-                <label className="mb-1.5 block text-[11px] font-medium uppercase tracking-[0.18em] text-[#3C2A6A]/80">
-                  Specific role
-                </label>
-                <input
-                  type="text"
-                  value={filters.roles}
-                  onChange={(e) => updateFilter("roles", e.target.value)}
-                  placeholder="e.g. Analyst, Consultant (comma-separated)"
-                  className="w-full rounded-xl border border-[#E5E7EB] bg-white px-4 py-3 text-sm text-[#3C2A6A] placeholder:text-slate-400 focus:border-[#3C2A6A]/50 focus:outline-none"
-                />
-              </div>
-              <div className="flex flex-wrap gap-3 pt-4">
-                <button
-                  type="button"
-                  onClick={() => setFlowStep("confirm_profile")}
-                  className="rounded-full bg-[#3C2A6A] px-8 py-3 text-sm font-medium text-[#FDFBF1] hover:bg-[#4a347f]"
-                >
-                  Start Hunt
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setFlowStep("confirm_profile")}
-                  className="rounded-full border border-[#3C2A6A]/30 bg-white px-8 py-3 text-sm font-medium text-[#3C2A6A] hover:bg-[#3C2A6A]/5"
-                >
-                  Skip & start hunt
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
       </div>
     );
   }

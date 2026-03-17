@@ -20,156 +20,55 @@ const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-const ALL_INDUSTRIES = [
-  "consulting",
-  "technology",
-  "finance",
-  "marketing",
-  "operations",
-  "product",
-  "data & analytics",
-  "investment banking",
-  "private equity & vc",
-  "fmcg",
-  "pharma & healthcare",
-  "energy & infrastructure",
-  "media & entertainment",
-  "legal",
-  "human resources",
-  "real estate",
-  "logistics & supply chain",
-  "e-commerce & d2c",
-  "edtech",
-  "banking & financial services",
-  "manufacturing & automotive",
+const HIRING_QUERIES = [
+  '"we are hiring" India site:linkedin.com/posts',
+  '"we\'re hiring" India site:linkedin.com/posts',
+  '"I am hiring" India site:linkedin.com/posts',
+  '"we\'re looking for" India site:linkedin.com/posts',
+  '"we are looking for" India site:linkedin.com/posts',
+  '"DM me" "hiring" India site:linkedin.com/posts',
+  '"DM me" "looking for" India site:linkedin.com/posts',
+  '"drop your CV" India site:linkedin.com/posts',
+  '"send your resume" India site:linkedin.com/posts',
+  '"share your CV" India site:linkedin.com/posts',
+  '"apply now" "India" site:linkedin.com/posts',
+  '"apply here" India site:linkedin.com/posts',
+  '"link in bio" "hiring" India site:linkedin.com/posts',
+  '"link in comments" "hiring" India site:linkedin.com/posts',
+  '"join our team" India site:linkedin.com/posts',
+  '"join us" "hiring" India site:linkedin.com/posts',
+  '"we have openings" India site:linkedin.com/posts',
+  '"open positions" India site:linkedin.com/posts',
+  '"open roles" India site:linkedin.com/posts',
+  '"open role" India site:linkedin.com/posts',
+  '"we are hiring" Bangalore site:linkedin.com/posts',
+  '"we are hiring" Mumbai site:linkedin.com/posts',
+  '"we are hiring" Delhi site:linkedin.com/posts',
+  '"we are hiring" Gurugram site:linkedin.com/posts',
+  '"we are hiring" Hyderabad site:linkedin.com/posts',
+  '"we are hiring" Pune site:linkedin.com/posts',
+  '"hiring freshers" India site:linkedin.com/posts',
+  '"entry level" "hiring" India site:linkedin.com/posts',
+  '"campus hiring" India site:linkedin.com/posts',
+  '"internship" "apply" India site:linkedin.com/posts',
+  '"urgently hiring" India site:linkedin.com/posts',
+  '"immediate joining" India site:linkedin.com/posts',
+  '"referral" "hiring" India site:linkedin.com/posts',
+  '"know anyone" "hiring" India site:linkedin.com/posts',
+  '"founding team" "hiring" India site:linkedin.com/posts',
+  '"Head of" "hiring" India site:linkedin.com/posts',
+  '"hiring a product manager" India site:linkedin.com/posts',
+  '"hiring an engineer" India site:linkedin.com/posts',
+  '"vacancy" "apply" India site:linkedin.com/posts',
+  '"we are hiring" Chennai site:linkedin.com/posts',
 ];
-
-const INDUSTRY_QUERIES: Record<string, string[]> = {
-  consulting: [
-    "site:linkedin.com/posts hiring consultant India",
-    "site:linkedin.com/posts \"we are hiring\" strategy consulting India",
-    "site:linkedin.com/posts \"looking for\" consultant analyst India",
-  ],
-  technology: [
-    "site:linkedin.com/posts hiring engineer developer India",
-    "site:linkedin.com/posts \"we are hiring\" software India",
-    "site:linkedin.com/posts \"join our team\" tech startup India",
-  ],
-  finance: [
-    "site:linkedin.com/posts hiring finance analyst India",
-    "site:linkedin.com/posts \"we are hiring\" CFO finance India",
-    "site:linkedin.com/posts \"looking for\" finance professional India",
-  ],
-  marketing: [
-    "site:linkedin.com/posts hiring marketing manager India",
-    "site:linkedin.com/posts \"we are hiring\" brand growth India",
-    "site:linkedin.com/posts \"join us\" marketing India",
-  ],
-  operations: [
-    "site:linkedin.com/posts hiring operations manager India",
-    "site:linkedin.com/posts \"we are hiring\" operations India",
-    "site:linkedin.com/posts \"looking for\" ops lead India",
-  ],
-  product: [
-    "site:linkedin.com/posts hiring product manager India",
-    "site:linkedin.com/posts \"we are hiring\" PM product India",
-    "site:linkedin.com/posts \"join our team\" product India",
-  ],
-  "data & analytics": [
-    "site:linkedin.com/posts hiring data analyst scientist India",
-    "site:linkedin.com/posts \"we are hiring\" data analytics India",
-    "site:linkedin.com/posts \"looking for\" data engineer India",
-  ],
-  "investment banking": [
-    "site:linkedin.com/posts hiring investment banking analyst India",
-    "site:linkedin.com/posts \"we are hiring\" IB M&A India",
-    "site:linkedin.com/posts \"join our team\" investment bank India",
-  ],
-  "private equity & vc": [
-    "site:linkedin.com/posts hiring private equity venture capital India",
-    "site:linkedin.com/posts \"we are hiring\" PE VC fund India",
-    "site:linkedin.com/posts \"looking for\" investment associate India",
-  ],
-  fmcg: [
-    "site:linkedin.com/posts hiring FMCG brand India",
-    "site:linkedin.com/posts \"we are hiring\" consumer goods India",
-    "site:linkedin.com/posts \"join us\" FMCG sales marketing India",
-  ],
-  "pharma & healthcare": [
-    "site:linkedin.com/posts hiring pharma healthcare India",
-    "site:linkedin.com/posts \"we are hiring\" medical pharmaceutical India",
-    "site:linkedin.com/posts \"looking for\" healthcare professional India",
-  ],
-  "energy & infrastructure": [
-    "site:linkedin.com/posts hiring energy infrastructure India",
-    "site:linkedin.com/posts \"we are hiring\" renewable energy India",
-    "site:linkedin.com/posts \"join our team\" infrastructure India",
-  ],
-  "media & entertainment": [
-    "site:linkedin.com/posts hiring media content creator India",
-    "site:linkedin.com/posts \"we are hiring\" entertainment media India",
-    "site:linkedin.com/posts \"looking for\" content media India",
-  ],
-  legal: [
-    "site:linkedin.com/posts hiring lawyer legal India",
-    "site:linkedin.com/posts \"we are hiring\" legal counsel India",
-    "site:linkedin.com/posts \"looking for\" advocate solicitor India",
-  ],
-  "human resources": [
-    "site:linkedin.com/posts hiring HR human resources India",
-    "site:linkedin.com/posts \"we are hiring\" HR manager India",
-    "site:linkedin.com/posts \"looking for\" talent acquisition India",
-  ],
-  "real estate": [
-    "site:linkedin.com/posts hiring real estate India",
-    "site:linkedin.com/posts \"we are hiring\" property realty India",
-    "site:linkedin.com/posts \"join us\" real estate India",
-  ],
-  "logistics & supply chain": [
-    "site:linkedin.com/posts hiring logistics supply chain India",
-    "site:linkedin.com/posts \"we are hiring\" logistics India",
-    "site:linkedin.com/posts \"looking for\" supply chain India",
-  ],
-  "e-commerce & d2c": [
-    "site:linkedin.com/posts hiring ecommerce D2C India",
-    "site:linkedin.com/posts \"we are hiring\" ecommerce startup India",
-    "site:linkedin.com/posts \"join our team\" D2C brand India",
-  ],
-  edtech: [
-    "site:linkedin.com/posts hiring edtech education India",
-    "site:linkedin.com/posts \"we are hiring\" edtech India",
-    "site:linkedin.com/posts \"looking for\" education technology India",
-  ],
-  "banking & financial services": [
-    "site:linkedin.com/posts hiring banking BFSI India",
-    "site:linkedin.com/posts \"we are hiring\" bank financial services India",
-    "site:linkedin.com/posts \"join us\" NBFC fintech India",
-  ],
-  "manufacturing & automotive": [
-    "site:linkedin.com/posts hiring manufacturing automotive India",
-    "site:linkedin.com/posts \"we are hiring\" factory plant India",
-    "site:linkedin.com/posts \"looking for\" manufacturing engineer India",
-  ],
-};
-
-const UNIVERSAL_QUERIES = [
-  "site:linkedin.com/posts \"hiring\" \"DM me\" India 2025",
-  "site:linkedin.com/posts \"we're hiring\" India freshers graduates",
-  "site:linkedin.com/posts \"open roles\" India apply now",
-  "site:linkedin.com/posts \"job opportunity\" India hiring",
-];
-
-function getQueriesForIndustry(industry: string): string[] {
-  const industryQueries = INDUSTRY_QUERIES[industry] ?? [];
-  return [...industryQueries, ...UNIVERSAL_QUERIES];
-}
 
 async function exaSearch(query: string): Promise<any[]> {
   if (!EXA_API_KEY) {
     console.error("[index-linkedin-posts] EXA_API_KEY missing");
     return [];
   }
-  const startDate = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
+  const startDate = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000)
     .toISOString()
     .split("T")[0];
   try {
@@ -203,13 +102,13 @@ async function exaSearch(query: string): Promise<any[]> {
   }
 }
 
-async function upsertPost(result: any, industry: string): Promise<void> {
+async function upsertPost(result: any, industry: string | null): Promise<void> {
   const row = {
     url: result.url,
     title: result.title ?? null,
     snippet: result.text ?? result.snippet ?? null,
     posted_at: result.publishedDate ?? null,
-    industry,
+    industry: industry ?? null,
     source: "exa_linkedin",
   };
   const { error } = await supabase.from("linkedin_hiring_posts").upsert(row, {
@@ -223,18 +122,17 @@ async function upsertPost(result: any, industry: string): Promise<void> {
   console.log("[index-linkedin-posts] upserted:", result.url);
 }
 
-async function processIndustry(industry: string): Promise<number> {
-  const queries = getQueriesForIndustry(industry);
+async function processHiringPosts(): Promise<number> {
   const seen = new Set<string>();
   let count = 0;
 
-  for (const query of queries) {
+  for (const query of HIRING_QUERIES) {
     const results = await exaSearch(query);
     for (const result of results) {
       if (!result.url?.includes("linkedin.com")) continue;
       if (seen.has(result.url)) continue;
       seen.add(result.url);
-      await upsertPost(result, industry);
+      await upsertPost(result, null);
       count++;
     }
     await new Promise((r) => setTimeout(r, 400));
@@ -245,43 +143,26 @@ async function processIndustry(industry: string): Promise<number> {
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
-    return new Response(null, { status: 204, headers: { ...corsHeaders } });
+    return new Response(null, { status: 204, headers: corsHeaders });
   }
 
   if (req.method !== "POST") {
-    return new Response(JSON.stringify({ error: "Method not allowed" }), {
-      status: 405,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return new Response("Method not allowed", { status: 405 });
   }
 
-  const body = (await req.json().catch(() => ({}))) as { industry?: string };
-  const industry: string | null = body.industry ?? null;
-
   try {
-    if (industry) {
-      const count = await processIndustry(industry);
-      return new Response(
-        JSON.stringify({ ok: true, industry, processed: count }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    let total = 0;
-    for (const ind of ALL_INDUSTRIES) {
-      const count = await processIndustry(ind);
-      total += count;
-      await new Promise((r) => setTimeout(r, 600));
-    }
-
+    const count = await processHiringPosts();
     return new Response(
-      JSON.stringify({ ok: true, processed: total }),
+      JSON.stringify({ ok: true, processed: count }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (err) {
     return new Response(
       JSON.stringify({ ok: false, error: String(err) }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      }
     );
   }
 });

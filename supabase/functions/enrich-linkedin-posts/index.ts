@@ -161,7 +161,7 @@ Extract structured hiring data from this LinkedIn post.
 
 Title: ${post.title ?? "unknown"}
 Snippet: ${post.snippet ?? "unknown"}
-Industry hint: ${post.industry ?? "unknown"}
+Industry hint: ${post.industry ?? "not provided — infer from post text"}
 
 Return a JSON object with exactly these fields:
 {
@@ -174,7 +174,7 @@ Return a JSON object with exactly these fields:
   "poster_title": "their job title/designation, or null",
   "apply_method": "DM / email / link / not specified",
   "is_india_role": true or false,
-  "enriched_industry": "map to one of: consulting, technology, finance, marketing, operations, product, data & analytics, investment banking, private equity & vc, fmcg, pharma & healthcare, energy & infrastructure, media & entertainment, legal, human resources, real estate, logistics & supply chain, e-commerce & d2c, edtech, banking & financial services, manufacturing & automotive — or null if unclear",
+  "enriched_industry": "REQUIRED — carefully infer from the post text and map to exactly one of: consulting, technology, finance, marketing, operations, product, data & analytics, investment banking, private equity & vc, fmcg, pharma & healthcare, energy & infrastructure, media & entertainment, legal, human resources, real estate, logistics & supply chain, e-commerce & d2c, edtech, banking & financial services, manufacturing & automotive. Use the company name, role title, and post content as clues. Only return null if truly impossible to determine.",
   "enrichment_confidence": "high / medium / low",
   "hiring_intent": "high / medium / low",
   "enriched_snippet": "1–2 sentence, clear natural-language summary of what the post is about, suitable to show directly to a user"

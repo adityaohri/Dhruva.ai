@@ -10,8 +10,25 @@ export default async function Home() {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-
   const isAuthed = !!user;
+
+  if (user) {
+    const { data: profileRow } = await supabase
+      .from("user_profiles")
+      .select("onboarding_complete")
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    if (!profileRow?.onboarding_complete) {
+      // Authenticated but not onboarded — always send to onboarding flow
+      return (
+        <div className="relative min-h-screen bg-[#FDFBF1]">
+          {/* Simple client-side redirect safeguard */}
+          <meta httpEquiv="refresh" content="0;url=/onboard" />
+        </div>
+      );
+    }
+  }
 
   const logos = [
     { src: "/partners/mckinsey.png", alt: "McKinsey & Company" },
