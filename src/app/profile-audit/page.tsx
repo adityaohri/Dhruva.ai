@@ -51,9 +51,11 @@ export default async function ProfileAuditPage() {
                 target role or firm.
               </p>
             </div>
-            <div className="hidden text-right text-xs text-[rgba(60,42,106,0.75)] sm:block">
-              <p className="font-medium">{safeName}</p>
-            </div>
+            {safeName !== "there" && (
+              <div className="hidden text-right text-xs text-[rgba(60,42,106,0.75)] sm:block">
+                <p className="font-medium">{safeName}</p>
+              </div>
+            )}
           </div>
 
           <section className="mt-4 rounded-3xl border border-[rgba(60,42,106,0.18)] bg-white/90 px-5 py-4">
