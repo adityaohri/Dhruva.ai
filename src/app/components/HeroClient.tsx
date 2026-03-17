@@ -8,9 +8,11 @@ type Logo = { src: string; alt: string };
 
 export function HeroClient({
   isAuthed,
+  onboardingComplete,
   logos,
 }: {
   isAuthed: boolean;
+  onboardingComplete: boolean;
   logos: Logo[];
 }) {
   const router = useRouter();
@@ -59,9 +61,17 @@ export function HeroClient({
               type="button"
               size="lg"
               className="rounded-full bg-[#3C2A6A] px-10 text-sm font-medium text-[#FDFBF1] hover:bg-[#4a347f]"
-              onClick={() => router.push(isAuthed ? "/dashboard" : "/onboard")}
+              onClick={() =>
+                router.push(
+                  isAuthed ? (onboardingComplete ? "/dashboard" : "/onboard") : "/onboard"
+                )
+              }
             >
-              {isAuthed ? "Go to Dashboard" : "Get Started"}
+              {isAuthed
+                ? onboardingComplete
+                  ? "Go to Dashboard"
+                  : "Go to Onboarding"
+                : "Get Started"}
             </Button>
           </div>
           <span className="text-xs text-[rgba(60,42,106,0.6)]">

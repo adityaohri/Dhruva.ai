@@ -13,6 +13,16 @@ export default async function HomePage() {
   } = await supabase.auth.getUser();
   const isAuthed = !!user;
 
+  let onboardingComplete: boolean | null = null;
+  if (user) {
+    const { data: profileRow } = await supabase
+      .from("user_profiles")
+      .select("onboarding_complete")
+      .eq("user_id", user.id)
+      .maybeSingle<{ onboarding_complete: boolean | null }>();
+    onboardingComplete = profileRow?.onboarding_complete ?? null;
+  }
+
   const logos = [
     { src: "/partners/mckinsey.png", alt: "McKinsey & Company" },
     { src: "/partners/bain.png", alt: "Bain & Company" },
@@ -22,7 +32,11 @@ export default async function HomePage() {
   return (
     <div className="relative min-h-screen bg-[#FDFBF1]">
       <main className="mx-auto flex w-full max-w-6xl flex-col items-center px-4 sm:px-8">
-        <HeroClient isAuthed={isAuthed} logos={logos} />
+        <HeroClient
+          isAuthed={isAuthed}
+          onboardingComplete={!!onboardingComplete}
+          logos={logos}
+        />
 
         {/* THE PROBLEM */}
         <section
