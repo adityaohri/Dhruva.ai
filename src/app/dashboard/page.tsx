@@ -229,7 +229,7 @@ export default async function DashboardPage() {
 
             {/* Card 2 — Opportunity Intelligence */}
             <Link
-              href="/opportunities"
+              href="/opportunity"
               className="flex flex-col justify-between rounded-2xl bg-[#3c2a6a] px-6 py-8 text-[#fdfbf1] shadow-sm transition-transform duration-300 ease-out hover:-translate-y-1"
             >
               <div>

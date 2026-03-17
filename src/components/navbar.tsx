@@ -21,7 +21,7 @@ function getDashboardNavLinks(): NavLink[] {
   return [
     { href: "/dashboard", label: "My Dashboard" },
     { href: "/profile-audit", label: "Profile Audit" },
-    { href: "/opportunities", label: "Opportunity Intelligence" },
+    { href: "/opportunity", label: "Opportunity Intelligence" },
     { href: "/outreach", label: "Outreach Copilot" },
   ];
 }
@@ -33,7 +33,7 @@ export function Navbar() {
   const isDashboardView =
     pathname.startsWith("/dashboard") ||
     pathname.startsWith("/profile-audit") ||
-    pathname.startsWith("/opportunities") ||
+    pathname.startsWith("/opportunity") ||
     pathname.startsWith("/outreach") ||
     pathname.startsWith("/chat");
 
