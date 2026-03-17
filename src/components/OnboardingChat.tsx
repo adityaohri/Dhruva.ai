@@ -402,7 +402,8 @@ export function OnboardingChat({ userId }: { userId: string }) {
   const showIndustryPrompt =
     lastIsAssistant &&
     !!lastMessage &&
-    /which industry.*work(ing)? in\?/i.test(lastMessage.content);
+    (/which industry do you want to work in\?/i.test(lastMessage.content) ||
+      /which industries are you interested in\?/i.test(lastMessage.content));
   const showExperienceChoices =
     lastIsAssistant &&
     !!lastMessage &&
