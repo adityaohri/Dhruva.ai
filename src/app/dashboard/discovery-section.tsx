@@ -22,7 +22,7 @@ type PublicProfile = {
 };
 
 interface DiscoverySectionProps {
-  parsed: ParsedCV | null;
+  parsed?: ParsedCV | null;
 }
 
 export function DiscoverySection({ parsed }: DiscoverySectionProps) {
@@ -117,8 +117,6 @@ export function DiscoverySection({ parsed }: DiscoverySectionProps) {
   }, [parsedGapAnalysis?.careerAnchors]);
 
   const handleRun = async () => {
-    if (!parsed) return;
-
     setError(null);
     setGapAnalysis(null);
     setTargetProfiles([]);
@@ -137,6 +135,7 @@ export function DiscoverySection({ parsed }: DiscoverySectionProps) {
           targetRole,
           targetCompany,
           targetIndustry,
+          minProfiles: 15,
           phase: "fiber",
         }),
       });
@@ -174,6 +173,7 @@ export function DiscoverySection({ parsed }: DiscoverySectionProps) {
           targetRole,
           targetCompany,
           targetIndustry,
+          minProfiles: 15,
           phase: "gap",
         }),
       });
@@ -300,7 +300,6 @@ export function DiscoverySection({ parsed }: DiscoverySectionProps) {
           disabled={
             runningProfiles ||
             runningGap ||
-            !parsed ||
             (!targetIndustry?.trim() && !targetRole?.trim() && !targetCompany?.trim())
           }
           className="mt-1 rounded-full bg-[#3C2A6A] px-5 py-2 text-xs font-medium text-[#FDFBF1] shadow-none transition-transform hover:-translate-y-0.5 hover:bg-[#4a347f] disabled:opacity-60"
@@ -309,12 +308,6 @@ export function DiscoverySection({ parsed }: DiscoverySectionProps) {
             ? "Analyzing…"
             : "Run Discovery from extracted CV"}
         </Button>
-
-        {!parsed && (
-          <p className="text-sm text-muted-foreground">
-            Upload and analyze a CV above to enable discovery.
-          </p>
-        )}
 
         {error && <p className="text-xs text-red-700">{error}</p>}
 
