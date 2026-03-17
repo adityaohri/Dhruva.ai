@@ -1,1 +1,2 @@
-export { default, runtime } from "./dashboard/page";
+export const runtime = "nodejs";
+export { default } from "./dashboard/page";
