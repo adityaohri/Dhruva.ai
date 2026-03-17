@@ -253,30 +253,39 @@ export function OnboardingChat({ userId }: { userId: string }) {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [messages]);
 
+  const toDbProfile = useCallback((fullProfile: Record<string, unknown>) => {
+    const dbProfile: Record<string, unknown> = { ...fullProfile };
+
+    if ("name" in dbProfile) {
+      dbProfile.full_name = dbProfile.name;
+      dbProfile.name = dbProfile.name;
+    }
+
+    if ("university" in dbProfile) {
+      dbProfile.current_university = dbProfile.university;
+      dbProfile.university = dbProfile.university;
+    }
+
+    return dbProfile;
+  }, []);
+
   const saveProfile = useCallback(
     async (fullProfile: Record<string, unknown>) => {
-      // Map logical profile keys to actual DB column names
-      const dbProfile: Record<string, unknown> = { ...fullProfile };
-      if ("name" in dbProfile) {
-        dbProfile.full_name = dbProfile.name;
-        delete dbProfile.name;
-      }
-      if ("university" in dbProfile) {
-        dbProfile.current_university = dbProfile.university;
-        delete dbProfile.university;
-      }
+      const dbProfile = toDbProfile(fullProfile);
 
-      const { error } = await supabase.from("user_profiles").upsert(
-        {
-          id: userId,
-          ...dbProfile,
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: "id" }
-      );
+      const { error } = await supabase
+        .from("user_profiles")
+        .upsert(
+          {
+            id: userId,
+            ...dbProfile,
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: "id" }
+        );
       if (error) console.error("[OnboardingChat] saveProfile:", error);
     },
-    [userId, supabase]
+    [userId, supabase, toDbProfile]
   );
 
   const sendMessage = useCallback(
@@ -341,10 +350,21 @@ export function OnboardingChat({ userId }: { userId: string }) {
         }
 
         if (data.isComplete) {
+          // Final safety: persist the full in-memory profile once more
+          // so that any answers that didn't emit profile_update tags
+          // are also written to the database.
+          const finalDbProfile = toDbProfile(profile);
           await supabase
             .from("user_profiles")
-            .update({ onboarding_complete: true, updated_at: new Date().toISOString() })
-            .eq("id", userId);
+            .upsert(
+              {
+                id: userId,
+                ...finalDbProfile,
+                onboarding_complete: true,
+                updated_at: new Date().toISOString(),
+              },
+              { onConflict: "id" }
+            );
           setTimeout(() => router.push("/dashboard"), 1500);
         }
       } catch (e) {
