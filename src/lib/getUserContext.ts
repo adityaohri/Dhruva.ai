@@ -31,10 +31,14 @@ export async function getUserContext(userId: string): Promise<string> {
 
   const sections: string[] = [];
 
-  if (p.name || p.university) {
+  const name = (p.full_name as string) ?? (p.name as string) ?? null;
+  const university =
+    (p.current_university as string) ?? (p.university as string) ?? null;
+
+  if (name || university) {
     const identity = [
-      p.name && `Name: ${p.name}`,
-      p.university && `University: ${p.university}`,
+      name && `Name: ${name}`,
+      university && `University: ${university}`,
       p.gpa && `GPA: ${p.gpa}`,
     ]
       .filter(Boolean)

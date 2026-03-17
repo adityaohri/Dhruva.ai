@@ -6,7 +6,7 @@ export const runtime = "nodejs";
 
 type UserProfile = {
   id: string;
-  name: string | null;
+  full_name: string | null;
   focus_sections: unknown;
   target_industries: string | null;
   target_functions: string | null;
@@ -78,7 +78,7 @@ export default async function DashboardPage() {
   const { data: profileRow } = await supabase
     .from("user_profiles")
     .select(
-      "id, name, focus_sections, target_industries, target_functions, onboarding_complete"
+      "id, full_name, focus_sections, target_industries, target_functions, onboarding_complete"
     )
     .eq("id", user.id)
     .maybeSingle<UserProfile>();
@@ -161,7 +161,7 @@ export default async function DashboardPage() {
 
   const topActivities = activities.slice(0, 10);
 
-  const greeting = getGreeting(profileRow.name);
+  const greeting = getGreeting(profileRow.full_name);
 
   return (
     <div className="relative min-h-screen bg-[#fdfbf1]">

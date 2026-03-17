@@ -152,7 +152,7 @@ export function DiscoverySection({ parsed }: DiscoverySectionProps) {
       const { data, error } = await supabase
         .from("user_profiles")
         .select(
-          "name, university, gpa, skills, internships, leadership_positions, projects, entrepreneurship, personal_impact"
+          "full_name, current_university, gpa, skills, internships, leadership_positions, projects, entrepreneurship, personal_impact"
         )
         .eq("id", user.id)
         .maybeSingle();
@@ -163,8 +163,8 @@ export function DiscoverySection({ parsed }: DiscoverySectionProps) {
       }
       const row = data as any;
       setProfileDraft({
-        name: row.name ?? "",
-        university: row.university ?? "",
+        name: row.full_name ?? "",
+        university: row.current_university ?? "",
         gpa: row.gpa ?? "",
         skills: Array.isArray(row.skills)
           ? row.skills

@@ -43,7 +43,9 @@ export async function POST(req: NextRequest) {
 
     const { data: profile } = await supabase
       .from("user_profiles")
-      .select("skills, internships, leadership_positions, projects, others, university")
+    .select(
+      "skills, internships, leadership_positions, projects, others, current_university"
+    )
     .eq("id", user.id)
       .maybeSingle();
 
@@ -58,7 +60,7 @@ export async function POST(req: NextRequest) {
       .map((s: any) => String(s).trim())
       .filter(Boolean);
     const experience = experienceParts.join(" | ");
-    const education = (profile as any)?.university ?? "";
+  const education = (profile as any)?.current_university ?? "";
 
     const hasProfile = skills || experience || education;
     if (!hasProfile) {

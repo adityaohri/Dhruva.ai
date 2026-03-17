@@ -1252,7 +1252,7 @@ export default function OpportunityPage() {
 
         const { data, error } = await supabase
           .from("user_profiles")
-          .select("skills, internships, university")
+        .select("skills, internships, current_university")
         .eq("id", user.id)
           .maybeSingle();
 
@@ -1265,7 +1265,7 @@ export default function OpportunityPage() {
           setBenchmarkProfile({
             top_skills: (data as any).skills ?? null,
             latest_company: (data as any).internships ?? null,
-            highest_degree: (data as any).university ?? null,
+            highest_degree: (data as any).current_university ?? null,
           });
         } else {
           setBenchmarkError(

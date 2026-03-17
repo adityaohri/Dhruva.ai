@@ -255,10 +255,21 @@ export function OnboardingChat({ userId }: { userId: string }) {
 
   const saveProfile = useCallback(
     async (fullProfile: Record<string, unknown>) => {
+      // Map logical profile keys to actual DB column names
+      const dbProfile: Record<string, unknown> = { ...fullProfile };
+      if ("name" in dbProfile) {
+        dbProfile.full_name = dbProfile.name;
+        delete dbProfile.name;
+      }
+      if ("university" in dbProfile) {
+        dbProfile.current_university = dbProfile.university;
+        delete dbProfile.university;
+      }
+
       const { error } = await supabase.from("user_profiles").upsert(
         {
           id: userId,
-          ...fullProfile,
+          ...dbProfile,
           updated_at: new Date().toISOString(),
         },
         { onConflict: "id" }

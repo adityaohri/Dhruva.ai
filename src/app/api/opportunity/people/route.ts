@@ -40,11 +40,11 @@ export async function POST(req: NextRequest) {
 
     const { data: profile } = await supabase
       .from("user_profiles")
-      .select("university, skills")
+    .select("current_university, skills")
     .eq("id", user.id)
       .maybeSingle();
 
-    const alumniSchool = (profile as any)?.university ?? null;
+  const alumniSchool = (profile as any)?.current_university ?? null;
     const industryHint = null; // Optional: derive from skills later.
 
     const { people } = await findRelevantPeopleForCompany({

@@ -301,9 +301,8 @@ export async function saveProfileToSupabase(profile: ParsedCV): Promise<{
   }
 
   const row = {
-    user_id: user.id,
     full_name: profile.name,
-    university: profile.university,
+    current_university: profile.university,
     gpa: profile.gpa,
     skills: profile.skills,
     internships: profile.internships,

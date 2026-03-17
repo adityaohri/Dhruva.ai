@@ -6,7 +6,7 @@ export const runtime = "nodejs";
 
 type UserProfile = {
   id: string;
-  name: string | null;
+  full_name: string | null;
   onboarding_complete: boolean | null;
 };
 
@@ -22,7 +22,7 @@ export default async function ProfileAuditPage() {
 
   const { data: profileRow } = await supabase
     .from("user_profiles")
-    .select("id, name, onboarding_complete")
+    .select("id, full_name, onboarding_complete")
     .eq("id", user.id)
     .maybeSingle<UserProfile>();
 
@@ -32,8 +32,8 @@ export default async function ProfileAuditPage() {
   }
 
   const safeName =
-    profileRow.name && profileRow.name.trim().length > 0
-      ? profileRow.name.trim()
+    profileRow.full_name && profileRow.full_name.trim().length > 0
+      ? profileRow.full_name.trim()
       : "there";
 
   return (
