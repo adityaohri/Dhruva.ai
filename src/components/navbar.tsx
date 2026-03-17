@@ -19,6 +19,7 @@ function getHomeNavLinks(): NavLink[] {
 
 function getDashboardNavLinks(): NavLink[] {
   return [
+    { href: "/dashboard", label: "My Dashboard" },
     { href: "/profile-audit", label: "Profile Audit" },
     { href: "/opportunities", label: "Opportunity Intelligence" },
     { href: "/outreach", label: "Outreach Copilot" },

@@ -12,6 +12,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { createClient as createSupabaseClient } from "@/lib/supabase/client";
 import { type ParsedCV } from "@/app/actions/cv-parser";
 
 type PublicProfile = {
@@ -40,6 +41,21 @@ export function DiscoverySection({ parsed }: DiscoverySectionProps) {
   const [downloadingReport, setDownloadingReport] = useState(false);
   const [showFullSummary, setShowFullSummary] = useState(false);
   const [showFullTrajectory, setShowFullTrajectory] = useState(false);
+
+  const [profileLoading, setProfileLoading] = useState(false);
+  const [profileError, setProfileError] = useState<string | null>(null);
+  const [profileConfirmed, setProfileConfirmed] = useState(false);
+  const [profileDraft, setProfileDraft] = useState<{
+    name?: string | null;
+    university?: string | null;
+    gpa?: string | null;
+    skills?: string[] | null;
+    internships?: string[] | null;
+    leadership_positions?: string | null;
+    projects?: string | null;
+    entrepreneurship?: string | null;
+    personal_impact?: string | null;
+  } | null>(null);
 
   // Helper to aggressively normalise any JSON-like string into a structured object.
   const parsedGapAnalysis = useMemo(() => {
@@ -115,6 +131,68 @@ export function DiscoverySection({ parsed }: DiscoverySectionProps) {
       }
     );
   }, [parsedGapAnalysis?.careerAnchors]);
+
+  const handleRetrieveProfile = async () => {
+    setProfileLoading(true);
+    setProfileError(null);
+    setProfileConfirmed(false);
+    try {
+      const supabase = createSupabaseClient();
+      const {
+        data: { user },
+        error: userError,
+      } = await supabase.auth.getUser();
+      if (userError || !user) {
+        setProfileError("Please log in again to retrieve your profile.");
+        setProfileLoading(false);
+        return;
+      }
+      const { data, error } = await supabase
+        .from("user_profiles")
+        .select(
+          "name, university, gpa, skills, internships, leadership_positions, projects, entrepreneurship, personal_impact"
+        )
+        .eq("user_id", user.id)
+        .maybeSingle();
+      if (error || !data) {
+        setProfileError("We couldn't find a saved profile for your account.");
+        setProfileLoading(false);
+        return;
+      }
+      const row = data as any;
+      setProfileDraft({
+        name: row.name ?? "",
+        university: row.university ?? "",
+        gpa: row.gpa ?? "",
+        skills: Array.isArray(row.skills)
+          ? row.skills
+          : typeof row.skills === "string"
+          ? row.skills
+              .split(/[,|]/)
+              .map((s: string) => s.trim())
+              .filter(Boolean)
+          : [],
+        internships: Array.isArray(row.internships)
+          ? row.internships
+          : typeof row.internships === "string"
+          ? row.internships
+              .split(/[,|]/)
+              .map((s: string) => s.trim())
+              .filter(Boolean)
+          : [],
+        leadership_positions: row.leadership_positions ?? "",
+        projects: row.projects ?? "",
+        entrepreneurship: row.entrepreneurship ?? "",
+        personal_impact: row.personal_impact ?? "",
+      });
+    } catch (e) {
+      setProfileError(
+        e instanceof Error ? e.message : "Failed to retrieve your profile."
+      );
+    } finally {
+      setProfileLoading(false);
+    }
+  };
 
   const handleRun = async () => {
     setError(null);
@@ -247,6 +325,135 @@ export function DiscoverySection({ parsed }: DiscoverySectionProps) {
         </CardDescription>
       </CardHeader>
       <CardContent className="pt-6 space-y-4">
+        <section className="space-y-3 rounded-3xl border border-slate-200 bg-white/90 p-4">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[rgba(60,42,106,0.7)]">
+                Retrieve profile
+              </p>
+              <p className="mt-1 text-xs text-[rgba(60,42,106,0.75)]">
+                Pull the profile we built from your onboarding chat, and make any quick
+                edits before running discovery.
+              </p>
+            </div>
+            <Button
+              type="button"
+              size="sm"
+              onClick={handleRetrieveProfile}
+              disabled={profileLoading}
+              className="rounded-full bg-[#3C2A6A] px-4 py-1.5 text-[11px] font-medium text-[#FDFBF1] hover:bg-[#4a347f] disabled:opacity-60"
+            >
+              {profileLoading ? "Retrieving…" : "Retrieve profile"}
+            </Button>
+          </div>
+          {profileError && (
+            <p className="mt-2 text-[11px] text-red-700">{profileError}</p>
+          )}
+          {profileDraft && (
+            <div className="mt-3 overflow-hidden rounded-2xl border border-slate-200 bg-[#FDFBF1] p-3 text-[11px] text-[#3C2A6A]">
+              <table className="w-full border-collapse text-left">
+                <tbody>
+                  <tr>
+                    <th className="w-32 py-1 pr-2 align-top font-semibold">
+                      Name
+                    </th>
+                    <td className="py-1">
+                      <Input
+                        value={profileDraft.name ?? ""}
+                        onChange={(e) =>
+                          setProfileDraft((prev) =>
+                            prev ? { ...prev, name: e.target.value } : prev
+                          )
+                        }
+                        className="h-7 rounded-full border border-[#3C2A6A]/20 bg-white text-[11px]"
+                      />
+                    </td>
+                  </tr>
+                  <tr>
+                    <th className="w-32 py-1 pr-2 align-top font-semibold">
+                      University
+                    </th>
+                    <td className="py-1">
+                      <Input
+                        value={profileDraft.university ?? ""}
+                        onChange={(e) =>
+                          setProfileDraft((prev) =>
+                            prev ? { ...prev, university: e.target.value } : prev
+                          )
+                        }
+                        className="h-7 rounded-full border border-[#3C2A6A]/20 bg-white text-[11px]"
+                      />
+                    </td>
+                  </tr>
+                  <tr>
+                    <th className="w-32 py-1 pr-2 align-top font-semibold">GPA</th>
+                    <td className="py-1">
+                      <Input
+                        value={profileDraft.gpa ?? ""}
+                        onChange={(e) =>
+                          setProfileDraft((prev) =>
+                            prev ? { ...prev, gpa: e.target.value } : prev
+                          )
+                        }
+                        className="h-7 rounded-full border border-[#3C2A6A]/20 bg-white text-[11px]"
+                      />
+                    </td>
+                  </tr>
+                  <tr>
+                    <th className="w-32 py-1 pr-2 align-top font-semibold">
+                      Skills
+                    </th>
+                    <td className="py-1">
+                      <Input
+                        value={(profileDraft.skills ?? []).join(", ")}
+                        onChange={(e) => {
+                          const parts = e.target.value
+                            .split(",")
+                            .map((s) => s.trim())
+                            .filter(Boolean);
+                          setProfileDraft((prev) =>
+                            prev ? { ...prev, skills: parts } : prev
+                          );
+                        }}
+                        className="h-7 rounded-full border border-[#3C2A6A]/20 bg-white text-[11px]"
+                      />
+                    </td>
+                  </tr>
+                  <tr>
+                    <th className="w-32 py-1 pr-2 align-top font-semibold">
+                      Internships
+                    </th>
+                    <td className="py-1">
+                      <Input
+                        value={(profileDraft.internships ?? []).join(", ")}
+                        onChange={(e) => {
+                          const parts = e.target.value
+                            .split(",")
+                            .map((s) => s.trim())
+                            .filter(Boolean);
+                          setProfileDraft((prev) =>
+                            prev ? { ...prev, internships: parts } : prev
+                          );
+                        }}
+                        className="h-7 rounded-full border border-[#3C2A6A]/20 bg-white text-[11px]"
+                      />
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+              <div className="mt-3 flex justify-end">
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={() => setProfileConfirmed(true)}
+                  className="rounded-full bg-[#3C2A6A] px-4 py-1.5 text-[11px] font-medium text-[#FDFBF1] hover:bg-[#4a347f]"
+                >
+                  Confirm profile for discovery
+                </Button>
+              </div>
+            </div>
+          )}
+        </section>
         <div className="grid gap-4 sm:grid-cols-3">
           <div className="space-y-2">
             <Label
@@ -300,6 +507,7 @@ export function DiscoverySection({ parsed }: DiscoverySectionProps) {
           disabled={
             runningProfiles ||
             runningGap ||
+            !profileConfirmed ||
             (!targetIndustry?.trim() && !targetRole?.trim() && !targetCompany?.trim())
           }
           className="mt-1 rounded-full bg-[#3C2A6A] px-5 py-2 text-xs font-medium text-[#FDFBF1] shadow-none transition-transform hover:-translate-y-0.5 hover:bg-[#4a347f] disabled:opacity-60"

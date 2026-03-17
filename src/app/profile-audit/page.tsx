@@ -45,11 +45,6 @@ export default async function ProfileAuditPage() {
               <h1 className="font-serif text-2xl sm:text-3xl font-semibold text-[#3C2A6A]">
                 Profile Intelligence Workspace
               </h1>
-              <p className="mt-1 text-sm text-[rgba(60,42,106,0.75)]">
-                Upload your CV once via onboarding, then use the Discovery Engine to see
-                how your trajectory lines up with real-world success patterns for any
-                target role or firm.
-              </p>
             </div>
             {safeName !== "there" && (
               <div className="hidden text-right text-xs text-[rgba(60,42,106,0.75)] sm:block">
