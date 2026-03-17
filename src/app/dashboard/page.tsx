@@ -77,12 +77,15 @@ export default async function DashboardPage() {
 
   const { data: profileRow } = await supabase
     .from("user_profiles")
-    .select("user_id, name, focus_sections, target_industries, target_functions, onboarding_complete")
+    .select(
+      "user_id, name, focus_sections, target_industries, target_functions, onboarding_complete"
+    )
     .eq("user_id", user.id)
     .maybeSingle<UserProfile>();
 
   if (!profileRow?.onboarding_complete) {
-    redirect("/onboard");
+    // User is signed in but not onboarded: nudge them back to home to start onboarding from Get Started.
+    redirect("/");
   }
 
   const focusActionsCount = getFocusActionsCount(profileRow.focus_sections);

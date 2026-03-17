@@ -1,18 +1,50 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { Menu, X } from "lucide-react";
 import { useState } from "react";
 
-const navLinks = [
-  { href: "/", label: "Home" },
-  { href: "/dashboard", label: "Profile Audit" },
-  { href: "/opportunity", label: "Opportunity Intelligence" },
-  { href: "/outreach", label: "Outreach Copilot" },
-];
+type NavLink = { href: string; label: string };
+
+function getHomeNavLinks(): NavLink[] {
+  return [
+    { href: "/#hero", label: "Home" },
+    { href: "/#problem", label: "Problem" },
+    { href: "/#who", label: "Who we build for" },
+    { href: "/#platform", label: "Platform" },
+    { href: "/dashboard", label: "My Dashboard" },
+  ];
+}
+
+function getDashboardNavLinks(): NavLink[] {
+  return [
+    { href: "/profile-audit", label: "Profile Audit" },
+    { href: "/opportunities", label: "Opportunity Intelligence" },
+    { href: "/outreach", label: "Outreach Copilot" },
+  ];
+}
 
 export function Navbar() {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const pathname = usePathname();
+
+  const isDashboardView =
+    pathname.startsWith("/dashboard") ||
+    pathname.startsWith("/profile-audit") ||
+    pathname.startsWith("/opportunities") ||
+    pathname.startsWith("/outreach") ||
+    pathname.startsWith("/chat");
+
+  const navLinks = isDashboardView ? getDashboardNavLinks() : getHomeNavLinks();
+
+  async function handleSignOut() {
+    try {
+      await fetch("/auth/signout", { method: "POST" });
+    } catch {
+      // ignore, redirect handled server-side
+    }
+  }
 
   return (
     <>
@@ -42,6 +74,15 @@ export function Navbar() {
                 {link.label}
               </Link>
             ))}
+            {isDashboardView && (
+              <button
+                type="button"
+                onClick={handleSignOut}
+                className="rounded-full border border-[rgba(60,42,106,0.25)] px-4 py-1.5 text-xs font-medium text-[#3C2A6A] hover:bg-slate-50"
+              >
+                Sign out
+              </button>
+            )}
           </div>
 
           {/* Mobile: hamburger button */}
@@ -58,12 +99,16 @@ export function Navbar() {
 
       {/* Mobile drawer overlay */}
       <div
-        className={`fixed inset-0 z-50 bg-black/20 transition-opacity md:hidden ${mobileOpen ? "opacity-100" : "pointer-events-none opacity-0"}`}
+        className={`fixed inset-0 z-50 bg-black/20 transition-opacity md:hidden ${
+          mobileOpen ? "opacity-100" : "pointer-events-none opacity-0"
+        }`}
         aria-hidden={!mobileOpen}
         onClick={() => setMobileOpen(false)}
       />
       <div
-        className={`fixed top-0 right-0 z-50 h-full w-[min(20rem,85vw)] max-w-sm flex flex-col gap-6 bg-white px-6 py-6 shadow-xl transition-transform duration-200 ease-out md:hidden ${mobileOpen ? "translate-x-0" : "translate-x-full"}`}
+        className={`fixed top-0 right-0 z-50 flex h-full w-[min(20rem,85vw)] max-w-sm flex-col gap-6 bg-white px-6 py-6 shadow-xl transition-transform duration-200 ease-out md:hidden ${
+          mobileOpen ? "translate-x-0" : "translate-x-full"
+        }`}
         aria-modal="true"
         aria-label="Mobile menu"
       >
@@ -91,6 +136,18 @@ export function Navbar() {
               {link.label}
             </Link>
           ))}
+          {isDashboardView && (
+            <button
+              type="button"
+              onClick={async () => {
+                setMobileOpen(false);
+                await handleSignOut();
+              }}
+              className="mt-2 rounded-lg border border-[rgba(60,42,106,0.25)] px-3 py-3 text-left text-base font-medium text-[#3C2A6A] hover:bg-slate-50"
+            >
+              Sign out
+            </button>
+          )}
         </nav>
       </div>
     </>
