@@ -18,7 +18,7 @@ export default async function HomePage() {
     const { data: profileRow } = await supabase
       .from("user_profiles")
       .select("onboarding_complete")
-      .eq("user_id", user.id)
+      .eq("id", user.id)
       .maybeSingle<{ onboarding_complete: boolean | null }>();
     onboardingComplete = profileRow?.onboarding_complete ?? null;
   }

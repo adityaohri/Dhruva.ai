@@ -32,14 +32,14 @@ export async function POST(req: NextRequest) {
   }
 
   const payload = {
-    user_id: user.id,
+    id: user.id,
     ...updates,
     updated_at: new Date().toISOString(),
   };
 
   const { error } = await supabase
     .from("user_profiles")
-    .upsert(payload, { onConflict: "user_id" });
+    .upsert(payload, { onConflict: "id" });
 
   if (error) {
     console.error("[profile/update] upsert error:", error);

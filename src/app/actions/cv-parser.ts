@@ -327,20 +327,20 @@ export async function saveProfileToSupabase(profile: ParsedCV): Promise<{
 
   const { data: existing } = await supabase
     .from("user_profiles")
-    .select("user_id")
-    .eq("user_id", user.id)
+    .select("id")
+    .eq("id", user.id)
     .maybeSingle();
 
   if (existing) {
     const { error: updateError } = await supabase
       .from("user_profiles")
       .update(row)
-      .eq("user_id", user.id);
+      .eq("id", user.id);
     if (updateError) return { success: false, error: updateError.message };
   } else {
     const { error: insertError } = await supabase
       .from("user_profiles")
-      .insert({ ...row, id: randomUUID() });
+      .insert({ ...row, id: user.id });
     if (insertError) return { success: false, error: insertError.message };
   }
   return { success: true };

@@ -21,7 +21,7 @@ export default function OnboardPage() {
       const { data: row } = await supabase
         .from("user_profiles")
         .select("onboarding_complete")
-        .eq("user_id", user.id)
+        .eq("id", user.id)
         .maybeSingle();
       if (row?.onboarding_complete) {
         router.replace("/dashboard");

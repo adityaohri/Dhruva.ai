@@ -154,7 +154,7 @@ export function DiscoverySection({ parsed }: DiscoverySectionProps) {
         .select(
           "name, university, gpa, skills, internships, leadership_positions, projects, entrepreneurship, personal_impact"
         )
-        .eq("user_id", user.id)
+        .eq("id", user.id)
         .maybeSingle();
       if (error || !data) {
         setProfileError("We couldn't find a saved profile for your account.");
@@ -221,7 +221,7 @@ export function DiscoverySection({ parsed }: DiscoverySectionProps) {
           skills: profileDraft.skills ?? null,
           internships: profileDraft.internships ?? null,
         })
-        .eq("user_id", user.id);
+        .eq("id", user.id);
       if (error) {
         setProfileError("Could not save your profile. Please try again.");
         setProfileLoading(false);

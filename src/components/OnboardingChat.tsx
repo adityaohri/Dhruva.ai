@@ -230,10 +230,10 @@ export function OnboardingChat({ userId }: { userId: string }) {
           .from("user_profiles")
           .upsert(
             {
-              user_id: userId,
+              id: userId,
               updated_at: new Date().toISOString(),
             },
-            { onConflict: "user_id" }
+            { onConflict: "id" }
           );
         if (error && !cancelled) {
           console.error("[OnboardingChat] ensure user_profiles row:", error);
@@ -257,11 +257,11 @@ export function OnboardingChat({ userId }: { userId: string }) {
     async (fullProfile: Record<string, unknown>) => {
       const { error } = await supabase.from("user_profiles").upsert(
         {
-          user_id: userId,
+          id: userId,
           ...fullProfile,
           updated_at: new Date().toISOString(),
         },
-        { onConflict: "user_id" }
+        { onConflict: "id" }
       );
       if (error) console.error("[OnboardingChat] saveProfile:", error);
     },
@@ -333,7 +333,7 @@ export function OnboardingChat({ userId }: { userId: string }) {
           await supabase
             .from("user_profiles")
             .update({ onboarding_complete: true, updated_at: new Date().toISOString() })
-            .eq("user_id", userId);
+            .eq("id", userId);
           setTimeout(() => router.push("/dashboard"), 1500);
         }
       } catch (e) {

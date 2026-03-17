@@ -44,7 +44,7 @@ export async function POST(req: NextRequest) {
     const { data: profile } = await supabase
       .from("user_profiles")
       .select("skills, internships, leadership_positions, projects, others, university")
-      .eq("user_id", user.id)
+    .eq("id", user.id)
       .maybeSingle();
 
     const skills = (profile as any)?.skills ?? "";

@@ -1186,7 +1186,7 @@ export default function OpportunityPage() {
           .select(
             "target_industries, commitment_type, experience_level, preferred_locations"
           )
-          .eq("user_id", user.id)
+        .eq("id", user.id)
           .maybeSingle();
 
         if (error || !data) return;
@@ -1253,7 +1253,7 @@ export default function OpportunityPage() {
         const { data, error } = await supabase
           .from("user_profiles")
           .select("skills, internships, university")
-          .eq("user_id", user.id)
+        .eq("id", user.id)
           .maybeSingle();
 
         if (error) {

@@ -5,7 +5,7 @@ import Link from "next/link";
 export const runtime = "nodejs";
 
 type UserProfile = {
-  user_id: string;
+  id: string;
   name: string | null;
   focus_sections: unknown;
   target_industries: string | null;
@@ -78,9 +78,9 @@ export default async function DashboardPage() {
   const { data: profileRow } = await supabase
     .from("user_profiles")
     .select(
-      "user_id, name, focus_sections, target_industries, target_functions, onboarding_complete"
+      "id, name, focus_sections, target_industries, target_functions, onboarding_complete"
     )
-    .eq("user_id", user.id)
+    .eq("id", user.id)
     .maybeSingle<UserProfile>();
 
   if (!profileRow?.onboarding_complete) {

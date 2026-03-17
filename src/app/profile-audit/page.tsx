@@ -5,7 +5,7 @@ import { DiscoverySection } from "../dashboard/discovery-section";
 export const runtime = "nodejs";
 
 type UserProfile = {
-  user_id: string;
+  id: string;
   name: string | null;
   onboarding_complete: boolean | null;
 };
@@ -22,8 +22,8 @@ export default async function ProfileAuditPage() {
 
   const { data: profileRow } = await supabase
     .from("user_profiles")
-    .select("user_id, name, onboarding_complete")
-    .eq("user_id", user.id)
+    .select("id, name, onboarding_complete")
+    .eq("id", user.id)
     .maybeSingle<UserProfile>();
 
   if (!profileRow?.onboarding_complete) {
