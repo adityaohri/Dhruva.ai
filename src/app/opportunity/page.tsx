@@ -1838,7 +1838,7 @@ export default function OpportunityPage() {
                   We will benchmark roles against your uploaded CV profile.
                 </p>
               )}
-            </div>
+                </div>
             <p className="mt-4 text-[11px] font-medium uppercase tracking-[0.18em] text-[#3C2A6A]/80">
               Identity confirmation
             </p>
@@ -1855,27 +1855,27 @@ export default function OpportunityPage() {
             <p className="mt-4 text-[11px] text-slate-500">
               Benchmarking grounded in your verified history for maximum match accuracy.
             </p>
-          </div>
+              </div>
 
           <div className="flex flex-wrap gap-3 pt-2">
-            <button
-              type="button"
+                <button
+                  type="button"
               onClick={async () => {
                 await runHunt();
                 setFlowStep("results");
               }}
-              className="rounded-full bg-[#3C2A6A] px-8 py-3 text-sm font-medium text-[#FDFBF1] hover:bg-[#4a347f]"
+                  className="rounded-full bg-[#3C2A6A] px-8 py-3 text-sm font-medium text-[#FDFBF1] hover:bg-[#4a347f]"
               disabled={benchmarkLoading}
-            >
+                >
               Confirm &amp; Start Hunt
-            </button>
+                </button>
             <Link
               href="/dashboard"
-              className="rounded-full border border-[#3C2A6A]/30 bg-white px-8 py-3 text-sm font-medium text-[#3C2A6A] hover:bg-[#3C2A6A]/5"
-            >
+                  className="rounded-full border border-[#3C2A6A]/30 bg-white px-8 py-3 text-sm font-medium text-[#3C2A6A] hover:bg-[#3C2A6A]/5"
+                >
               Update Profile
             </Link>
-          </div>
+              </div>
         </div>
       </div>
     );

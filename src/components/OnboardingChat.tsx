@@ -220,6 +220,35 @@ export function OnboardingChat({ userId }: { userId: string }) {
     Record<string, string[]>
   >({});
 
+  // Ensure a user_profiles row exists for this user as soon as onboarding starts.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      if (!userId) return;
+      try {
+        const { error } = await supabase
+          .from("user_profiles")
+          .upsert(
+            {
+              user_id: userId,
+              updated_at: new Date().toISOString(),
+            },
+            { onConflict: "user_id" }
+          );
+        if (error && !cancelled) {
+          console.error("[OnboardingChat] ensure user_profiles row:", error);
+        }
+      } catch (e) {
+        if (!cancelled) {
+          console.error("[OnboardingChat] ensure user_profiles row (exception):", e);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [userId, supabase]);
+
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [messages]);
