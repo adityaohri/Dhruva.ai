@@ -444,7 +444,7 @@ export function OnboardingChat({ userId }: { userId: string }) {
   const showSignalChoices =
     lastIsAssistant &&
     !!lastMessage &&
-    /which signals?( would you like us to (use|show)| would you like us to use for opportunity discovery|\?)/i.test(
+    /(which signals?( would you like us to (use|show)| would you like us to use for opportunity discovery|\?)|which market signals would you like me to track)/i.test(
       lastMessage.content
     );
 

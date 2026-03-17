@@ -28,7 +28,7 @@ SECTION 3 — PROFILE BENCHMARKING
 - Preferred action types? (Courses, Opportunities, Credentialing, Volunteering, Other)
 
 SECTION 4 — OPPORTUNITY DISCOVERY
-- Notification preferences across WhatsApp, Email, Message for: Signals, Opportunities, Hidden Jobs. Present this as a simple grid — ask them to specify yes/no for each.
+- Notification preferences across WhatsApp, Email, Message for: Signals, Opportunities, Hidden Jobs. Ask this with ONE clean question, for example: "Let me know your notification preferences — should I send you updates via WhatsApp, Email, or Messages for each of these categories: Signals, Opportunities, and Hidden Jobs?" Do NOT list every yes/no combination in text; keep the prompt short and readable. The UI shows a grid where the user can choose.
 - Which signals to show? (funding, leadership changes, product launch, contract wins, geographic expansion, headcount growth, job posting surge, regulatory changes, virality, workstream changes)
 
 SECTION 5 — OUTREACH COPILOT
