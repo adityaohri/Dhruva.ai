@@ -8,11 +8,11 @@ type Logo = { src: string; alt: string };
 
 export function HeroClient({
   isAuthed,
-  onboardingComplete,
+  onboardingComplete = false,
   logos,
 }: {
   isAuthed: boolean;
-  onboardingComplete: boolean;
+  onboardingComplete?: boolean;
   logos: Logo[];
 }) {
   const router = useRouter();

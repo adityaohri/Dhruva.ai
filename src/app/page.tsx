@@ -220,7 +220,10 @@ export default async function HomePage() {
                 Human-led, AI-powered. Built in New Delhi.
               </p>
               <div className="mt-6 flex justify-center">
-                <GetStartedButton isAuthed={isAuthed} />
+                <GetStartedButton
+                  isAuthed={isAuthed}
+                  onboardingComplete={!!onboardingComplete}
+                />
               </div>
             </div>
           </div>
