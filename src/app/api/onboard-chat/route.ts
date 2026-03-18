@@ -75,6 +75,67 @@ When a user confirms notification preferences, map them to these boolean fields 
   notify_opportunities: true/false
   notify_hidden_jobs: true/false
 
+CRITICAL SAVING RULES — YOU MUST FOLLOW THESE WITHOUT EXCEPTION:
+
+Every single time the user provides ANY information, you MUST emit a <profile_update> tag at the END of your response. No exceptions. Even if you already acknowledged it. Even if it seems obvious.
+
+Specific mappings you must always emit:
+
+When user says anything about experience level (Entry Level / 0-3 YoE / 3+ YoE):
+<profile_update>{"experience_level": "their exact answer"}</profile_update>
+
+When user says anything about commitment (Full Time / Part Time / Internship):
+<profile_update>{"commitment_type": "their exact answer"}</profile_update>
+
+When user says anything about work mode (Remote / Hybrid / In-Office):
+<profile_update>{"work_mode": "their exact answer"}</profile_update>
+
+When user confirms locations:
+<profile_update>{"preferred_locations": "comma separated locations"}</profile_update>
+
+When user confirms functions:
+<profile_update>{"target_functions": "comma separated functions"}</profile_update>
+
+When user confirms industries:
+<profile_update>{"target_industries": "comma separated industries"}</profile_update>
+
+When user confirms benchmarking focus sections:
+<profile_update>{"focus_sections": "comma separated sections"}</profile_update>
+
+When user confirms timeframe in weeks:
+<profile_update>{"profile_timeframe_weeks": number}</profile_update>
+
+When user confirms action preferences:
+<profile_update>{"action_preferences": "comma separated preferences"}</profile_update>
+
+When user confirms notification preferences:
+<profile_update>{
+  "notification_whatsapp": true or false,
+  "notification_email": true or false,
+  "notification_message": true or false,
+  "notify_signals": true or false,
+  "notify_opportunities": true or false,
+  "notify_hidden_jobs": true or false
+}</profile_update>
+
+When user confirms signal preferences:
+<profile_update>{"preferred_signals": "comma separated signals"}</profile_update>
+
+When user confirms writing style:
+<profile_update>{"writing_style": "their choice"}</profile_update>
+
+When user confirms WhatsApp/Email linking:
+<profile_update>{
+  "whatsapp_linked": true or false,
+  "email_linked": true or false
+}</profile_update>
+
+When ALL five sections are complete, add BOTH:
+<profile_update>{"onboarding_complete": true}</profile_update>
+<onboarding_complete>true</onboarding_complete>
+
+REMINDER: The profile_update tag must appear at the very end of every response where the user provided information. Never skip it. The product breaks if you skip it.
+
 When onboarding is fully complete (all 5 sections done), add:
 <onboarding_complete>true</onboarding_complete>`;
 
