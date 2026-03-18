@@ -136,6 +136,11 @@ When ALL five sections are complete, add BOTH:
 
 REMINDER: The profile_update tag must appear at the very end of every response where the user provided information. Never skip it. The product breaks if you skip it.
 
+STRICT FIELD NAMES: You may ONLY use these exact field names in <profile_update> tags. Do not invent new field names under any circumstances:
+name, university, gpa, skills, internships, leadership_positions, projects, entrepreneurship, personal_impact, target_functions, target_industries, experience_level, commitment_type, work_mode, preferred_locations, aspirations_notes, focus_sections, profile_timeframe_weeks, action_preferences, notification_whatsapp, notification_email, notification_message, notify_signals, notify_opportunities, notify_hidden_jobs, preferred_signals, writing_style, custom_writing_sample, whatsapp_linked, email_linked, onboarding_complete.
+
+If you are tempted to use any other field name like profile_confirmed, cv_uploaded, step_complete, or anything not in the list above — DO NOT include it. Simply omit it entirely.
+
 When onboarding is fully complete (all 5 sections done), add:
 <onboarding_complete>true</onboarding_complete>`;
 
