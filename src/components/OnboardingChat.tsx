@@ -521,9 +521,11 @@ export function OnboardingChat({ userId }: { userId: string }) {
   const showNotificationMatrix =
     lastIsAssistant &&
     !!lastMessage &&
-    /(where do you want to get your notifications|how would you like to receive notifications|notification preferences\b|i'll need your preferences for whatsapp, email, and in-app messages across three categories|let me know your preferences for each combination)/i.test(
-      lastMessage.content
-    );
+    lastMessage.content
+      .trim()
+      .startsWith(
+        "Where do you want to get your notifications? Choose which media to use for each notification type."
+      );
 
   const showSignalChoices =
     lastIsAssistant &&
