@@ -68,7 +68,7 @@ async function exaSearch(query: string): Promise<any[]> {
     console.error("[index-linkedin-posts] EXA_API_KEY missing");
     return [];
   }
-  const startDate = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000)
+  const startDate = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
     .toISOString()
     .split("T")[0];
   try {
