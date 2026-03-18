@@ -146,14 +146,23 @@ function stripTags(text: string): string {
     .trim();
 }
 
-function extractProfileUpdate(text: string): Record<string, unknown> | null {
-  const match = text.match(/<profile_update>([\s\S]*?)<\/profile_update>/);
-  if (!match || !match[1]) return null;
-  try {
-    return JSON.parse(match[1].trim()) as Record<string, unknown>;
-  } catch {
-    return null;
+function extractProfileUpdate(text: string): Record<string, unknown> {
+  const matches = [
+    ...text.matchAll(/<profile_update>([\s\S]*?)<\/profile_update>/g),
+  ];
+  if (!matches.length) return {};
+
+  const merged: Record<string, unknown> = {};
+  for (const match of matches) {
+    if (!match[1]) continue;
+    try {
+      const parsed = JSON.parse(match[1].trim()) as Record<string, unknown>;
+      Object.assign(merged, parsed);
+    } catch {
+      // skip malformed tag
+    }
   }
+  return merged;
 }
 
 function extractOnboardingComplete(text: string): boolean {
@@ -208,7 +217,7 @@ export async function POST(req: NextRequest) {
     const rawText = block && block.type === "text" ? block.text : "";
 
     const reply = stripTags(rawText);
-    const profileUpdates = extractProfileUpdate(rawText) ?? {};
+    const profileUpdates = extractProfileUpdate(rawText);
     const isComplete = extractOnboardingComplete(rawText);
 
     return NextResponse.json({

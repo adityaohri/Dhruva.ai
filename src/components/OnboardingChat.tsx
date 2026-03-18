@@ -210,6 +210,7 @@ export function OnboardingChat({ userId }: { userId: string }) {
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [profile, setProfile] = useState<Record<string, unknown>>({});
+  const profileRef = useRef<Record<string, unknown>>({});
   const [selectedFunctions, setSelectedFunctions] = useState<string[]>([]);
   const [selectedIndustries, setSelectedIndustries] = useState<string[]>([]);
   const [selectedLocations, setSelectedLocations] = useState<string[]>([]);
@@ -330,7 +331,7 @@ export function OnboardingChat({ userId }: { userId: string }) {
           body: JSON.stringify({
             messages: messages.map((m) => ({ role: m.role, content: m.content })),
             userMessage: text,
-            profile,
+            profile: profileRef.current,
             userId,
           }),
         });
@@ -368,14 +369,16 @@ export function OnboardingChat({ userId }: { userId: string }) {
           },
         ]);
         if (Object.keys(updates).length > 0) {
-          const nextProfile = { ...profile, ...updates };
+          const nextProfile = { ...profileRef.current, ...updates };
           setProfile(nextProfile);
+          profileRef.current = nextProfile;
           await saveProfile(nextProfile);
         }
 
         if (data.isComplete) {
           // Use the latest merged profile including any last-message updates
-          const latestProfile = { ...profile, ...updates };
+          const latestProfile = { ...profileRef.current, ...updates };
+          profileRef.current = latestProfile;
           const finalDbProfile = toDbProfile(latestProfile);
           await supabase
             .from("user_profiles")
@@ -646,9 +649,13 @@ export function OnboardingChat({ userId }: { userId: string }) {
                                 <td className="py-2 text-[#3c2a6a]">
                                   <textarea
                                     value={displayValue}
-                                    onChange={(e) =>
-                                      setProfile((prev) => ({ ...prev, [key]: e.target.value }))
-                                    }
+                                    onChange={(e) => {
+                                      setProfile((prev) => {
+                                        const next = { ...prev, [key]: e.target.value };
+                                        profileRef.current = next;
+                                        return next;
+                                      });
+                                    }}
                                     rows={1}
                                     className="w-full min-h-[2.25rem] rounded border border-[rgba(60,42,106,0.2)] bg-white px-2 py-1 text-[#3c2a6a] text-sm leading-snug placeholder:text-[rgba(60,42,106,0.4)] focus:border-[#3c2a6a] focus:outline-none focus:ring-1 focus:ring-[#3c2a6a]/30 resize-y"
                                   />
@@ -674,7 +681,7 @@ export function OnboardingChat({ userId }: { userId: string }) {
                         <button
                           type="button"
                           onClick={async () => {
-                            await saveProfile(profile);
+                            await saveProfile(profileRef.current);
                             await sendMessage(
                               "I've confirmed my profile. Please guide me to the next steps."
                             );
