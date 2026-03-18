@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getBenchmarkProfiles } from "@/lib/benchmarkProfiles";
 import OpenAI from "openai";
 import Anthropic from "@anthropic-ai/sdk";
 import { createClient } from "@/lib/supabase/server";
@@ -1045,11 +1046,12 @@ export async function POST(req: NextRequest) {
     let companiesSearched: string[];
     let similarCompanies: string[];
 
-    rawResults = await pdlPersonSearch(
+    const initialBench = await getBenchmarkProfiles(
       correctedRole || "professional",
       correctedCompany || undefined,
       resolvedIndustry || undefined
     );
+    rawResults = initialBench.profiles ?? [];
 
     // If we still have fewer than MIN_PROFILES and a target company,
     // expand the cohort to similar roles at peer companies.
@@ -1061,12 +1063,12 @@ export async function POST(req: NextRequest) {
       );
 
       for (const peer of peers) {
-        const peerResults = await pdlPersonSearch(
+        const peerBench = await getBenchmarkProfiles(
           correctedRole || "professional",
           peer,
           resolvedIndustry || undefined
         );
-        rawResults = rawResults.concat(peerResults);
+        rawResults = rawResults.concat(peerBench.profiles ?? []);
         if (rawResults.length >= MIN_PROFILES) break;
       }
     }

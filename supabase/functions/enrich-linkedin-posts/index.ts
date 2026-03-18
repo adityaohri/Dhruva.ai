@@ -23,9 +23,20 @@ async function shouldKeepLowIntentPost(
   companyName: string | null,
   posterTitle: string | null,
   scrapedAt: string | null,
-  enrichmentConfidence: string | null
+  enrichmentConfidence: string | null,
+  enrichmentAttempts: number
 ): Promise<boolean> {
-  // Rule 1 — Keep if enrichment confidence is low
+  // Rule 1A — Delete if low confidence AND already enriched twice AND older than 7 days
+  if (
+    enrichmentConfidence === "low" &&
+    enrichmentAttempts >= 2 &&
+    scrapedAt &&
+    Date.now() - new Date(scrapedAt).getTime() > 7 * 24 * 60 * 60 * 1000
+  ) {
+    return false; // safe to delete
+  }
+
+  // Rule 1 — Keep if enrichment confidence is low (first attempt only)
   if (enrichmentConfidence === "low") return true;
 
   // Rule 2 — Keep if post is less than 3 days old
@@ -102,7 +113,9 @@ async function deleteLowIntentPosts(): Promise<number> {
 
   const { data: candidates } = await supabase
     .from("linkedin_hiring_posts")
-    .select("id, company_name, poster_title, scraped_at, enrichment_confidence")
+    .select(
+      "id, company_name, poster_title, scraped_at, enrichment_confidence, enrichment_attempts"
+    )
     .eq("hiring_intent", "low")
     .eq("is_enriched", true)
     .lt("scraped_at", threeDaysAgo);
@@ -117,12 +130,14 @@ async function deleteLowIntentPosts(): Promise<number> {
     poster_title: string | null;
     scraped_at: string | null;
     enrichment_confidence: string | null;
+    enrichment_attempts?: number | null;
   }[]) {
     const keep = await shouldKeepLowIntentPost(
       post.company_name,
       post.poster_title,
       post.scraped_at,
-      post.enrichment_confidence
+      post.enrichment_confidence,
+      post.enrichment_attempts ?? 1
     );
     if (!keep) toDelete.push(post.id);
     await new Promise((r) => setTimeout(r, 50));
@@ -143,12 +158,52 @@ async function deleteLowIntentPosts(): Promise<number> {
   return deleted;
 }
 
+async function deleteStaleMediumHighIntentPosts(): Promise<number> {
+  const fifteenDaysAgo = new Date(Date.now() - 15 * 24 * 60 * 60 * 1000).toISOString();
+  const twentyDaysAgo = new Date(Date.now() - 20 * 24 * 60 * 60 * 1000).toISOString();
+
+  const [{ data: mediumCandidates }, { data: highCandidates }] = await Promise.all([
+    supabase
+      .from("linkedin_hiring_posts")
+      .select("id")
+      .eq("is_enriched", true)
+      .eq("hiring_intent", "medium")
+      .lt("scraped_at", fifteenDaysAgo),
+    supabase
+      .from("linkedin_hiring_posts")
+      .select("id")
+      .eq("is_enriched", true)
+      .eq("hiring_intent", "high")
+      .lt("scraped_at", twentyDaysAgo),
+  ]);
+
+  const ids = [
+    ...((mediumCandidates ?? []) as { id: string }[]).map((r) => r.id),
+    ...((highCandidates ?? []) as { id: string }[]).map((r) => r.id),
+  ].filter(Boolean);
+
+  if (ids.length === 0) return 0;
+
+  let deleted = 0;
+  for (let i = 0; i < ids.length; i += 100) {
+    const batch = ids.slice(i, i + 100);
+    const { error } = await supabase.from("linkedin_hiring_posts").delete().in("id", batch);
+    if (!error) deleted += batch.length;
+  }
+
+  console.log(
+    `[enrich-linkedin-posts] Deleted ${deleted} stale medium/high intent posts (15d/20d rule)`
+  );
+  return deleted;
+}
+
 type PostRow = {
   id: string;
   title: string | null;
   snippet: string | null;
   industry: string | null;
   posted_at: string | null;
+  enrichment_attempts?: number | null;
 };
 
 async function enrichPost(post: PostRow): Promise<Record<string, any> | null> {
@@ -236,7 +291,7 @@ async function processBatch(batchSize: number = 50): Promise<{ enriched: number;
   // Tier 1 rate limits and avoids hitting the Edge runtime wall-clock limit.
   const { data: rows, error: fetchError } = await supabase
     .from("linkedin_hiring_posts")
-    .select("id, title, snippet, industry, posted_at")
+    .select("id, title, snippet, industry, posted_at, enrichment_attempts")
     .eq("is_enriched", false)
     .not("snippet", "is", null)
     .order("scraped_at", { ascending: false })
@@ -248,8 +303,11 @@ async function processBatch(batchSize: number = 50): Promise<{ enriched: number;
   }
 
   if (!rows?.length) {
-    const deletedCountIfAny = await deleteLowIntentPosts();
-    return { enriched: 0, deleted: deletedCountIfAny };
+    const [deletedLow, deletedStale] = await Promise.all([
+      deleteLowIntentPosts(),
+      deleteStaleMediumHighIntentPosts(),
+    ]);
+    return { enriched: 0, deleted: deletedLow + deletedStale };
   }
 
   let totalEnriched = 0;
@@ -275,6 +333,7 @@ async function processBatch(batchSize: number = 50): Promise<{ enriched: number;
           hiring_intent: result.hiring_intent ?? null,
           enriched_snippet: result.enriched_snippet ?? null,
           is_enriched: true,
+          enrichment_attempts: (row.enrichment_attempts ?? 1) + 1,
         })
         .eq("id", row.id);
 
@@ -286,15 +345,21 @@ async function processBatch(batchSize: number = 50): Promise<{ enriched: number;
     } else {
       await supabase
         .from("linkedin_hiring_posts")
-        .update({ is_enriched: true })
+        .update({
+          is_enriched: true,
+          enrichment_attempts: (row.enrichment_attempts ?? 1) + 1,
+        })
         .eq("id", row.id);
     }
 
   }
 
-  const deletedCount = await deleteLowIntentPosts();
+  const [deletedLow, deletedStale] = await Promise.all([
+    deleteLowIntentPosts(),
+    deleteStaleMediumHighIntentPosts(),
+  ]);
 
-  return { enriched: totalEnriched, deleted: deletedCount };
+  return { enriched: totalEnriched, deleted: deletedLow + deletedStale };
 }
 
 Deno.serve(async (req: Request) => {

@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
-import { DiscoverySection } from "../dashboard/discovery-section";
+import { ProfileAuditSectionsClient } from "./ProfileAuditSectionsClient";
 
 export const runtime = "nodejs";
 
@@ -77,7 +77,7 @@ export default async function ProfileAuditPage() {
           </section>
         </header>
 
-        <DiscoverySection />
+        <ProfileAuditSectionsClient />
       </div>
     </div>
   );
