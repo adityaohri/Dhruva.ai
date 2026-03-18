@@ -490,15 +490,15 @@ export function OnboardingChat({ userId }: { userId: string }) {
   const showExperienceChoices =
     lastIsAssistant &&
     !!lastMessage &&
-    /experience level\?/i.test(lastMessage.content);
+    lastMessage.content.includes("What's your experience level?");
   const showCommitmentChoices =
     lastIsAssistant &&
     !!lastMessage &&
-    /commitment/i.test(lastMessage.content);
+    lastMessage.content.includes("What commitment type are you looking for?");
   const showWorkModeChoices =
     lastIsAssistant &&
     !!lastMessage &&
-    /work mode/i.test(lastMessage.content);
+    lastMessage.content.includes("What work mode do you prefer?");
   const showLocationChoices =
     lastIsAssistant &&
     !!lastMessage &&
@@ -693,7 +693,21 @@ export function OnboardingChat({ userId }: { userId: string }) {
             </div>
           );
         })}
-        {isLoading && (
+        {isLoading &&
+          !(
+            showFunctionChoices ||
+            showIndustryPrompt ||
+            showExperienceChoices ||
+            showCommitmentChoices ||
+            showWorkModeChoices ||
+            showLocationChoices ||
+            showBenchmarkingFocusChoices ||
+            showActionPreferenceChoices ||
+            showSignalChoices ||
+            showWritingStyleChoices ||
+            showLinkChoices ||
+            showNotificationMatrix
+          ) && (
           <div className="flex justify-start">
             <div className="flex items-center gap-2 rounded-2xl border border-[rgba(60,42,106,0.1)] bg-white px-4 py-3">
               <div className="relative h-5 w-5">
