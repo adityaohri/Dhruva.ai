@@ -254,45 +254,74 @@ export function OnboardingChat({ userId }: { userId: string }) {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [messages]);
 
-  const toDbProfile = useCallback((fullProfile: Record<string, unknown>) => {
-    const dbProfile: Record<string, unknown> = { ...fullProfile };
+  const toDbProfile = useCallback(
+    (fullProfile: Record<string, unknown>) => {
+      const dbProfile: Record<string, unknown> = { ...fullProfile };
 
-    const arrayToText = (v: unknown): unknown => {
-      if (Array.isArray(v)) return v.join(", ");
-      return v;
-    };
+      const arrayToText = (v: unknown): unknown => {
+        if (Array.isArray(v)) return v.join(", ");
+        return v;
+      };
 
-    // Dual mapping for name / university
-    if ("name" in fullProfile) {
-      dbProfile.name = fullProfile.name ?? null;
-      dbProfile.full_name = fullProfile.name ?? null;
-    }
-    if ("university" in fullProfile) {
-      dbProfile.university = fullProfile.university ?? null;
-      dbProfile.current_university = fullProfile.university ?? null;
-    }
+      // Dual mapping for name / university
+      if ("name" in fullProfile) {
+        dbProfile.name = fullProfile.name ?? null;
+        dbProfile.full_name = fullProfile.name ?? null;
+      }
+      if ("university" in fullProfile) {
+        dbProfile.university = fullProfile.university ?? null;
+        dbProfile.current_university = fullProfile.university ?? null;
+      }
 
-    // Array -> text conversions for TEXT columns
-    dbProfile.target_functions = arrayToText(dbProfile.target_functions);
-    dbProfile.target_industries = arrayToText(dbProfile.target_industries);
-    dbProfile.work_mode = arrayToText(dbProfile.work_mode);
-    dbProfile.preferred_locations = arrayToText(dbProfile.preferred_locations);
-    dbProfile.focus_sections = arrayToText(dbProfile.focus_sections);
-    dbProfile.action_preferences = arrayToText(dbProfile.action_preferences);
-    dbProfile.preferred_signals = arrayToText(dbProfile.preferred_signals);
+      // Map entrepreneurship to entrepreneurial_leadership
+      if ("entrepreneurship" in fullProfile) {
+        dbProfile.entrepreneurial_leadership =
+          fullProfile.entrepreneurship ?? null;
+      }
 
-    // Ensure entrepreneurship is stored as text
-    if (
-      dbProfile.entrepreneurship &&
-      typeof dbProfile.entrepreneurship === "object"
-    ) {
-      dbProfile.entrepreneurship = JSON.stringify(
-        dbProfile.entrepreneurship
+      // Map target_industries to target_industry (singular) as text
+      if ("target_industries" in fullProfile) {
+        dbProfile.target_industry =
+          (arrayToText(fullProfile.target_industries) as string | null) ?? null;
+      }
+
+      // Map others field directly
+      if ("others" in fullProfile) {
+        dbProfile.others = fullProfile.others ?? null;
+      }
+
+      // Also ensure user_id is always saved alongside id
+      if (userId) {
+        dbProfile.user_id = userId;
+      }
+
+      // Array -> text conversions for TEXT columns
+      dbProfile.target_functions = arrayToText(dbProfile.target_functions);
+      dbProfile.target_industries = arrayToText(dbProfile.target_industries);
+      dbProfile.work_mode = arrayToText(dbProfile.work_mode);
+      dbProfile.preferred_locations = arrayToText(
+        dbProfile.preferred_locations
       );
-    }
+      dbProfile.focus_sections = arrayToText(dbProfile.focus_sections);
+      dbProfile.action_preferences = arrayToText(
+        dbProfile.action_preferences
+      );
+      dbProfile.preferred_signals = arrayToText(dbProfile.preferred_signals);
 
-    return dbProfile;
-  }, []);
+      // Ensure entrepreneurship is stored as text
+      if (
+        dbProfile.entrepreneurship &&
+        typeof dbProfile.entrepreneurship === "object"
+      ) {
+        dbProfile.entrepreneurship = JSON.stringify(
+          dbProfile.entrepreneurship
+        );
+      }
+
+      return dbProfile;
+    },
+    [userId]
+  );
 
   const saveProfile = useCallback(
     async (fullProfile: Record<string, unknown>) => {
