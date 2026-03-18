@@ -521,11 +521,9 @@ export function OnboardingChat({ userId }: { userId: string }) {
   const showNotificationMatrix =
     lastIsAssistant &&
     !!lastMessage &&
-    lastMessage.content
-      .trim()
-      .startsWith(
-        "Where do you want to get your notifications? Choose which media to use for each notification type."
-      );
+    lastMessage.content.includes(
+      "Where do you want to get your notifications? Choose which media to use for each notification type."
+    );
 
   const showSignalChoices =
     lastIsAssistant &&
