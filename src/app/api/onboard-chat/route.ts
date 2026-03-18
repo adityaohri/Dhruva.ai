@@ -59,19 +59,35 @@ At the END of your response, append a JSON block in this exact format:
 Only include fields that were explicitly provided in this message.
 Use these exact field names: name, university, gpa, skills, internships, leadership_positions, projects, entrepreneurship, personal_impact, target_functions, target_industries, experience_level, commitment_type, work_mode, preferred_locations, aspirations_notes, focus_sections, profile_timeframe_weeks, action_preferences, notification_whatsapp, notification_email, notification_message, notify_signals, notify_opportunities, notify_hidden_jobs, preferred_signals, writing_style, custom_writing_sample, whatsapp_linked, email_linked.
 
+CRITICAL: When the user sends a message that was generated from a button selection (for example "I'm interested in these functions: Finance & Investing, Consulting & Advisory" or "My preferred locations are: Mumbai, Delhi"), you MUST still emit a <profile_update> tag with the correct field and value extracted from their message. For array fields, always emit the value as a JSON array of strings. For example:
+<profile_update>
+{
+  "target_functions": ["Finance & Investing", "Consulting & Advisory"]
+}
+</profile_update>
+Do not skip the profile_update tag just because the user message looks like a formatted summary.
+
+When a user confirms notification preferences, map them to these boolean fields and emit them in profile_update:
+  notification_whatsapp: true/false
+  notification_email: true/false
+  notification_message: true/false
+  notify_signals: true/false
+  notify_opportunities: true/false
+  notify_hidden_jobs: true/false
+
 When onboarding is fully complete (all 5 sections done), add:
 <onboarding_complete>true</onboarding_complete>`;
 
 function stripTags(text: string): string {
   return text
-    .replace(/<profile_update>[\s\S]*?<\/profile_update>/gi, "")
-    .replace(/<onboarding_complete>[\s\S]*?<\/onboarding_complete>/gi, "")
+    .replace(/<profile_update>[\s\S]*?<\/profile_update>/g, "")
+    .replace(/<onboarding_complete>[\s\S]*?<\/onboarding_complete>/g, "")
     .trim();
 }
 
 function extractProfileUpdate(text: string): Record<string, unknown> | null {
-  const match = text.match(/<profile_update>([\s\S]*?)<\/profile_update>/i);
-  if (!match) return null;
+  const match = text.match(/<profile_update>([\s\S]*?)<\/profile_update>/);
+  if (!match || !match[1]) return null;
   try {
     return JSON.parse(match[1].trim()) as Record<string, unknown>;
   } catch {

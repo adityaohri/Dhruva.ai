@@ -256,14 +256,38 @@ export function OnboardingChat({ userId }: { userId: string }) {
   const toDbProfile = useCallback((fullProfile: Record<string, unknown>) => {
     const dbProfile: Record<string, unknown> = { ...fullProfile };
 
-    if ("name" in dbProfile) {
-      dbProfile.full_name = dbProfile.name;
-      dbProfile.name = dbProfile.name;
+    const arrayToText = (v: unknown): unknown => {
+      if (Array.isArray(v)) return v.join(", ");
+      return v;
+    };
+
+    // Dual mapping for name / university
+    if ("name" in fullProfile) {
+      dbProfile.name = fullProfile.name ?? null;
+      dbProfile.full_name = fullProfile.name ?? null;
+    }
+    if ("university" in fullProfile) {
+      dbProfile.university = fullProfile.university ?? null;
+      dbProfile.current_university = fullProfile.university ?? null;
     }
 
-    if ("university" in dbProfile) {
-      dbProfile.current_university = dbProfile.university;
-      dbProfile.university = dbProfile.university;
+    // Array -> text conversions for TEXT columns
+    dbProfile.target_functions = arrayToText(dbProfile.target_functions);
+    dbProfile.target_industries = arrayToText(dbProfile.target_industries);
+    dbProfile.work_mode = arrayToText(dbProfile.work_mode);
+    dbProfile.preferred_locations = arrayToText(dbProfile.preferred_locations);
+    dbProfile.focus_sections = arrayToText(dbProfile.focus_sections);
+    dbProfile.action_preferences = arrayToText(dbProfile.action_preferences);
+    dbProfile.preferred_signals = arrayToText(dbProfile.preferred_signals);
+
+    // Ensure entrepreneurship is stored as text
+    if (
+      dbProfile.entrepreneurship &&
+      typeof dbProfile.entrepreneurship === "object"
+    ) {
+      dbProfile.entrepreneurship = JSON.stringify(
+        dbProfile.entrepreneurship
+      );
     }
 
     return dbProfile;
@@ -350,10 +374,9 @@ export function OnboardingChat({ userId }: { userId: string }) {
         }
 
         if (data.isComplete) {
-          // Final safety: persist the full in-memory profile once more
-          // so that any answers that didn't emit profile_update tags
-          // are also written to the database.
-          const finalDbProfile = toDbProfile(profile);
+          // Use the latest merged profile including any last-message updates
+          const latestProfile = { ...profile, ...updates };
+          const finalDbProfile = toDbProfile(latestProfile);
           await supabase
             .from("user_profiles")
             .upsert(
