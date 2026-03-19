@@ -311,7 +311,31 @@ export function DiscoverySection({ parsed }: DiscoverySectionProps) {
         gapAnalysis: any;
       };
 
-      setGapAnalysis(gapData.gapAnalysis || null);
+      const nextGap = gapData.gapAnalysis || null;
+      setGapAnalysis(nextGap);
+
+      // Persist the latest audit output so Strategy Agent can activate
+      // only after an audit has been run.
+      try {
+        if (typeof window !== "undefined") {
+          window.sessionStorage.setItem(
+            "dhruva_last_profile_audit",
+            JSON.stringify({
+              targetRole,
+              targetCompany,
+              targetIndustry,
+              targetProfiles: fiberData.targetProfiles || [],
+              similarProfiles: fiberData.similarProfiles || [],
+              companiesSearched: fiberData.companiesSearched || [],
+              similarCompanies: fiberData.similarCompanies || [],
+              gapAnalysis: nextGap,
+              auditedAt: new Date().toISOString(),
+            })
+          );
+        }
+      } catch {
+        // ignore storage errors
+      }
     } catch (e: any) {
       setError(e?.message || "Discovery failed");
     } finally {
