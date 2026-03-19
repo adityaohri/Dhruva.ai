@@ -5,11 +5,10 @@ import { useMemo, useState } from "react";
 export interface CompanyRow {
   name: string;
   industry: string;
-  size: string;
   hq: string;
 }
 
-type EditableField = "industry" | "size" | "hq";
+type EditableField = "industry" | "hq";
 
 type EditingCell = {
   rowIndex: number;
@@ -24,7 +23,6 @@ function emptyCompany(): CompanyRow {
   return {
     name: "",
     industry: "",
-    size: "",
     hq: "",
   };
 }
@@ -84,7 +82,7 @@ export default function CompanyTable({ companies }: CompanyTableProps) {
                 background: "#F5F3EA",
               }}
             >
-              {["Company", "Industry", "Size", "HQ", ""].map((h) => (
+              {["Company", "Industry", "HQ", ""].map((h) => (
                 <th
                   key={h || "actions"}
                   className="px-4 py-2 text-left text-[0.75rem] font-semibold uppercase"
@@ -110,7 +108,7 @@ export default function CompanyTable({ companies }: CompanyTableProps) {
                   {row.name || "New Company"}
                 </td>
 
-                {(["industry", "size", "hq"] as EditableField[]).map((field) => (
+                {(["industry", "hq"] as EditableField[]).map((field) => (
                   <td
                     key={field}
                     className="cursor-text px-4 py-3 text-[0.95rem] text-[#1E1B4B]"

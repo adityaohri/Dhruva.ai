@@ -26,9 +26,8 @@ function parseCompanies(raw: string): CompanyRow[] | null {
         const record = item as Record<string, unknown>;
         const name = typeof record.name === "string" ? record.name : "";
         const industry = typeof record.industry === "string" ? record.industry : "";
-        const size = typeof record.size === "string" ? record.size : "";
         const hq = typeof record.hq === "string" ? record.hq : "";
-        return { name, industry, size, hq };
+        return { name, industry, hq };
       })
       .filter((row): row is CompanyRow => row !== null);
 
@@ -165,10 +164,10 @@ export default function OutreachPage() {
         style={{
           maxWidth: 760,
           margin: "0 auto",
-          background: "#FFFFFF",
+          background: "transparent",
           borderRadius: 16,
-          border: "1px solid rgba(30,27,75,0.08)",
-          boxShadow: "0 2px 12px rgba(30,27,75,0.06)",
+          border: "none",
+          boxShadow: "none",
           display: "flex",
           flexDirection: "column",
           height: "calc(100vh - 48px)",
@@ -191,6 +190,8 @@ export default function OutreachPage() {
               fontSize: "1.9rem",
               lineHeight: 1.2,
               marginTop: 6,
+              fontFamily: "var(--font-playfair), Georgia, serif",
+              fontWeight: 600,
             }}
           >
             Create hidden opportunities
