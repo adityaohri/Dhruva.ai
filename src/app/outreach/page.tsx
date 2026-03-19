@@ -170,11 +170,11 @@ export default function OutreachPage() {
           boxShadow: "none",
           display: "flex",
           flexDirection: "column",
-          height: "calc(100vh - 48px)",
         }}
       >
         <div style={{ padding: "20px 20px 12px" }}>
           <p
+            className="font-medium"
             style={{
               textTransform: "uppercase",
               letterSpacing: "0.12em",
@@ -185,12 +185,12 @@ export default function OutreachPage() {
             Outreach Copilot
           </p>
           <h1
+            className="font-serif"
             style={{
               color: "#6B5FE4",
               fontSize: "1.9rem",
               lineHeight: 1.2,
               marginTop: 6,
-              fontFamily: "var(--font-playfair), Georgia, serif",
               fontWeight: 600,
             }}
           >
@@ -198,7 +198,7 @@ export default function OutreachPage() {
           </h1>
         </div>
 
-        <div style={{ flex: 1, overflowY: "auto", padding: "8px 20px 16px", display: "grid", gap: 12 }}>
+        <div style={{ padding: "8px 20px 16px", display: "grid", gap: 12 }}>
           {messages.map((message, idx) => {
             const isUser = message.role === "user";
             return (
