@@ -197,7 +197,7 @@ export default function OutreachPage() {
             >
               Outreach Copilot
             </p>
-            <h1 className="mt-1 font-serif text-[2rem] font-semibold leading-tight text-[#6B5FE4]">
+            <h1 className="mt-1 font-serif text-[2rem] font-semibold leading-tight text-[#3C2A6A]">
               Create hidden opportunities
             </h1>
           </div>

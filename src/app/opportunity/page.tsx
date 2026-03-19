@@ -1750,38 +1750,61 @@ export default function OpportunityPage() {
 
   if (flowStep === "confirm_profile") {
     const bp = benchmarkProfile as any | null;
+    const parseListValue = (value: unknown): string[] => {
+      if (Array.isArray(value)) {
+        return value
+          .map((item) => String(item).trim())
+          .filter(Boolean);
+      }
+
+      if (typeof value !== "string") return [];
+      let working = value.trim();
+      if (!working) return [];
+
+      for (let i = 0; i < 3; i += 1) {
+        try {
+          const parsed: unknown = JSON.parse(working);
+          if (Array.isArray(parsed)) {
+            return parsed
+              .map((item) => String(item).trim())
+              .filter(Boolean);
+          }
+          if (typeof parsed === "string") {
+            working = parsed.trim();
+            continue;
+          }
+        } catch {
+          // Not valid JSON at this stage; continue with fallback parsing below.
+        }
+        break;
+      }
+
+      const unescaped = working
+        .replace(/\\+"/g, '"')
+        .replace(/\\\\/g, "\\")
+        .replace(/^\[/, "")
+        .replace(/\]$/, "");
+
+      return unescaped
+        .split(/[,|\n]+/)
+        .map((item) =>
+          item
+            .replace(/^[\s"'`[\]\\]+/, "")
+            .replace(/[\s"'`[\]\\]+$/, "")
+            .trim()
+        )
+        .filter(Boolean);
+    };
+
     // Normalise skills snippet (supports string or array) – include all skills
     let skillsSnippet: string | null = null;
-    if (Array.isArray(bp?.top_skills)) {
-      skillsSnippet = (bp.top_skills as any[])
-        .map((s) => String(s).trim())
-        .filter(Boolean)
-        .join(", ");
-    } else if (typeof bp?.top_skills === "string" && bp.top_skills.trim()) {
-      skillsSnippet = bp.top_skills
-        .split(/[,|]/)
-        .map((s: string) => s.trim())
-        .filter(Boolean)
-        .join(", ");
-    }
+    const skillList = parseListValue(bp?.top_skills);
+    if (skillList.length > 0) skillsSnippet = skillList.join(", ");
 
     // Normalise experience snippet (supports string or array) – include all titles
     let companySnippet: string | null = null;
-    if (Array.isArray(bp?.latest_company)) {
-      companySnippet = (bp.latest_company as any[])
-        .map((s) => String(s).trim())
-        .filter(Boolean)
-        .join(", ");
-    } else if (
-      typeof bp?.latest_company === "string" &&
-      bp.latest_company.trim()
-    ) {
-      companySnippet = bp.latest_company
-        .split(/[,|]/)
-        .map((s: string) => s.trim())
-        .filter(Boolean)
-        .join(", ");
-    }
+    const companyList = parseListValue(bp?.latest_company);
+    if (companyList.length > 0) companySnippet = companyList.join(", ");
 
     const degreeSnippet =
       typeof bp?.highest_degree === "string" && bp.highest_degree.trim()
