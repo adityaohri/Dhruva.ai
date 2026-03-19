@@ -159,59 +159,40 @@ export default function OutreachPage() {
   };
 
   return (
-    <main style={{ background: "#F5F3EA", minHeight: "100vh", padding: "24px" }}>
-      <div
-        style={{
-          maxWidth: 760,
-          margin: "0 auto",
-          background: "transparent",
-          borderRadius: 16,
-          border: "none",
-          boxShadow: "none",
-          display: "flex",
-          flexDirection: "column",
-        }}
-      >
-        <div style={{ padding: "20px 20px 12px" }}>
-          <p
-            className="font-medium"
-            style={{
-              textTransform: "uppercase",
-              letterSpacing: "0.12em",
-              fontSize: "0.75rem",
-              color: "rgba(30,27,75,0.5)",
-            }}
-          >
-            Outreach Copilot
-          </p>
-          <h1
-            className="font-serif"
-            style={{
-              color: "#6B5FE4",
-              fontSize: "1.9rem",
-              lineHeight: 1.2,
-              marginTop: 6,
-              fontWeight: 600,
-            }}
-          >
-            Create hidden opportunities
-          </h1>
+    <main className="flex min-h-[100vh] flex-col bg-[#fdfbf1] overflow-hidden">
+      <header className="flex shrink-0 flex-col border-b border-[rgba(60,42,106,0.08)] bg-[#fdfbf1]">
+        <div className="px-6 py-5">
+          <div className="mx-auto w-full max-w-[760px]">
+            <p
+              className="font-medium uppercase text-[0.75rem]"
+              style={{ letterSpacing: "0.12em", color: "rgba(30,27,75,0.5)" }}
+            >
+              Outreach Copilot
+            </p>
+            <h1 className="mt-1 font-serif text-[2rem] font-semibold leading-tight text-[#6B5FE4]">
+              Create hidden opportunities
+            </h1>
+          </div>
         </div>
+      </header>
 
-        <div style={{ padding: "8px 20px 16px", display: "grid", gap: 12 }}>
+      <div className="px-6 py-6">
+        <div className="mx-auto w-full max-w-[760px] space-y-4">
           {messages.map((message, idx) => {
             const isUser = message.role === "user";
             return (
-              <div key={idx} style={{ display: "flex", justifyContent: isUser ? "flex-end" : "flex-start" }}>
+              <div
+                key={idx}
+                className={`flex ${isUser ? "justify-end" : "justify-start"}`}
+              >
                 <div
+                  className={`max-w-[85%] rounded-2xl px-4 py-3 text-sm ${
+                    isUser
+                      ? "bg-[#1E1B4B] text-white"
+                      : "border border-[rgba(30,27,75,0.1)] bg-white text-[#1E1B4B]"
+                  }`}
                   style={{
-                    maxWidth: "90%",
-                    padding: "12px 14px",
-                    color: isUser ? "#FFFFFF" : "#1E1B4B",
-                    background: isUser ? "#1E1B4B" : "#FFFFFF",
-                    border: isUser ? "none" : "1px solid rgba(30,27,75,0.1)",
                     borderRadius: isUser ? "16px 16px 4px 16px" : "16px 16px 16px 4px",
-                    fontSize: "0.95rem",
                     lineHeight: 1.55,
                   }}
                 >
@@ -222,16 +203,10 @@ export default function OutreachPage() {
           })}
 
           {loading && (
-            <div style={{ display: "flex", justifyContent: "flex-start" }}>
+            <div className="flex justify-start">
               <div
-                style={{
-                  maxWidth: "90%",
-                  padding: "12px 14px",
-                  color: "#1E1B4B",
-                  background: "#FFFFFF",
-                  border: "1px solid rgba(30,27,75,0.1)",
-                  borderRadius: "16px 16px 16px 4px",
-                }}
+                className="max-w-[85%] rounded-2xl border border-[rgba(30,27,75,0.1)] bg-white px-4 py-3 text-[#1E1B4B]"
+                style={{ borderRadius: "16px 16px 16px 4px" }}
               >
                 <TypingIndicator />
               </div>
@@ -239,50 +214,23 @@ export default function OutreachPage() {
           )}
           <div ref={bottomRef} />
         </div>
+      </div>
 
-        <form
-          onSubmit={onSubmit}
-          style={{
-            borderTop: "1px solid rgba(30,27,75,0.08)",
-            padding: "14px 16px",
-            display: "flex",
-            gap: 10,
-            alignItems: "flex-end",
-            background: "#FFFFFF",
-            borderBottomLeftRadius: 16,
-            borderBottomRightRadius: 16,
-          }}
-        >
+      <div className="border-t border-[rgba(60,42,106,0.08)] bg-[#fdfbf1] px-6 py-4">
+        <form onSubmit={onSubmit} className="mx-auto flex w-full max-w-[760px] items-end gap-3">
           <textarea
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={onTextAreaKeyDown}
             rows={3}
             placeholder="Type company names, one per line or comma-separated…"
-            style={{
-              flex: 1,
-              resize: "vertical",
-              background: "#FFFFFF",
-              border: "1px solid rgba(30,27,75,0.15)",
-              borderRadius: 10,
-              padding: "12px 16px",
-              fontSize: "0.95rem",
-              color: "#1E1B4B",
-              outline: "none",
-            }}
+            className="w-full resize-y rounded-2xl border border-[rgba(60,42,106,0.15)] bg-white px-4 py-2.5 text-sm text-[#3c2a6a] placeholder:text-[rgba(60,42,106,0.4)] focus:outline-none focus:ring-2 focus:ring-[#3c2a6a]/20"
           />
           <button
             type="submit"
             disabled={!canSend}
-            style={{
-              background: canSend ? "#1E1B4B" : "rgba(30,27,75,0.45)",
-              color: "#FFFFFF",
-              borderRadius: 8,
-              padding: "10px 20px",
-              fontSize: "0.9rem",
-              border: "none",
-              cursor: canSend ? "pointer" : "not-allowed",
-            }}
+            className="flex h-10 shrink-0 items-center justify-center rounded-full bg-[#3c2a6a] px-4 text-sm font-medium text-[#fdfbf1] disabled:opacity-50 hover:enabled:bg-[#4a347f]"
+            aria-label="Send"
           >
             Send
           </button>
