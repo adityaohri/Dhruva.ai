@@ -14,6 +14,14 @@ interface ApiResponse {
   error?: string;
 }
 
+function buildGreeting(firstName: string): string {
+  return (
+    `Hello ${firstName}! This is where we create opportunities — reach out to companies that ` +
+    `don't have a job opening yet, because you're going to create that opening. Go ahead and ` +
+    `drop the list of companies you want to reach out to!`
+  );
+}
+
 function parseCompanies(raw: string): CompanyRow[] | null {
   const cleaned = raw.replace(/```json|```/g, "").trim();
   try {
@@ -76,23 +84,34 @@ function TypingIndicator() {
 }
 
 export default function OutreachPage() {
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [messages, setMessages] = useState<Message[]>([
+    { role: "assistant", content: buildGreeting("there") },
+  ]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const bottomRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     const boot = async () => {
-      const supabase = createClient();
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      const firstName = user?.user_metadata?.full_name?.split(" ")[0] ?? "there";
-      const greeting =
-        `Hello ${firstName}! This is where we create opportunities — reach out to companies that ` +
-        `don't have a job opening yet, because you're going to create that opening. Go ahead and ` +
-        `drop the list of companies you want to reach out to!`;
-      setMessages([{ role: "assistant", content: greeting }]);
+      try {
+        const supabase = createClient();
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+        const firstName = user?.user_metadata?.full_name?.split(" ")[0] ?? "there";
+        setMessages((prev) => {
+          if (prev.length === 0) {
+            return [{ role: "assistant", content: buildGreeting(firstName) }];
+          }
+          const [first, ...rest] = prev;
+          if (first.role === "assistant" && typeof first.content === "string") {
+            return [{ ...first, content: buildGreeting(firstName) }, ...rest];
+          }
+          return prev;
+        });
+      } catch {
+        // Keep default greeting with "there".
+      }
     };
     void boot();
   }, []);
@@ -126,12 +145,21 @@ export default function OutreachPage() {
 
       const content = data.content ?? "";
       const parsedCompanies = parseCompanies(content);
-      if (parsedCompanies) {
+      if (parsedCompanies && parsedCompanies.length > 0) {
         setMessages((prev) => [
           ...prev,
           {
             role: "assistant",
             content: <CompanyTable companies={parsedCompanies} />,
+          },
+        ]);
+      } else if (parsedCompanies && parsedCompanies.length === 0) {
+        setMessages((prev) => [
+          ...prev,
+          {
+            role: "assistant",
+            content:
+              "I could not detect company names in that message. Please share a list like: Bain, Temasek, Warburg Pincus.",
           },
         ]);
       } else {
@@ -151,8 +179,8 @@ export default function OutreachPage() {
     void submitMessage();
   };
 
-  const onTextAreaKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === "Enter" && !e.shiftKey) {
+  const onInputKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") {
       e.preventDefault();
       void submitMessage();
     }
@@ -217,22 +245,21 @@ export default function OutreachPage() {
       </div>
 
       <div className="border-t border-[rgba(60,42,106,0.08)] bg-[#fdfbf1] px-6 py-4">
-        <form onSubmit={onSubmit} className="mx-auto flex w-full max-w-[760px] items-end gap-3">
-          <textarea
+        <form onSubmit={onSubmit} className="mx-auto flex w-full max-w-2xl items-center gap-2">
+          <input
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            onKeyDown={onTextAreaKeyDown}
-            rows={3}
-            placeholder="Type company names, one per line or comma-separated…"
-            className="w-full resize-y rounded-2xl border border-[rgba(60,42,106,0.15)] bg-white px-4 py-2.5 text-sm text-[#3c2a6a] placeholder:text-[rgba(60,42,106,0.4)] focus:outline-none focus:ring-2 focus:ring-[#3c2a6a]/20"
+            onKeyDown={onInputKeyDown}
+            placeholder="Type company names, one per line or comma-separated..."
+            className="flex-1 rounded-full border border-[rgba(60,42,106,0.15)] bg-white px-4 py-2.5 text-sm text-[#3c2a6a] placeholder:text-[rgba(60,42,106,0.4)] focus:outline-none focus:ring-2 focus:ring-[#3c2a6a]/20"
           />
           <button
             type="submit"
             disabled={!canSend}
-            className="flex h-10 shrink-0 items-center justify-center rounded-full bg-[#3c2a6a] px-4 text-sm font-medium text-[#fdfbf1] disabled:opacity-50 hover:enabled:bg-[#4a347f]"
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#3c2a6a] text-sm font-medium text-[#fdfbf1] disabled:opacity-50 hover:enabled:bg-[#4a347f]"
             aria-label="Send"
           >
-            Send
+            →
           </button>
         </form>
       </div>
