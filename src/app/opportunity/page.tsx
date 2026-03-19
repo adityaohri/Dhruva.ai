@@ -1111,6 +1111,53 @@ function OpportunityCard({
 }
 
 export default function OpportunityPage() {
+  const normalizeProfileListText = (value: unknown): string => {
+    if (Array.isArray(value)) {
+      return value
+        .map((item) => String(item).trim())
+        .filter(Boolean)
+        .join(", ");
+    }
+
+    if (typeof value !== "string") return "";
+    let working = value.trim();
+    if (!working) return "";
+
+    for (let i = 0; i < 3; i += 1) {
+      try {
+        const parsed: unknown = JSON.parse(working);
+        if (Array.isArray(parsed)) {
+          return parsed
+            .map((item) => String(item).trim())
+            .filter(Boolean)
+            .join(", ");
+        }
+        if (typeof parsed === "string") {
+          working = parsed.trim();
+          continue;
+        }
+      } catch {
+        // Not JSON; fall through to delimiter parsing.
+      }
+      break;
+    }
+
+    return working
+      .replace(/\\+"/g, '"')
+      .replace(/\\\\/g, "\\")
+      .replace(/^\[/, "")
+      .replace(/\]$/, "")
+      .split(/[,|\n]+/)
+      .map((item) =>
+        item
+          .replace(/^[\s"'`[\]\\]+/, "")
+          .replace(/[\s"'`[\]\\]+$/, "")
+          .trim()
+      )
+      .filter(Boolean)
+      .join(", ");
+  };
+
   const [flowStep, setFlowStep] = useState<FlowStep>("confirm_profile");
   const [filters, setFilters] = useState<OpportunityFilters>(initialFilters);
   const [results, setResults] = useState<OpportunityResult[]>([]);
@@ -1156,6 +1203,21 @@ export default function OpportunityPage() {
     top_skills?: string | null;
     latest_company?: string | null;
     highest_degree?: string | null;
+    target_industries?: string | null;
+    experience_level?: string | null;
+    commitment_type?: string | null;
+    preferred_locations?: string | null;
+    aspiration_notes?: string | null;
+  } | null>(null);
+  const [profileDraft, setProfileDraft] = useState<{
+    top_skills: string;
+    latest_company: string;
+    highest_degree: string;
+    target_industries: string;
+    experience_level: string;
+    commitment_type: string;
+    preferred_locations: string;
+    aspiration_notes: string;
   } | null>(null);
   const [benchmarkLoading, setBenchmarkLoading] = useState(false);
   const [benchmarkError, setBenchmarkError] = useState<string | null>(null);
@@ -1252,8 +1314,10 @@ export default function OpportunityPage() {
 
         const { data, error } = await supabase
           .from("user_profiles")
-        .select("skills, internships, current_university")
-        .eq("id", user.id)
+          .select(
+            "skills, internships, current_university, target_industries, experience_level, commitment_type, preferred_locations, aspiration_notes"
+          )
+          .eq("id", user.id)
           .maybeSingle();
 
         if (error) {
@@ -1262,10 +1326,26 @@ export default function OpportunityPage() {
           );
           setBenchmarkProfile(null);
         } else if (data) {
-          setBenchmarkProfile({
+          const nextProfile = {
             top_skills: (data as any).skills ?? null,
             latest_company: (data as any).internships ?? null,
             highest_degree: (data as any).current_university ?? null,
+            target_industries: (data as any).target_industries ?? null,
+            experience_level: (data as any).experience_level ?? null,
+            commitment_type: (data as any).commitment_type ?? null,
+            preferred_locations: (data as any).preferred_locations ?? null,
+            aspiration_notes: (data as any).aspiration_notes ?? null,
+          };
+          setBenchmarkProfile(nextProfile);
+          setProfileDraft({
+            top_skills: normalizeProfileListText(nextProfile.top_skills),
+            latest_company: normalizeProfileListText(nextProfile.latest_company),
+            highest_degree: String(nextProfile.highest_degree ?? ""),
+            target_industries: normalizeProfileListText(nextProfile.target_industries),
+            experience_level: String(nextProfile.experience_level ?? ""),
+            commitment_type: String(nextProfile.commitment_type ?? ""),
+            preferred_locations: normalizeProfileListText(nextProfile.preferred_locations),
+            aspiration_notes: String(nextProfile.aspiration_notes ?? ""),
           });
         } else {
           setBenchmarkError(
@@ -1298,278 +1378,74 @@ export default function OpportunityPage() {
     }, 1200);
 
     try {
-      const sentinelPayload = {
-          industry: filters.industry,
-          jobType: filters.jobType,
-          experience: filters.experience,
-          location: filters.location || undefined,
-          pay: filters.pay || undefined,
-          companies: filters.companies
-          ? filters.companies
-              .split(",")
-              .map((s) => s.trim())
-              .filter(Boolean)
-            : undefined,
-          roles: filters.roles
-          ? filters.roles
-              .split(",")
-              .map((s) => s.trim())
-              .filter(Boolean)
-            : undefined,
-      };
+      const supabase = createSupabaseClient();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) throw new Error("Please log in to run opportunities.");
 
-      const [res, radarResults, hiringResults, jsearchResults] =
-        await Promise.all([
-        fetch("/api/discovery/sentinel", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(sentinelPayload),
-        }),
-        fetch("/api/discovery/radar-signals", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            industry: filters.industry,
-            topCompanies: getTopCompanies(
-              filters.industry as IndustryName,
-              12
-            ),
-            location: filters.location || undefined,
-          }),
-        }).then(async (r) => (r.ok ? r.json() : { signals: [] })),
-        fetch("/api/discovery/hiring-signals", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            industry: filters.industry,
-            topCompanies: getTopCompanies(
-              filters.industry as IndustryName,
-              10
-            ),
-            roleVariants: getRoleVariants(
-              filters.industry as IndustryName
-            ).slice(0, 4),
-            location: filters.location || undefined,
-            jobType: filters.jobType,
-            experience: filters.experience,
-          }),
-        }).then(async (r) => (r.ok ? r.json() : { signals: [] })),
-        fetch("/api/discovery/jsearch", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            industry: filters.industry,
-            roleVariants: getRoleVariants(
-              filters.industry as IndustryName
-            ).slice(0, 4),
-            experience: filters.experience,
-            jobType: filters.jobType,
-            location: filters.location || "India",
-            topCompanies: getTopCompanies(
-              filters.industry as IndustryName,
-              8
-            ),
-          }),
-        }).then(async (r) => (r.ok ? r.json() : { jobs: [] })),
-      ]);
+      const effectiveIndustry =
+        (profileDraft?.target_industries || filters.industry || "").trim();
+      const effectiveLocation =
+        (profileDraft?.preferred_locations || filters.location || "").trim();
+      const effectiveExperience =
+        (profileDraft?.experience_level || filters.experience || "").trim();
+      const effectiveCommitment =
+        (profileDraft?.commitment_type || filters.jobType || "").trim();
 
-      const data = await res.json();
+      const query = supabase
+        .from("jobs_index")
+        .select(
+          "title, company, url, snippet, source, industry, experience_level, location, bucket, posted_at, is_active, function, employment_type"
+        )
+        .eq("is_active", true)
+        .order("posted_at", { ascending: false })
+        .limit(300);
+
+      if (effectiveIndustry) query.ilike("industry", `%${effectiveIndustry}%`);
+      if (effectiveLocation) query.ilike("location", `%${effectiveLocation}%`);
+      if (effectiveExperience) {
+        query.or(
+          `experience_level.ilike.%${effectiveExperience}%,seniority.ilike.%${effectiveExperience}%`
+        );
+      }
+      if (effectiveCommitment) {
+        query.ilike("employment_type", `%${effectiveCommitment}%`);
+      }
+
+      const { data, error: jobsError } = await query;
+
       clearInterval(progressInterval);
       clearInterval(statusInterval);
       setLoadingProgress(100);
 
-      if (!res.ok) {
-        setError(data.error || "Hunt failed");
+      if (jobsError) {
+        setError(jobsError.message || "Hunt failed");
         setResults([]);
+        setResultsByCompany({});
         return;
       }
-      const baseResults: OpportunityResult[] = data.results || [];
 
-      const withoutLegacySignals = baseResults.filter(
-        (r) => r.bucket !== "C" && r.bucket !== "E"
-      );
-
-      const serpHiringSignals: OpportunityResult[] = baseResults
-        .filter((r) => r.bucket === "C")
-        .map((r) => ({ ...r, source: r.source ?? "LinkedIn" }));
-
-      const serpRadarSignals: OpportunityResult[] = baseResults
-        .filter((r) => r.bucket === "E")
-        .map((r) => ({ ...r, source: r.source ?? "News" }));
-
-      const radarSignals: OpportunityResult[] = (radarResults?.signals ?? []).map(
-        (s: any) => ({
-          title: String(s.title ?? ""),
-          url: String(s.url ?? ""),
-          snippet: String(s.snippet ?? ""),
-          source: String(s.source ?? "News"),
-          isDirect: false,
-          company: (s.companyName ?? "").trim() || null,
-          bucket: "E",
-          location: "India",
-          posted_at: s.postedAgo ?? null,
-          ...(s.signalLabel && { signalLabel: s.signalLabel }),
-          ...(s.signalCategory && { signalCategory: s.signalCategory }),
-          ...(s.postedAgo && { postedAgo: s.postedAgo }),
-        } as OpportunityResult)
-      );
-
-      const hiringData = hiringResults ?? {};
-
-      const hiringSignalsFromApi: OpportunityResult[] = (
-        hiringData.signals ?? []
-      ).map((s: any) => ({
-        title: String(s.title ?? ""),
-        url: String(s.url ?? ""),
-        snippet: String(s.snippet ?? ""),
-        source: "LinkedIn",
-        isDirect: false,
-        company: null,
-        bucket: "C",
-      }));
-
-      // India-only for LinkedIn jobs: use the global blocklist + require positive India indicator
-      const linkedInJobsMapped: OpportunityResult[] = (
-        hiringData.linkedInJobs ?? []
-      )
-        .filter((job: any) => {
-          const rawSnippet = String(job.snippet ?? "");
-          const rawTitle = String(job.title ?? "");
-          const rawUrl = String(job.url ?? "").toLowerCase();
-          const combined = `${rawTitle} ${rawSnippet}`.toLowerCase();
-          
-          // Hard reject if non-India location detected
-          const hasNonIndia = NON_INDIA_LOCATION_STRINGS.some((s) => combined.includes(s));
-          if (hasNonIndia) return false;
-          
-          // Must have positive India indicator or be from Indian job board
-          const hasIndiaIndicator = INDIA_LOCATION_INDICATORS.some((ind) =>
-            combined.includes(ind) || rawUrl.includes(ind)
-          );
-          
-          // If URL is from ATS platforms (Greenhouse, Lever, etc.) without India indicator, reject
-          const isATSUrl = /greenhouse|lever\.co|workday|ashby|smartrecruiters/i.test(rawUrl);
-          if (isATSUrl && !hasIndiaIndicator) return false;
-          
-          return true;
-        })
-        .map((job: any, idx: number) => {
-        const rawTitle = String(job.title ?? "");
-
-        const extractCompany = (title: string): string => {
-          const atMatch = title.match(/\bat\s+(.+)$/i);
-          if (atMatch) return atMatch[1].trim();
-          const colonMatch = title.match(/^([^:]{2,40}):\s+/);
-          if (colonMatch) return colonMatch[1].trim();
-          return "";
-        };
-
-        const extractTitle = (title: string, company: string): string => {
-          if (company) {
-            return title
-              .replace(new RegExp(`\\s+at\\s+${company}`, "i"), "")
-              .replace(new RegExp(`^${company}:\\s+`, "i"), "")
-              .trim();
-          }
-          return title;
-        };
-
-        const rawCompany = extractCompany(rawTitle);
-        const cleanTitle = extractTitle(rawTitle, rawCompany);
-
-        const snippetStr = String(job.snippet ?? "");
-        const snippetLower = snippetStr.toLowerCase();
-        const INDIAN_CITIES = [
-          "mumbai",
-          "delhi",
-          "bangalore",
-          "bengaluru",
-          "gurgaon",
-          "gurugram",
-          "hyderabad",
-          "pune",
-          "chennai",
-          "kolkata",
-          "noida",
-          "ahmedabad",
-          "india",
-        ];
-        const foundCity = INDIAN_CITIES.find((c) => snippetLower.includes(c));
-        const location =
-          foundCity != null
-            ? foundCity.charAt(0).toUpperCase() + foundCity.slice(1)
-            : "India";
-
-        const publishedDate = job.publishedDate as string | undefined;
-        const posted_at =
-          publishedDate && !Number.isNaN(Date.parse(publishedDate))
-            ? (() => {
-                const days = Math.floor(
-                  (Date.now() - new Date(publishedDate).getTime()) /
-                    (1000 * 60 * 60 * 24)
-                );
-                if (days === 0) return "Today";
-                if (days === 1) return "Yesterday";
-                if (days <= 7) return `${days} days ago`;
-                if (days <= 30) return `${Math.floor(days / 7)} weeks ago`;
-                return `${Math.floor(days / 30)} months ago`;
-              })()
-            : null;
-
-        return {
-          title: cleanTitle || rawTitle,
-          company: rawCompany || null,
-          url: String(job.url ?? ""),
-          snippet: snippetStr,
-          source: "LinkedIn",
-          bucket: "B",
-          displayName: rawCompany || null,
+      const mapped: OpportunityResult[] = ((data ?? []) as Record<string, unknown>[])
+        .filter((row) => typeof row.url === "string" && String(row.url).trim().length > 0)
+        .map((row, idx) => ({
+          title: String(row.title ?? ""),
+          company: (row.company as string | null) ?? null,
+          url: String(row.url ?? ""),
+          snippet: String(row.snippet ?? ""),
+          source: String(row.source ?? "jobs_index"),
+          bucket: ((row.bucket as OpportunityResult["bucket"]) ?? "B"),
+          displayName: (row.company as string | null) ?? null,
           originalIndex: idx,
-          recencyScore: Number(job.recencyScore ?? 0),
-          isFresh: Boolean(job.isFresh),
-          isVerified: true,
           isDirect: false,
-          match_score: undefined,
-          prestige_score: undefined,
-          location,
-          posted_at,
-        } as OpportunityResult;
-      });
+          location: (row.location as string | null) ?? "India",
+          posted_at: (row.posted_at as string | null) ?? null,
+          industry: (row.industry as string | null) ?? null,
+          experience_level: (row.experience_level as string | null) ?? null,
+        }));
 
-      const jsearchJobs = (jsearchResults as any)?.jobs ?? [];
-      const jsearchMeta = (jsearchResults as any)?._meta;
-      
-      // Always log JSearch response for debugging
-      console.log("[Opportunity] JSearch response:", {
-        jobsCount: jsearchJobs.length,
-        meta: jsearchMeta,
-      });
-      const jsearchMapped: OpportunityResult[] = jsearchJobs.map(
-        (job: any, idx: number) => ({
-          ...(job as OpportunityResult),
-          originalIndex: idx,
-        })
-      );
-
-      const merged: OpportunityResult[] = [
-        ...withoutLegacySignals,
-        ...linkedInJobsMapped,
-        ...(data.source === "index" ? [] : jsearchMapped),
-        // On The Radar — Exa + SerpApi merged
-        ...radarSignals,
-        ...serpRadarSignals,
-        // Hiring Signals — Exa + SerpApi merged
-        ...hiringSignalsFromApi,
-        ...serpHiringSignals,
-      ];
-
-      const withIndex = merged.map((r, idx) => ({
-        ...r,
-        originalIndex: idx,
-      }));
-
-      setResults(withIndex);
-      setResultsByCompany(data.resultsByCompany || {});
+      setResults(mapped);
+      setResultsByCompany({});
       setMatchByUrl({});
     } catch (e) {
       clearInterval(progressInterval);
@@ -1581,7 +1457,7 @@ export default function OpportunityPage() {
       setLoading(false);
       setLoadingProgress(0);
     }
-  }, [filters]);
+  }, [filters, profileDraft]);
 
   const fetchMatchForJob = useCallback(
     async (job: OpportunityResult) => {
@@ -1796,32 +1672,16 @@ export default function OpportunityPage() {
         .filter(Boolean);
     };
 
-    // Normalise skills snippet (supports string or array) – include all skills
-    let skillsSnippet: string | null = null;
-    const skillList = parseListValue(bp?.top_skills);
-    if (skillList.length > 0) skillsSnippet = skillList.join(", ");
-
-    // Normalise experience snippet (supports string or array) – include all titles
-    let companySnippet: string | null = null;
-    const companyList = parseListValue(bp?.latest_company);
-    if (companyList.length > 0) companySnippet = companyList.join(", ");
-
-    const degreeSnippet =
-      typeof bp?.highest_degree === "string" && bp.highest_degree.trim()
-        ? bp.highest_degree.trim()
-        : null;
-
-    const activeSections: string[] = [];
-    if (skillsSnippet) activeSections.push("Skills");
-    if (companySnippet) activeSections.push("Internships / Experience");
-    if (degreeSnippet) activeSections.push("Education");
-
-    const confirmLine =
-      activeSections.length > 0
-        ? `We will use the ${activeSections.join(
-            ", "
-          )} section${activeSections.length > 1 ? "s" : ""} from your uploaded CV to power Opportunity Intelligence.`
-        : "We will use your uploaded CV to power Opportunity Intelligence.";
+    const profileRows = [
+      { key: "target_industries", label: "Target Industries" },
+      { key: "experience_level", label: "Experience Level" },
+      { key: "commitment_type", label: "Commitment Level" },
+      { key: "preferred_locations", label: "Preferred Location" },
+      { key: "aspiration_notes", label: "Aspiration Notes" },
+      { key: "top_skills", label: "Skills" },
+      { key: "latest_company", label: "Internships / Experience" },
+      { key: "highest_degree", label: "Education" },
+    ] as const;
 
     return (
       <div
@@ -1830,45 +1690,58 @@ export default function OpportunityPage() {
       >
         <div className="w-full max-w-2xl space-y-6">
           <div className="rounded-2xl border border-white bg-white p-6 text-[#3C2A6A] shadow-sm">
-            <h3 className="text-sm font-semibold text-[#3C2A6A]">
-              Executive summary
-            </h3>
-            <div className="mt-2 space-y-1 text-sm">
-              {skillsSnippet && (
-                <p>
-                  <span className="font-semibold text-[#3C2A6A]">Skills: </span>
-                  <span className="text-[#3C2A6A]">{skillsSnippet}</span>
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <div>
+                <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-[#3C2A6A]/80">
+                  Retrieve profile
                 </p>
-              )}
-              {companySnippet && (
-                <p>
-                  <span className="font-semibold text-[#3C2A6A]">
-                    Experience:{" "}
-                  </span>
-                  <span className="text-[#3C2A6A]">{companySnippet}</span>
+                <p className="mt-1 text-sm text-[#3C2A6A]/80">
+                  Pull your onboarding profile and edit before matching.
                 </p>
-              )}
-              {degreeSnippet && (
-                <p>
-                  <span className="font-semibold text-[#3C2A6A]">
-                    Education:{" "}
-                  </span>
-                  <span className="text-[#3C2A6A]">{degreeSnippet}</span>
-                </p>
-              )}
-              {!skillsSnippet && !companySnippet && !degreeSnippet && (
-                <p className="text-[#3C2A6A]">
-                  We will benchmark roles against your uploaded CV profile.
-                </p>
-              )}
-                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setFlowStep("confirm_profile")}
+                className="rounded-full bg-[#3C2A6A] px-5 py-2 text-sm font-medium text-[#FDFBF1] hover:bg-[#4a347f]"
+              >
+                Retrieve profile
+              </button>
+            </div>
+            <h3 className="text-sm font-semibold text-[#3C2A6A]">Profile details</h3>
+            <div className="mt-3 overflow-hidden rounded-xl border border-[rgba(60,42,106,0.12)] bg-[#fdfbf6]">
+              <table className="w-full text-left text-sm">
+                <tbody>
+                  {profileRows.map(({ key, label }) => (
+                    <tr
+                      key={key}
+                      className="border-b border-[rgba(60,42,106,0.08)] last:border-b-0"
+                    >
+                      <td className="w-1/3 px-3 py-2 font-medium text-[rgba(60,42,106,0.8)]">
+                        {label}
+                      </td>
+                      <td className="px-3 py-2">
+                        <input
+                          value={String(profileDraft?.[key] ?? "")}
+                          onChange={(e) =>
+                            setProfileDraft((prev) =>
+                              prev ? { ...prev, [key]: e.target.value } : prev
+                            )
+                          }
+                          className="w-full rounded border border-[rgba(60,42,106,0.2)] bg-white px-2 py-1 text-[#3C2A6A] focus:border-[#3C2A6A] focus:outline-none focus:ring-1 focus:ring-[#3C2A6A]/30"
+                        />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
             <p className="mt-4 text-[11px] font-medium uppercase tracking-[0.18em] text-[#3C2A6A]/80">
               Identity confirmation
             </p>
             <p className="mt-1 text-xs text-slate-500">
               {benchmarkLoading
                 ? "Pulling your benchmarking attributes from your uploaded CV..."
-                : confirmLine}
+                : "We use this profile table to suggest target opportunities from internal jobs data only (no live API calls)."}
             </p>
             {benchmarkError && (
               <p className="mt-2 text-xs text-red-600">
@@ -1884,6 +1757,36 @@ export default function OpportunityPage() {
                 <button
                   type="button"
               onClick={async () => {
+                try {
+                  const supabase = createSupabaseClient();
+                  const {
+                    data: { user },
+                  } = await supabase.auth.getUser();
+                  if (user && profileDraft) {
+                    await supabase.from("user_profiles").upsert(
+                      {
+                        id: user.id,
+                        user_id: user.id,
+                        target_industries: profileDraft.target_industries || null,
+                        experience_level: profileDraft.experience_level || null,
+                        commitment_type: profileDraft.commitment_type || null,
+                        preferred_locations: profileDraft.preferred_locations || null,
+                        aspiration_notes: profileDraft.aspiration_notes || null,
+                        skills: profileDraft.top_skills || null,
+                        internships: profileDraft.latest_company || null,
+                        current_university: profileDraft.highest_degree || null,
+                      },
+                      { onConflict: "id" }
+                    );
+                    setFilters((prev) => ({
+                      ...prev,
+                      industry: profileDraft.target_industries || prev.industry,
+                      experience: profileDraft.experience_level || prev.experience,
+                      jobType: profileDraft.commitment_type || prev.jobType,
+                      location: profileDraft.preferred_locations || prev.location,
+                    }));
+                  }
+                } catch {}
                 await runHunt();
                 setFlowStep("results");
               }}
