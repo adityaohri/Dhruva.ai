@@ -27,6 +27,82 @@ interface DiscoverySectionProps {
 }
 
 export function DiscoverySection({ parsed }: DiscoverySectionProps) {
+  const normalizeProfileListText = (value: unknown): string[] => {
+    const extractTokensFromString = (input: string): string[] => {
+      let working = input.trim();
+      if (!working) return [];
+
+      for (let i = 0; i < 5; i += 1) {
+        const prev = working;
+        working = working.replace(/\\+"/g, '"').replace(/\\\\/g, "\\").trim();
+        if (working === prev) break;
+      }
+
+      if (working.length >= 2 && working.startsWith('"') && working.endsWith('"')) {
+        working = working.slice(1, -1).trim();
+      }
+
+      for (let i = 0; i < 3; i += 1) {
+        try {
+          const parsedValue: unknown = JSON.parse(working);
+          if (Array.isArray(parsedValue)) {
+            const out: string[] = [];
+            for (const item of parsedValue) {
+              out.push(...extractTokensFromString(String(item)));
+            }
+            return out;
+          }
+          if (typeof parsedValue === "string") {
+            working = parsedValue.trim();
+            continue;
+          }
+        } catch {
+          // Not JSON; continue with token extraction.
+        }
+        break;
+      }
+
+      working = working
+        .replace(/\\+"/g, '"')
+        .replace(/\\\\/g, "\\")
+        .replace(/^[\[{]/, "")
+        .replace(/[\]}]$/, "");
+
+      const quoted = Array.from(working.matchAll(/"([^"]*?)"/g), (m) => m[1]);
+      if (quoted.length > 0) {
+        const cleaned = quoted
+          .map((t) =>
+            t
+              .replace(/\\+/g, "")
+              .replace(/[\[\]]/g, "")
+              .trim()
+          )
+          .filter((t) => t.length > 1 && !/\\|\[|\]/.test(t));
+        if (cleaned.length > 0) return cleaned;
+      }
+
+      return working
+        .split(/[,|\n]+/)
+        .map((item) =>
+          item
+            .replace(/^[\s"'`[\]\\]+/, "")
+            .replace(/[\s"'`[\]\\]+$/, "")
+            .replace(/\\+/g, "")
+            .replace(/[\[\]{}]/g, "")
+            .trim()
+        )
+        .filter(Boolean);
+    };
+
+    if (Array.isArray(value)) {
+      const out: string[] = [];
+      for (const item of value) out.push(...extractTokensFromString(String(item)));
+      return out;
+    }
+    if (typeof value !== "string") return [];
+    return extractTokensFromString(value);
+  };
+
   const [targetRole, setTargetRole] = useState("");
   const [targetCompany, setTargetCompany] = useState("");
   const [targetIndustry, setTargetIndustry] = useState("");
@@ -168,22 +244,8 @@ export function DiscoverySection({ parsed }: DiscoverySectionProps) {
         name: row.full_name ?? "",
         university: row.current_university ?? "",
         gpa: row.gpa ?? "",
-        skills: Array.isArray(row.skills)
-          ? row.skills
-          : typeof row.skills === "string"
-          ? row.skills
-              .split(/[,|]/)
-              .map((s: string) => s.trim())
-              .filter(Boolean)
-          : [],
-        internships: Array.isArray(row.internships)
-          ? row.internships
-          : typeof row.internships === "string"
-          ? row.internships
-              .split(/[,|]/)
-              .map((s: string) => s.trim())
-              .filter(Boolean)
-          : [],
+        skills: normalizeProfileListText(row.skills),
+        internships: normalizeProfileListText(row.internships),
         leadership_positions: row.leadership_positions ?? "",
         projects: row.projects ?? "",
         entrepreneurship: row.entrepreneurship ?? "",
