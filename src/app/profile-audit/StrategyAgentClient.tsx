@@ -141,8 +141,8 @@ export function StrategyAgentClient() {
     }
   }, []);
 
-  const company = audit.targetCompany?.trim();
-  const role = audit.targetRole?.trim();
+  const company = audit?.targetCompany?.trim();
+  const role = audit?.targetRole?.trim();
 
   const allQuestionsAnswered = useMemo(
     () => questionIdx >= DISCOVERY_QUESTIONS.length,
@@ -310,6 +310,7 @@ export function StrategyAgentClient() {
           </div>
         </div>
       ) : (
+      <>
       <section className="rounded-3xl border border-[rgba(60,42,106,0.12)] bg-white/70 px-5 py-5">
         <p className="text-[11px] font-semibold tracking-[0.22em] text-[rgba(60,42,106,0.7)]">
           HOW TO USE STRATEGY AGENT
@@ -568,6 +569,7 @@ export function StrategyAgentClient() {
           </div>
         )}
       </section>
+      </>
       )}
     </div>
   );
