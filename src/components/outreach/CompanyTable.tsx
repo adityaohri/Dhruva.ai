@@ -154,7 +154,7 @@ export default function CompanyTable({ companies }: CompanyTableProps) {
           onClick={addRow}
           className="px-4 py-2 text-[0.875rem]"
           style={{
-            color: "#6B5FE4",
+            color: "#1E1B4B",
             background: "none",
             border: "none",
             cursor: "pointer",
