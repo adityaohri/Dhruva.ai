@@ -35,6 +35,8 @@ type RequestBody = {
     budget: string;
     network: string;
   };
+  refinement?: string;
+  currentPlan?: StoredStrategyPlan;
 };
 
 const SYSTEM_PROMPT = `You are Dhruva Strategy Agent.
@@ -61,6 +63,7 @@ Rules:
 - 5 to 8 tasks total
 - Plan must be one-week and realistic
 - Use user's discussion preferences and bandwidth directly
+- If "refinement" is present in input, revise the current plan to address it while keeping the plan feasible.
 - If task is about applying/discovery/job search, use toolCta "opportunity-discovery"
 - If task is about networking/outreach/referrals/messages, use toolCta "outreach-copilot"
 - Otherwise toolCta null

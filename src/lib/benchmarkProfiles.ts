@@ -1,7 +1,33 @@
 import { createClient } from "@/lib/supabase/client";
+import { getTopCompanies, type IndustryName } from "@/lib/industryKeywords";
 
 const CACHE_THRESHOLD = 15;
 // Minimum profiles needed to skip PDL call
+const MIN_LINKEDIN_CONNECTIONS = 500;
+
+function getFollowerCount(raw: Record<string, unknown>): number {
+  const candidates = [
+    raw.connections,
+    raw.linkedin_connections,
+    raw.followers,
+    raw.follower_count,
+    (raw.additional_fields as Record<string, unknown> | undefined)?.connections,
+    (raw.additional_fields as Record<string, unknown> | undefined)?.linkedin_connections,
+  ];
+
+  for (const c of candidates) {
+    if (typeof c === "number" && Number.isFinite(c)) return c;
+    if (typeof c === "string") {
+      const n = Number(c.replace(/[^0-9.]/g, ""));
+      if (!Number.isNaN(n)) return n;
+    }
+  }
+  return 0;
+}
+
+function filterHighConnectionProfiles(rows: Record<string, unknown>[]) {
+  return rows.filter((row) => getFollowerCount(row) >= MIN_LINKEDIN_CONNECTIONS);
+}
 
 async function checkInternalCache(
   role: string,
@@ -33,7 +59,7 @@ async function checkInternalCache(
     return { hasEnough: false, profiles: [] };
   }
 
-  const results = (data as any[]) ?? [];
+  const results = filterHighConnectionProfiles(((data as any[]) ?? []) as Record<string, unknown>[]);
   return {
     hasEnough: results.length >= CACHE_THRESHOLD,
     profiles: results,
@@ -236,6 +262,7 @@ async function pdlPersonSearch(
   role: string,
   company?: string,
   industry?: string,
+  competitorCompanies: string[] = [],
   size: number = 30
 ): Promise<{ results: any[]; pass: string }> {
   const PDL_API_KEY = process.env.PDL_API_KEY;
@@ -257,18 +284,28 @@ async function pdlPersonSearch(
   if (safeCompany) baseMust.push({ match_phrase: { job_company_name: safeCompany } });
   baseMust.push({ term: { location_country: "india" } });
 
-  const passes: { must: any[]; label: string }[] = [];
-  if (safeIndustry) {
+  const passes: { must: any[]; should?: any[]; minimumShouldMatch?: number; label: string }[] = [];
+
+  // Pass 1 — target role + target company
+  passes.push({ must: baseMust, label: "role+company" });
+
+  // Pass 2 — target role + competitor companies (same industry set)
+  const cleanedCompetitors = competitorCompanies
+    .map((c) => c.trim())
+    .filter((c) => c && c.toLowerCase() !== (safeCompany ?? "").toLowerCase());
+  if (cleanedCompetitors.length > 0) {
     passes.push({
       must: [
-        ...baseMust,
-        { match_phrase: { industry: safeIndustry } },
-        { match_phrase: { job_company_industry: safeIndustry } },
+        { term: { location_country: "india" } },
+        ...(safeRole ? [{ match_phrase: { job_title: safeRole } }] : []),
       ],
-      label: "role+company+industry",
+      should: cleanedCompetitors.map((c) => ({ match_phrase: { job_company_name: c } })),
+      minimumShouldMatch: 1,
+      label: "role+competitors",
     });
   }
-  passes.push({ must: baseMust, label: "role+company" });
+
+  // Pass 3 — fallback: other roles in same target company
   if (safeCompany) {
     passes.push({
       must: [
@@ -280,7 +317,15 @@ async function pdlPersonSearch(
   }
 
   for (const pass of passes) {
-    const esQuery = { query: { bool: { must: pass.must } } };
+    const esQuery = {
+      query: {
+        bool: {
+          must: pass.must,
+          ...(pass.should ? { should: pass.should } : {}),
+          ...(pass.minimumShouldMatch ? { minimum_should_match: pass.minimumShouldMatch } : {}),
+        },
+      },
+    };
     const resp = await fetch(`${baseUrl}?${params.toString()}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -305,8 +350,10 @@ async function pdlPersonSearch(
       data.results ||
       [];
 
-    if (Array.isArray(results) && results.length > 0) {
-      return { results, pass: pass.label };
+    const filtered = filterHighConnectionProfiles((results as Record<string, unknown>[]) ?? []);
+
+    if (Array.isArray(filtered) && filtered.length > 0) {
+      return { results: filtered as any[], pass: pass.label };
     }
   }
 
@@ -327,7 +374,16 @@ export async function getBenchmarkProfiles(
     return { profiles: cache.profiles, source: "cache", count: cache.profiles.length };
   }
 
-  const { results, pass } = await pdlPersonSearch(role, company, industry, 30);
+  let competitors: string[] = [];
+  if (industry?.trim()) {
+    try {
+      competitors = getTopCompanies(industry.trim() as IndustryName, 12);
+    } catch {
+      competitors = [];
+    }
+  }
+
+  const { results, pass } = await pdlPersonSearch(role, company, industry, competitors, 30);
   if (results.length > 0) {
     await storePdlResults(results, role, company, industry, pass);
     return { profiles: results, source: "pdl", count: results.length };

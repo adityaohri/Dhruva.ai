@@ -149,7 +149,7 @@ export function StrategyAgentClient() {
     [questionIdx]
   );
 
-  const generatePlan = async (finalAnswers: StrategyAnswers) => {
+  const generatePlan = async (finalAnswers: StrategyAnswers, refinement?: string) => {
     if (!audit) return;
     setIsGenerating(true);
     setError(null);
@@ -165,6 +165,23 @@ export function StrategyAgentClient() {
             gapAnalysis: audit.gapAnalysis,
           },
           discussion: finalAnswers,
+          refinement: refinement ?? undefined,
+          currentPlan:
+            tasks.length > 0
+              ? {
+                  summary: planSummary,
+                  tasks: tasks.map((t) => ({
+                    title: t.title,
+                    description: t.description,
+                    gapArea: t.gapArea,
+                    stageLabel: t.stageLabel,
+                    difficulty: t.difficulty,
+                    impact: t.impact,
+                    estimatedHours: t.estimatedHours,
+                    toolCta: t.toolCta,
+                  })),
+                }
+              : undefined,
         }),
       });
       const data = (await res.json()) as {
@@ -207,14 +224,23 @@ export function StrategyAgentClient() {
   };
 
   const onSend = async () => {
-    if (!input.trim() || isGenerating || allQuestionsAnswered) return;
+    if (!input.trim() || isGenerating) return;
     const value = input.trim();
+    setInput("");
+    setMessages((prev) => [...prev, { role: "user", content: value }]);
+
+    if (allQuestionsAnswered) {
+      setMessages((prev) => [
+        ...prev,
+        { role: "assistant", content: "Got it — updating the plan. Dhruva is thinking..." },
+      ]);
+      await generatePlan(answers as StrategyAnswers, value);
+      return;
+    }
+
     const current = DISCOVERY_QUESTIONS[questionIdx];
     const nextAnswers = { ...answers, [current.key]: value };
-
-    setMessages((prev) => [...prev, { role: "user", content: value }]);
     setAnswers(nextAnswers);
-    setInput("");
 
     const nextIdx = questionIdx + 1;
     setQuestionIdx(nextIdx);
@@ -226,11 +252,7 @@ export function StrategyAgentClient() {
     const finalAnswers = nextAnswers as StrategyAnswers;
     setMessages((prev) => [
       ...prev,
-      {
-        role: "assistant",
-        content:
-          "Thanks — generating your actionable one-week plan now. This will tie directly into Discovery and Outreach flows.",
-      },
+      { role: "assistant", content: "Thanks — Dhruva is thinking..." },
     ]);
     await generatePlan(finalAnswers);
   };
@@ -405,18 +427,18 @@ export function StrategyAgentClient() {
                       void onSend();
                     }
                   }}
-                  disabled={isGenerating || allQuestionsAnswered}
+                  disabled={isGenerating}
                   placeholder={
                     allQuestionsAnswered
-                      ? "Discussion complete — generating/ready."
+                      ? "Share what feels infeasible or what you want to change."
                       : "Type your answer and press Enter"
                   }
-                  className="w-full rounded-full border border-[rgba(60,42,106,0.18)] bg-white px-4 py-2.5 text-sm text-[#3c2a6a] placeholder:text-[rgba(60,42,106,0.45)]"
+                  className="w-full rounded-full border border-[rgba(60,42,106,0.18)] bg-white px-4 py-2.5 text-sm text-[#3c2a6a] placeholder:text-[rgba(60,42,106,0.45)] focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0"
                 />
                 <button
                   type="button"
                   onClick={() => void onSend()}
-                  disabled={isGenerating || allQuestionsAnswered || !input.trim()}
+                  disabled={isGenerating || !input.trim()}
                   className="rounded-full bg-[#3c2a6a] px-4 py-2 text-xs font-medium text-[#fdfbf1] disabled:opacity-50"
                 >
                   Send
@@ -453,7 +475,7 @@ export function StrategyAgentClient() {
 
               {isGenerating ? (
                 <div className="rounded-xl border border-[rgba(60,42,106,0.1)] bg-[#fdfbf6] px-3 py-3 text-sm text-[rgba(60,42,106,0.8)]">
-                  Generating plan with Claude Sonnet...
+                  Dhruva is thinking...
                 </div>
               ) : tasks.length === 0 ? (
                 <div className="rounded-xl border border-[rgba(60,42,106,0.1)] bg-[#fdfbf6] px-3 py-3 text-sm text-[rgba(60,42,106,0.8)]">
