@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { createClient } from "@/lib/supabase/client";
 
 export interface CompanyRow {
   name: string;
@@ -19,6 +20,13 @@ interface CompanyTableProps {
   companies: CompanyRow[];
 }
 
+interface OutreachCompanyUpsertRow {
+  user_id: string;
+  name: string;
+  industry: string;
+  hq: string;
+}
+
 function emptyCompany(): CompanyRow {
   return {
     name: "",
@@ -31,6 +39,8 @@ export default function CompanyTable({ companies }: CompanyTableProps) {
   const [rows, setRows] = useState<CompanyRow[]>(companies);
   const [editing, setEditing] = useState<EditingCell>(null);
   const [continueMessage, setContinueMessage] = useState("");
+  const [saveError, setSaveError] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
 
   const count = useMemo(() => rows.length, [rows.length]);
 
@@ -53,11 +63,38 @@ export default function CompanyTable({ companies }: CompanyTableProps) {
     setRows((prev) => [...prev, emptyCompany()]);
   };
 
-  const onContinue = () => {
+  const onContinue = async () => {
     // TODO: Phase 2 hook — pass final rows to contact-hunting step.
     console.log("[OutreachCopilot] Final companies:", rows);
+    setSaveError("");
+    setContinueMessage("");
+
+    const supabase = createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return;
+
+    const payload: OutreachCompanyUpsertRow[] = rows.map((c) => ({
+      user_id: user.id,
+      name: c.name,
+      industry: c.industry,
+      hq: c.hq,
+    }));
+
+    setIsSaving(true);
+    const { error } = await supabase
+      .from("outreach_target_companies")
+      .upsert(payload, { onConflict: "user_id,name" });
+    setIsSaving(false);
+
+    if (error) {
+      setSaveError("Something went wrong saving your companies. Please try again.");
+      return;
+    }
+
     setContinueMessage(
-      "Great — we'll find the right people to contact at each of these companies next."
+      "Wonderful, we'll find the right people to contact at each of these companies next."
     );
   };
 
@@ -168,6 +205,7 @@ export default function CompanyTable({ companies }: CompanyTableProps) {
         <button
           type="button"
           onClick={onContinue}
+          disabled={isSaving}
           className="rounded-lg px-5 py-2 text-[0.9rem] text-white transition-colors"
           style={{
             background: "#1E1B4B",
@@ -175,9 +213,15 @@ export default function CompanyTable({ companies }: CompanyTableProps) {
           onMouseEnter={(e) => (e.currentTarget.style.background = "#2D2A6E")}
           onMouseLeave={(e) => (e.currentTarget.style.background = "#1E1B4B")}
         >
-          Continue →
+          {isSaving ? "Saving..." : "Continue →"}
         </button>
       </div>
+
+      {saveError && (
+        <div className="rounded-2xl border border-[rgba(30,27,75,0.1)] bg-white px-4 py-3 text-sm text-[#1E1B4B]">
+          {saveError}
+        </div>
+      )}
 
       {continueMessage && (
         <p className="text-sm text-[#1E1B4B]" style={{ opacity: 0.8 }}>
