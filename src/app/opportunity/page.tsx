@@ -1435,7 +1435,7 @@ export default function OpportunityPage() {
           snippet: String(row.snippet ?? ""),
           source: String(row.source ?? "jobs_index"),
           bucket: ((row.bucket as OpportunityResult["bucket"]) ?? "B"),
-          displayName: (row.company as string | null) ?? null,
+          displayName: typeof row.company === "string" ? row.company : undefined,
           originalIndex: idx,
           isDirect: false,
           location: (row.location as string | null) ?? "India",
