@@ -141,28 +141,6 @@ export function StrategyAgentClient() {
     }
   }, []);
 
-  if (!audit) {
-    return (
-      <div className="rounded-3xl border border-[rgba(60,42,106,0.12)] bg-white/70 px-5 py-5">
-        <p className="text-[11px] font-semibold tracking-[0.22em] text-[rgba(60,42,106,0.7)]">
-          HOW TO USE STRATEGY AGENT
-        </p>
-        <ol className="mt-2 list-decimal space-y-1 pl-5 text-xs text-[rgba(60,42,106,0.8)]">
-          <li>Run an audit of your profile through the Discovery Engine.</li>
-          <li>Configure your Dhruva chat agent by setting your preferences and goals.</li>
-          <li>Get a week-by-week action plan, powered by Dhruva&apos;s features.</li>
-          <li>Get a roadmap for your dream role in half the time.</li>
-        </ol>
-
-        <div className="mt-4 rounded-2xl border border-[rgba(60,42,106,0.12)] bg-white px-4 py-3 text-sm text-[rgba(60,42,106,0.85)]">
-          Strategy Agent unlocks after you run a Profile Audit (gap analysis). Go back to the{" "}
-          <span className="font-medium text-[#3c2a6a]">Profile Audit</span> tab and click{" "}
-          <span className="font-medium text-[#3c2a6a]">Run Discovery</span>.
-        </div>
-      </div>
-    );
-  }
-
   const company = audit.targetCompany?.trim();
   const role = audit.targetRole?.trim();
 
@@ -313,6 +291,25 @@ export function StrategyAgentClient() {
 
   return (
     <div className="flex flex-col gap-4">
+      {!audit ? (
+        <div className="rounded-3xl border border-[rgba(60,42,106,0.12)] bg-white/70 px-5 py-5">
+          <p className="text-[11px] font-semibold tracking-[0.22em] text-[rgba(60,42,106,0.7)]">
+            HOW TO USE STRATEGY AGENT
+          </p>
+          <ol className="mt-2 list-decimal space-y-1 pl-5 text-xs text-[rgba(60,42,106,0.8)]">
+            <li>Run an audit of your profile through the Discovery Engine.</li>
+            <li>Configure your Dhruva chat agent by setting your preferences and goals.</li>
+            <li>Get a week-by-week action plan, powered by Dhruva&apos;s features.</li>
+            <li>Get a roadmap for your dream role in half the time.</li>
+          </ol>
+
+          <div className="mt-4 rounded-2xl border border-[rgba(60,42,106,0.12)] bg-white px-4 py-3 text-sm text-[rgba(60,42,106,0.85)]">
+            Strategy Agent unlocks after you run a Profile Audit (gap analysis). Go back to the{" "}
+            <span className="font-medium text-[#3c2a6a]">Profile Audit</span> tab and click{" "}
+            <span className="font-medium text-[#3c2a6a]">Run Discovery</span>.
+          </div>
+        </div>
+      ) : (
       <section className="rounded-3xl border border-[rgba(60,42,106,0.12)] bg-white/70 px-5 py-5">
         <p className="text-[11px] font-semibold tracking-[0.22em] text-[rgba(60,42,106,0.7)]">
           HOW TO USE STRATEGY AGENT
@@ -571,6 +568,7 @@ export function StrategyAgentClient() {
           </div>
         )}
       </section>
+      )}
     </div>
   );
 }
