@@ -32,6 +32,8 @@ export function DiscoverySection({ parsed }: DiscoverySectionProps) {
   const [targetIndustry, setTargetIndustry] = useState("");
   const [targetProfiles, setTargetProfiles] = useState<PublicProfile[]>([]);
   const [similarProfiles, setSimilarProfiles] = useState<PublicProfile[]>([]);
+  const [moreBenchmarkProfiles, setMoreBenchmarkProfiles] = useState<PublicProfile[]>([]);
+  const [totalMatchedProfiles, setTotalMatchedProfiles] = useState(0);
   const [companiesSearched, setCompaniesSearched] = useState<string[]>([]);
   const [similarCompanies, setSimilarCompanies] = useState<string[]>([]);
   const [gapAnalysis, setGapAnalysis] = useState<any | null>(null);
@@ -243,6 +245,8 @@ export function DiscoverySection({ parsed }: DiscoverySectionProps) {
     setGapAnalysis(null);
     setTargetProfiles([]);
     setSimilarProfiles([]);
+    setMoreBenchmarkProfiles([]);
+    setTotalMatchedProfiles(0);
     setCompaniesSearched([]);
     setSimilarCompanies([]);
     setRunningProfiles(true);
@@ -278,11 +282,20 @@ export function DiscoverySection({ parsed }: DiscoverySectionProps) {
         similarCompanies: string[];
         targetProfiles: PublicProfile[];
         similarProfiles: PublicProfile[];
+        moreBenchmarkProfiles?: PublicProfile[];
+        totalMatchedProfiles?: number;
       };
       setCompaniesSearched(fiberData.companiesSearched || []);
       setSimilarCompanies(fiberData.similarCompanies || []);
       setTargetProfiles(fiberData.targetProfiles || []);
       setSimilarProfiles(fiberData.similarProfiles || []);
+      setMoreBenchmarkProfiles(fiberData.moreBenchmarkProfiles || []);
+      setTotalMatchedProfiles(
+        typeof fiberData.totalMatchedProfiles === "number"
+          ? fiberData.totalMatchedProfiles
+          : (fiberData.targetProfiles?.length || 0) +
+              (fiberData.similarProfiles?.length || 0)
+      );
       setRunningProfiles(false);
 
       // Phase 2: OpenAI gap analysis
@@ -595,6 +608,7 @@ export function DiscoverySection({ parsed }: DiscoverySectionProps) {
 
         {(targetProfiles.length > 0 ||
           similarProfiles.length > 0 ||
+          moreBenchmarkProfiles.length > 0 ||
           parsedGapAnalysis) && (
           <div className="mt-8 grid gap-5 md:grid-cols-2 animate-in fade-in-50 slide-in-from-bottom-2">
             {/* Left: target profiles list */}
@@ -603,6 +617,14 @@ export function DiscoverySection({ parsed }: DiscoverySectionProps) {
                 Target profiles
               </h3>
               <div className="mt-1 space-y-1 text-[10px] text-slate-600">
+                {totalMatchedProfiles > 0 && (
+                  <p>
+                    <span className="font-semibold text-[#3C2A6A]">
+                      Total matched profiles:
+                    </span>{" "}
+                    {totalMatchedProfiles}
+                  </p>
+                )}
                 {companiesSearched.length > 0 && (
                   <p>
                     <span className="font-semibold text-[#3C2A6A]">
@@ -694,6 +716,51 @@ export function DiscoverySection({ parsed }: DiscoverySectionProps) {
                           : null;
                       return (
                         <li key={(p.linkedin_url ?? p.full_name) + "-similar"}>
+                          <span className="font-medium">{p.full_name}</span>
+                          {roleLine && (
+                            <span className="text-slate-600">
+                              {" "}
+                              — {roleLine}
+                            </span>
+                          )}
+                          {p.linkedin_url && (
+                            <a
+                              href={p.linkedin_url}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="ml-2 inline-flex h-4 w-4 items-center justify-center rounded-sm text-[#0A66C2]"
+                              aria-label="Open LinkedIn profile"
+                            >
+                              <svg
+                                xmlns="http://www.w3.org/2000/svg"
+                                viewBox="0 0 24 24"
+                                className="h-3 w-3 fill-current"
+                              >
+                                <path d="M4.98 3.5C4.98 4.88 3.88 6 2.5 6S0 4.88 0 3.5 1.12 1 2.5 1 4.98 2.12 4.98 3.5zM.29 8.09h4.42V24H.29zM8.47 8.09h4.24v2.16h.06c.59-1.12 2.03-2.3 4.17-2.3 4.46 0 5.28 2.93 5.28 6.74V24h-4.42v-7.32c0-1.75-.03-4-2.44-4-2.44 0-2.81 1.9-2.81 3.87V24H8.47z" />
+                              </svg>
+                            </a>
+                          )}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              )}
+              {moreBenchmarkProfiles.length > 0 && (
+                <div className="mt-4 space-y-1">
+                  <p className="text-[11px] font-medium text-slate-700">
+                    More benchmark profiles (cache)
+                  </p>
+                  <ul className="space-y-1 text-xs text-slate-800">
+                    {moreBenchmarkProfiles.map((p) => {
+                      const roleLine =
+                        p.current_title || p.current_company
+                          ? `${p.current_title ?? "Unknown role"}${
+                              p.current_company ? ` at ${p.current_company}` : ""
+                            }`
+                          : null;
+                      return (
+                        <li key={(p.linkedin_url ?? p.full_name) + "-more"}>
                           <span className="font-medium">{p.full_name}</span>
                           {roleLine && (
                             <span className="text-slate-600">

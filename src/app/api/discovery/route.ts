@@ -34,6 +34,27 @@ type DiscoveryResult = {
 
 const cache = new Map<string, DiscoveryResult>();
 
+function dedupePublicProfiles(
+  profiles: Array<{
+    full_name: string;
+    current_title: string | null;
+    current_company: string | null;
+    linkedin_url: string | null;
+  }>
+) {
+  const seen = new Set<string>();
+  const out: typeof profiles = [];
+  for (const p of profiles) {
+    const key = (p.linkedin_url || `${p.full_name}|${p.current_company || ""}|${p.current_title || ""}`)
+      .toLowerCase()
+      .trim();
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    out.push(p);
+  }
+  return out;
+}
+
 // Minimum LinkedIn connections we require to treat a profile as
 // high-credibility for discovery and gap analysis.
 const MIN_CONNECTIONS = 500;
@@ -1100,12 +1121,11 @@ export async function POST(req: NextRequest) {
       return `https://${trimmed.replace(/^\/+/, "")}`;
     };
 
-    const highCredForList = rawResults.filter(
-      (r) => getFollowerCount(r) >= MIN_CONNECTIONS
-    );
-    const listSource = highCredForList.length ? highCredForList : rawResults;
+    // Display list should reflect the full matched cohort (not only high-cred subset)
+    // so users can see the breadth of benchmark cache/matches.
+    const listSource = rawResults;
 
-    targetPublicProfiles = listSource.slice(0, 15).map((raw: any) => {
+    const mappedTargetProfiles = listSource.map((raw: any) => {
       const full_name_raw =
         raw.full_name || raw.name || raw.display_name || "Unknown";
       const full_name = toTitleCase(String(full_name_raw));
@@ -1132,6 +1152,9 @@ export async function POST(req: NextRequest) {
         linkedin_url,
       };
     });
+    const dedupedTargetProfiles = dedupePublicProfiles(mappedTargetProfiles);
+    targetPublicProfiles = dedupedTargetProfiles.slice(0, 15);
+    const moreBenchmarkProfiles = dedupedTargetProfiles.slice(15);
 
     companiesSearched = correctedCompany
       ? [targetCompany?.trim() || correctedCompany]
@@ -1145,15 +1168,15 @@ export async function POST(req: NextRequest) {
         similarCompanies,
         targetProfiles: targetPublicProfiles.slice(0, 15),
         similarProfiles: similarPublicProfiles.slice(0, 15),
+        moreBenchmarkProfiles: moreBenchmarkProfiles.slice(0, 200),
+        totalMatchedProfiles: dedupedTargetProfiles.length,
       });
     }
 
     // ---- Gap analysis phase ----
 
-    const highCredRaw = rawResults.filter(
-      (r) => getFollowerCount(r) >= MIN_CONNECTIONS
-    );
-    const effectiveRaw = highCredRaw.length ? highCredRaw : rawResults;
+    // Use the full matched cohort for benchmarking and gap analysis.
+    const effectiveRaw = rawResults;
 
     const profiles: SuccessProfile[] = effectiveRaw.map((raw: any) =>
       mapPdlRecordToSuccessProfile(raw)
@@ -1340,7 +1363,56 @@ CRITICAL:
     // 5) Normalise: ensure no field is a string containing JSON (would show as wall of text in UI/PDF)
     gapAnalysis = normaliseGapAnalysis(gapAnalysis);
 
-    return NextResponse.json({ gapAnalysis });
+    // Persist gap analysis activity so downstream strategy/context can use DB state.
+    let activityLogError: string | null = null;
+    try {
+      const gapsFound = [
+        ...((gapAnalysis?.skillGaps?.missingTechnical as any[]) ?? []).map((g: any) =>
+          typeof g === "object" && g && "name" in g ? String(g.name) : String(g)
+        ),
+        ...((gapAnalysis?.skillGaps?.missingSoft as any[]) ?? []).map(String),
+      ].filter(Boolean);
+
+      const strengthsFound = Array.isArray(gapAnalysis?.careerAnchors)
+        ? gapAnalysis.careerAnchors
+        : [];
+
+      const { data: insertedActivity, error: activityError } = await supabase
+        .from("profile_audit_activity")
+        .insert({
+          user_id: user.id,
+          activity_type: "gap_analysis",
+          target_role: correctedRole || targetRole || null,
+          target_company: correctedCompany || targetCompany || null,
+          target_industry: resolvedIndustry || targetIndustry || null,
+          gaps_found: gapsFound,
+          strengths_found: strengthsFound,
+          benchmark_data_source: "benchmark_profiles+pdl",
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .select("id")
+        .maybeSingle();
+      if (activityError) {
+        activityLogError = activityError.message;
+        console.error(
+          "[discovery] profile_audit_activity insert error:",
+          activityError.message
+        );
+      } else {
+        console.log(
+          "[discovery] profile_audit_activity inserted:",
+          insertedActivity?.id ?? "ok"
+        );
+      }
+    } catch (activityErr) {
+      // Non-blocking: gap analysis response should still return to UI.
+      activityLogError =
+        activityErr instanceof Error ? activityErr.message : String(activityErr);
+      console.error("[discovery] profile_audit_activity insert failed:", activityErr);
+    }
+
+    return NextResponse.json({ gapAnalysis, activityLogError });
   } catch (e: any) {
     console.error("[discovery] error:", e);
     return NextResponse.json(

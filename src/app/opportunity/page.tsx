@@ -1112,50 +1112,93 @@ function OpportunityCard({
 
 export default function OpportunityPage() {
   const normalizeProfileListText = (value: unknown): string => {
+    const extractTokensFromString = (input: string): string[] => {
+      let working = input.trim();
+      if (!working) return [];
+
+      // Unwrap repeated escaping layers (Supabase may show the value already double-escaped).
+      for (let i = 0; i < 5; i += 1) {
+        const prev = working;
+        working = working
+          // Turn sequences like \" into "
+          .replace(/\\+"/g, '"')
+          // Collapse double-slashes
+          .replace(/\\\\/g, "\\")
+          .trim();
+        if (working === prev) break;
+      }
+
+      // If the entire payload is wrapped in quotes, strip one outer layer.
+      if (working.length >= 2 && working.startsWith('"') && working.endsWith('"')) {
+        working = working.slice(1, -1).trim();
+      }
+
+      for (let i = 0; i < 3; i += 1) {
+        try {
+          const parsed: unknown = JSON.parse(working);
+          if (Array.isArray(parsed)) {
+            const out: string[] = [];
+            for (const item of parsed) {
+              const tokens = extractTokensFromString(String(item));
+              out.push(...tokens);
+            }
+            return out;
+          }
+          if (typeof parsed === "string") {
+            working = parsed.trim();
+            continue;
+          }
+        } catch {
+          // Not JSON; fall through to extraction.
+        }
+        break;
+      }
+
+      // Unescape common layers (handles strings like: [\"Finance\",\"Investment Banking\"])
+      working = working
+        .replace(/\\+"/g, '"')
+        .replace(/\\\\/g, "\\")
+        .replace(/^[\[{]/, "")
+        .replace(/[\]}]$/, "");
+
+      // If heavily-escaped JSON exists inside, extract only quoted tokens.
+      // Example input may contain many bracket/escape characters; we filter those out.
+      const quoted = Array.from(working.matchAll(/"([^"]*?)"/g), (m) => m[1]);
+      if (quoted.length > 0) {
+        const cleaned = quoted
+          .map((t) =>
+            t.replace(/\\+/g, "")
+              .replace(/[\[\]]/g, "")
+              .trim()
+          )
+          .filter((t) => t.length > 1 && !/\\|\[|\]/.test(t));
+        if (cleaned.length > 0) return cleaned;
+      }
+
+      // Fallback: split by comma/newline and strip surrounding punctuation.
+      return working
+        .split(/[,|\n]+/)
+        .map((item) =>
+          item
+            .replace(/^[\s"'`[\]\\]+/, "")
+            .replace(/[\s"'`[\]\\]+$/, "")
+            .replace(/\\+/g, "")
+            .replace(/[\[\]{}]/g, "")
+            .trim()
+        )
+        .filter((t) => t.length > 0);
+    };
+
     if (Array.isArray(value)) {
-      return value
-        .map((item) => String(item).trim())
-        .filter(Boolean)
-        .join(", ");
+      const out: string[] = [];
+      for (const item of value) {
+        out.push(...extractTokensFromString(String(item)));
+      }
+      return out.join(", ");
     }
 
     if (typeof value !== "string") return "";
-    let working = value.trim();
-    if (!working) return "";
-
-    for (let i = 0; i < 3; i += 1) {
-      try {
-        const parsed: unknown = JSON.parse(working);
-        if (Array.isArray(parsed)) {
-          return parsed
-            .map((item) => String(item).trim())
-            .filter(Boolean)
-            .join(", ");
-        }
-        if (typeof parsed === "string") {
-          working = parsed.trim();
-          continue;
-        }
-      } catch {
-        // Not JSON; fall through to delimiter parsing.
-      }
-      break;
-    }
-
-    return working
-      .replace(/\\+"/g, '"')
-      .replace(/\\\\/g, "\\")
-      .replace(/^\[/, "")
-      .replace(/\]$/, "")
-      .split(/[,|\n]+/)
-      .map((item) =>
-        item
-          .replace(/^[\s"'`[\]\\]+/, "")
-          .replace(/[\s"'`[\]\\]+$/, "")
-          .trim()
-      )
-      .filter(Boolean)
-      .join(", ");
+    return extractTokensFromString(value).join(", ");
   };
 
   const [flowStep, setFlowStep] = useState<FlowStep>("confirm_profile");
