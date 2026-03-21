@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { createClient } from "@/lib/supabase/server";
 import { buildLayer2SignalIntelligence } from "@/lib/layer2/strategyContext";
+import { buildLayer3ConsultingContext } from "@/lib/layer3/context";
 
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY ?? "";
 
@@ -69,6 +70,7 @@ Rules:
 - If task is about networking/outreach/referrals/messages, use toolCta "outreach-copilot"
 - Otherwise toolCta null
 - Use layer2SignalIntelligence context to prioritize tasks using the strongest and most role-relevant signals.
+- Use layer3ConsultingSkillMatrix context to prioritize high-frequency market skills in consulting plans.
 - No markdown, no commentary, JSON only`;
 
 export async function POST(req: NextRequest) {
@@ -100,10 +102,16 @@ export async function POST(req: NextRequest) {
       supabase,
       body.audit
     );
+    const layer3ConsultingSkillMatrix = await buildLayer3ConsultingContext(
+      supabase,
+      body.audit.targetCompany ?? null,
+      body.audit.targetIndustry ?? null
+    );
 
     const modelInput = {
       ...body,
       layer2SignalIntelligence,
+      layer3ConsultingSkillMatrix,
     };
 
     const response = await anthropic.messages.create({

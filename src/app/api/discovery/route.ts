@@ -3,6 +3,8 @@ import { getBenchmarkProfiles } from "@/lib/benchmarkProfiles";
 import OpenAI from "openai";
 import Anthropic from "@anthropic-ai/sdk";
 import { createClient } from "@/lib/supabase/server";
+import { buildLayer2SignalIntelligence } from "@/lib/layer2/strategyContext";
+import { buildLayer3ConsultingContext } from "@/lib/layer3/context";
 
 type ExperienceEntry = {
   title: string;
@@ -1242,6 +1244,18 @@ export async function POST(req: NextRequest) {
     }
 
     const anthropic = new Anthropic({ apiKey: ANTHROPIC_API_KEY });
+    const { context: layer2SignalIntelligence } = await buildLayer2SignalIntelligence(
+      supabase,
+      {
+        targetRole: correctedRole || targetRole || undefined,
+        targetCompany: correctedCompany || targetCompany || undefined,
+      }
+    );
+    const layer3ConsultingContext = await buildLayer3ConsultingContext(
+      supabase,
+      correctedCompany || targetCompany || null,
+      resolvedIndustry || targetIndustry || null
+    );
 
     const prompt = `
 You are an expert career coach. Your output will be parsed by code and shown in a structured report and PDF. You MUST return exactly one valid JSON object—no markdown, no code fences, no prose before or after.
@@ -1250,6 +1264,8 @@ INPUT: You will receive a JSON object with:
 - userProfile: the candidate's parsed CV summary
 - targetProfiles: real-world Fiber profiles (with experience_history, skills, education) for the target role/company
 - successPattern: aggregate metrics from those profiles (common_previous_roles, top_skills_delta, avg_tenure_in_previous_step, impact_keyword_density)
+- layer2SignalIntelligence: qualitative hiring intelligence (interview experiences, hiring criteria, process insights, profile tips). Use this for prioritization and practical recommendations.
+- layer3ConsultingSkillMatrix: consulting JD-based skill frequency signals by tier. Use this to calibrate market-demanded skills and to prioritize missingTechnical recommendations when relevant.
 
 TASK: Produce a DATA-DRIVEN gap analysis. Every claim must be grounded in the input data. Use percentages and counts where possible (e.g. "12 of 20 profiles had X").
 
@@ -1292,6 +1308,8 @@ CRITICAL:
                 // so the model can make a truly data-driven comparison.
                 targetProfiles: profiles,
                 successPattern: pattern,
+                layer2SignalIntelligence,
+                layer3ConsultingSkillMatrix: layer3ConsultingContext,
               }),
             },
           ],
