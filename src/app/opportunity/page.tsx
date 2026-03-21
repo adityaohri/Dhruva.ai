@@ -1741,15 +1741,15 @@ export default function OpportunityPage() {
                 <p className="mt-1 text-sm text-[#3C2A6A]/80">
                   Pull your onboarding profile and edit before matching.
                 </p>
-              </div>
-              <button
-                type="button"
+                </div>
+                    <button
+                      type="button"
                 onClick={() => setFlowStep("confirm_profile")}
                 className="rounded-full bg-[#3C2A6A] px-5 py-2 text-sm font-medium text-[#FDFBF1] hover:bg-[#4a347f]"
               >
                 Retrieve profile
-              </button>
-            </div>
+                    </button>
+                </div>
             <h3 className="text-sm font-semibold text-[#3C2A6A]">Profile details</h3>
             <div className="mt-3 overflow-hidden rounded-xl border border-[rgba(60,42,106,0.12)] bg-[#fdfbf6]">
               <table className="w-full text-left text-sm">
@@ -1763,7 +1763,7 @@ export default function OpportunityPage() {
                         {label}
                       </td>
                       <td className="px-3 py-2">
-                        <input
+                <input
                           value={String(profileDraft?.[key] ?? "")}
                           onChange={(e) =>
                             setProfileDraft((prev) =>
@@ -1777,7 +1777,7 @@ export default function OpportunityPage() {
                   ))}
                 </tbody>
               </table>
-            </div>
+              </div>
             <p className="mt-4 text-[11px] font-medium uppercase tracking-[0.18em] text-[#3C2A6A]/80">
               Identity confirmation
             </p>
