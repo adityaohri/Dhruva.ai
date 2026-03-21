@@ -2,7 +2,7 @@ import Exa from "exa-js";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import crypto from "crypto";
 import { CAREERS_PAGES, type QueryConfig } from "./queries";
-import { enrichSignal } from "./enrichment";
+import { enrichSignalWithLLM } from "./enrichment";
 
 function readEnv(value: string | undefined): string {
   if (!value) return "";
@@ -104,28 +104,31 @@ export async function runQuery(
 
   const result = await exa.searchAndContents(config.query, searchOptions);
 
-  return result.results
+  const filtered = result.results
     .filter((r) => r.text && r.text.length > 200)
-    .filter((r) => isRelevant(r.text!, config.firm))
-    .map((r) => {
-      const slice = r.text!.slice(0, 3000);
-      const enriched = enrichSignal(config.signal_type, slice);
-      return {
-        firm: config.firm,
-        firm_tier: config.firm_tier,
-        source: config.source_domain ?? new URL(r.url).hostname,
-        source_url: r.url,
-        content: slice,
-        content_hash: hashContent(slice),
-        signal_type: config.signal_type,
-        cleaned_summary: enriched.cleaned_summary,
-        signal_strength: enriched.signal_strength,
-        inferred_role: enriched.inferred_role,
-        actionable_inference: enriched.actionable_inference,
-        scraped_at: new Date().toISOString(),
-        last_checked_at: new Date().toISOString(),
-      };
+    .filter((r) => isRelevant(r.text!, config.firm));
+
+  const rows: QualitativeSignalRow[] = [];
+  for (const r of filtered) {
+    const slice = r.text!.slice(0, 3000);
+    const enriched = await enrichSignalWithLLM(config.signal_type, slice);
+    rows.push({
+      firm: config.firm,
+      firm_tier: config.firm_tier,
+      source: config.source_domain ?? new URL(r.url).hostname,
+      source_url: r.url,
+      content: slice,
+      content_hash: hashContent(slice),
+      signal_type: config.signal_type,
+      cleaned_summary: enriched.cleaned_summary,
+      signal_strength: enriched.signal_strength,
+      inferred_role: enriched.inferred_role,
+      actionable_inference: enriched.actionable_inference,
+      scraped_at: new Date().toISOString(),
+      last_checked_at: new Date().toISOString(),
     });
+  }
+  return rows;
 }
 
 export async function saveSignals(
@@ -184,7 +187,7 @@ export async function fetchCareersPages(): Promise<number> {
 
       const content = text.slice(0, 5000);
       const content_hash = hashContent(content);
-      const enriched = enrichSignal("hiring_criteria", content);
+      const enriched = await enrichSignalWithLLM("hiring_criteria", content);
 
       const { data: existing } = await supabase
         .from("qualitative_signals")
@@ -306,18 +309,26 @@ export async function runScrape(queries: QueryConfig[]): Promise<{
   return { queriesRun, totalSaved };
 }
 
-export async function backfillSignalEnrichment(maxRows: number = 2000): Promise<number> {
+export async function backfillSignalEnrichment(
+  maxRows: number = 2000,
+  industry?: "consulting" | "investment_banking"
+): Promise<number> {
   const supabase = getServiceSupabase();
   let offset = 0;
   let updated = 0;
   const pageSize = 200;
 
   while (offset < maxRows) {
-    const { data, error } = await supabase
+    let query = supabase
       .from("qualitative_signals")
       .select("source_url, signal_type, content")
-      .order("scraped_at", { ascending: false })
-      .range(offset, offset + pageSize - 1);
+      .order("scraped_at", { ascending: false });
+
+    if (industry) {
+      query = query.eq("industry", industry);
+    }
+
+    const { data, error } = await query.range(offset, offset + pageSize - 1);
 
     if (error) throw error;
     const rows = (data ?? []) as Array<{
@@ -333,7 +344,7 @@ export async function backfillSignalEnrichment(maxRows: number = 2000): Promise<
 
       const signalType = (row.signal_type ??
         "hiring_criteria") as QueryConfig["signal_type"];
-      const enriched = enrichSignal(signalType, content);
+      const enriched = await enrichSignalWithLLM(signalType, content);
 
       const { error: updateError } = await supabase
         .from("qualitative_signals")

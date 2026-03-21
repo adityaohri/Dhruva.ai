@@ -20,7 +20,7 @@ const BASE_QUERIES: QueryConfig[] = [
   { query: "McKinsey India interview experience consulting hiring", firm: "mckinsey", firm_tier: "mbb", signal_type: "interview_experience", source_domain: "preplounge.com", cadence: "biannual" },
 
   // Hiring criteria
-  { query: "McKinsey India campus hiring profile what they look for", firm: "mckinsey", firm_tier: "mbb", signal_type: "hiring_criteria", source_domain: "ambitionbox.com", cadence: "quarterly" },
+  { query: "McKinsey India campus hiring profile what they look for", firm: "mckinsey", firm_tier: "mbb", signal_type: "hiring_criteria", source_domain: "casecoach.com", cadence: "quarterly" },
   { query: "McKinsey India shortlist criteria undergraduate consulting hiring", firm: "mckinsey", firm_tier: "mbb", signal_type: "hiring_criteria", source_domain: "preplounge.com", cadence: "quarterly" },
   { query: "McKinsey India consulting hiring profile site:reddit.com/r/IndianMBAs OR site:reddit.com/r/consulting", firm: "mckinsey", firm_tier: "mbb", signal_type: "hiring_criteria", cadence: "quarterly" },
 
@@ -44,7 +44,7 @@ const BASE_QUERIES: QueryConfig[] = [
   { query: "BCG India interview experience consulting hiring", firm: "bcg", firm_tier: "mbb", signal_type: "interview_experience", source_domain: "preplounge.com", cadence: "biannual" },
 
   // Hiring criteria
-  { query: "BCG India campus hiring profile what they look for", firm: "bcg", firm_tier: "mbb", signal_type: "hiring_criteria", source_domain: "ambitionbox.com", cadence: "quarterly" },
+  { query: "BCG India campus hiring profile what they look for", firm: "bcg", firm_tier: "mbb", signal_type: "hiring_criteria", source_domain: "casecoach.com", cadence: "quarterly" },
   { query: "BCG India shortlist criteria undergraduate consulting hiring", firm: "bcg", firm_tier: "mbb", signal_type: "hiring_criteria", source_domain: "preplounge.com", cadence: "quarterly" },
   { query: "BCG India consulting hiring profile site:reddit.com/r/IndianMBAs OR site:reddit.com/r/consulting", firm: "bcg", firm_tier: "mbb", signal_type: "hiring_criteria", cadence: "quarterly" },
 
@@ -68,7 +68,7 @@ const BASE_QUERIES: QueryConfig[] = [
   { query: "Bain India interview experience consulting hiring", firm: "bain", firm_tier: "mbb", signal_type: "interview_experience", source_domain: "preplounge.com", cadence: "biannual" },
 
   // Hiring criteria
-  { query: "Bain India campus hiring profile what they look for", firm: "bain", firm_tier: "mbb", signal_type: "hiring_criteria", source_domain: "ambitionbox.com", cadence: "quarterly" },
+  { query: "Bain India campus hiring profile what they look for", firm: "bain", firm_tier: "mbb", signal_type: "hiring_criteria", source_domain: "casecoach.com", cadence: "quarterly" },
   { query: "Bain India shortlist criteria undergraduate consulting hiring", firm: "bain", firm_tier: "mbb", signal_type: "hiring_criteria", source_domain: "preplounge.com", cadence: "quarterly" },
   { query: "Bain India consulting hiring profile site:reddit.com/r/IndianMBAs OR site:reddit.com/r/consulting", firm: "bain", firm_tier: "mbb", signal_type: "hiring_criteria", cadence: "quarterly" },
 
@@ -143,7 +143,7 @@ const BASE_QUERIES: QueryConfig[] = [
   { query: "Samagra Governance interview experience hiring entry level", firm: "samagra", firm_tier: "social_governance", signal_type: "interview_experience", source_domain: "ambitionbox.com", cadence: "biannual" },
   { query: "Samagra Governance concept note round what is tested hiring", firm: "samagra", firm_tier: "social_governance", signal_type: "process_structure", cadence: "biannual" },
   { query: "how to get into Samagra Governance profile tips preparation", firm: "samagra", firm_tier: "social_governance", signal_type: "profile_tip", source_domain: "medium.com", cadence: "biannual" },
-  { query: "Samagra Governance hiring criteria profile what they look for", firm: "samagra", firm_tier: "social_governance", signal_type: "hiring_criteria", source_domain: "ambitionbox.com", cadence: "quarterly" },
+  { query: "Samagra Governance hiring criteria profile what they look for", firm: "samagra", firm_tier: "social_governance", signal_type: "hiring_criteria", source_domain: "managementconsulted.com", cadence: "quarterly" },
 
   // Dalberg
   { query: "Dalberg India interview experience hiring consulting process", firm: "dalberg", firm_tier: "social_governance", signal_type: "interview_experience", source_domain: "ambitionbox.com", cadence: "biannual" },
@@ -186,6 +186,11 @@ const BASE_QUERIES: QueryConfig[] = [
   { query: "IIM Ahmedabad consulting club placement prep McKinsey BCG Bain India", firm: "all_mbb", firm_tier: "mbb", signal_type: "hiring_criteria", cadence: "biannual" },
   { query: "IIM Bangalore consulting club interview preparation India MBB", firm: "all_mbb", firm_tier: "mbb", signal_type: "hiring_criteria", cadence: "biannual" },
   { query: "SRCC consulting club case competition placement consulting firms India", firm: "all_mbb", firm_tier: "mbb", signal_type: "hiring_criteria", cadence: "biannual" },
+  { query: "how I cleared McKinsey India consulting interview rounds case and fit", firm: "mckinsey", firm_tier: "mbb", signal_type: "interview_experience", source_domain: "medium.com", cadence: "quarterly" },
+  { query: "how I cleared BCG India consulting interview rounds case and fit", firm: "bcg", firm_tier: "mbb", signal_type: "interview_experience", source_domain: "medium.com", cadence: "quarterly" },
+  { query: "how I cleared Bain India consulting interview rounds case and fit", firm: "bain", firm_tier: "mbb", signal_type: "interview_experience", source_domain: "medium.com", cadence: "quarterly" },
+  { query: "consulting interview process in India round by round experience", firm: "all_mbb", firm_tier: "mbb", signal_type: "process_structure", source_domain: "medium.com", cadence: "quarterly" },
+  { query: "India consulting placement interview experience personal journey case interview", firm: "all_tiers", firm_tier: "mbb", signal_type: "interview_experience", source_domain: "medium.com", cadence: "quarterly" },
   { query: "consulting India undergraduate placement profile tips preparation", firm: "all_tiers", firm_tier: "mbb", signal_type: "profile_tip", source_domain: "medium.com", cadence: "quarterly" },
   { query: "180 degrees consulting India placement tips profile undergraduate", firm: "all_tiers", firm_tier: "mbb", signal_type: "profile_tip", cadence: "biannual" },
 
