@@ -1,0 +1,223 @@
+import Exa from "exa-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import crypto from "crypto";
+import { CAREERS_PAGES, type QueryConfig } from "./queries";
+
+function readEnv(value: string | undefined): string {
+  if (!value) return "";
+  return value.trim().split(/\r?\n/)[0].trim();
+}
+
+let _exa: Exa | null = null;
+function getExa(): Exa {
+  if (_exa) return _exa;
+  const key = readEnv(process.env.EXA_API_KEY);
+  if (!key) {
+    throw new Error(
+      "Missing EXA_API_KEY — add it to .env.local and Vercel env."
+    );
+  }
+  _exa = new Exa(key);
+  return _exa;
+}
+
+let _supabase: SupabaseClient | null = null;
+function getServiceSupabase(): SupabaseClient {
+  if (_supabase) return _supabase;
+  const url = readEnv(process.env.NEXT_PUBLIC_SUPABASE_URL);
+  const key = readEnv(process.env.SUPABASE_SERVICE_ROLE_KEY);
+  if (!url || !key) {
+    throw new Error(
+      "Missing Supabase service role env: NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY (same pattern as Supabase Edge functions)."
+    );
+  }
+  _supabase = createClient(url, key);
+  return _supabase;
+}
+
+function hashContent(content: string): string {
+  return crypto.createHash("md5").update(content).digest("hex");
+}
+
+export type QualitativeSignalRow = {
+  firm: string;
+  firm_tier: string;
+  source: string;
+  source_url: string;
+  content: string;
+  content_hash: string;
+  signal_type: string;
+  scraped_at: string;
+  last_checked_at: string;
+};
+
+export async function runQuery(
+  config: QueryConfig
+): Promise<QualitativeSignalRow[]> {
+  const exa = getExa();
+  const sixMonthsAgo = new Date();
+  sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+
+  const searchOptions = {
+    numResults: 5,
+    text: true as const,
+    startPublishedDate: sixMonthsAgo.toISOString(),
+    ...(config.source_domain
+      ? { includeDomains: [config.source_domain] as string[] }
+      : {}),
+  };
+
+  const result = await exa.searchAndContents(config.query, searchOptions);
+
+  return result.results
+    .filter((r) => r.text && r.text.length > 200)
+    .map((r) => {
+      const slice = r.text!.slice(0, 3000);
+      return {
+        firm: config.firm,
+        firm_tier: config.firm_tier,
+        source: config.source_domain ?? new URL(r.url).hostname,
+        source_url: r.url,
+        content: slice,
+        content_hash: hashContent(slice),
+        signal_type: config.signal_type,
+        scraped_at: new Date().toISOString(),
+        last_checked_at: new Date().toISOString(),
+      };
+    });
+}
+
+export async function saveSignals(
+  signals: QualitativeSignalRow[]
+): Promise<number> {
+  if (signals.length === 0) return 0;
+
+  const supabase = getServiceSupabase();
+  const { data, error } = await supabase
+    .from("qualitative_signals")
+    .upsert(signals, {
+      onConflict: "source_url",
+      ignoreDuplicates: false,
+    })
+    .select("id");
+
+  if (error) throw error;
+  return data?.length ?? 0;
+}
+
+export async function fetchCareersPages(): Promise<number> {
+  const exa = getExa();
+  const supabase = getServiceSupabase();
+  let saved = 0;
+
+  for (const page of CAREERS_PAGES) {
+    try {
+      const result = await exa.getContents([page.url], { text: true });
+      const text = result.results[0]?.text;
+      if (!text) continue;
+
+      const content = text.slice(0, 5000);
+      const content_hash = hashContent(content);
+
+      const { data: existing } = await supabase
+        .from("qualitative_signals")
+        .select("content_hash")
+        .eq("source_url", page.url)
+        .maybeSingle();
+
+      if (existing?.content_hash === content_hash) {
+        await supabase
+          .from("qualitative_signals")
+          .update({ last_checked_at: new Date().toISOString() })
+          .eq("source_url", page.url);
+        continue;
+      }
+
+      const { error: upsertError } = await supabase
+        .from("qualitative_signals")
+        .upsert(
+          {
+            firm: page.firm,
+            firm_tier: "careers_page",
+            source: new URL(page.url).hostname,
+            source_url: page.url,
+            content,
+            content_hash,
+            signal_type: "hiring_criteria",
+            scraped_at: new Date().toISOString(),
+            last_checked_at: new Date().toISOString(),
+          },
+          { onConflict: "source_url" }
+        );
+
+      if (upsertError) throw upsertError;
+      saved++;
+    } catch (err) {
+      console.error(`Careers page failed: ${page.firm}`, err);
+    }
+
+    await new Promise((r) => setTimeout(r, 500));
+  }
+
+  return saved;
+}
+
+export async function runScrape(queries: QueryConfig[]): Promise<{
+  queriesRun: number;
+  totalSaved: number;
+}> {
+  const supabase = getServiceSupabase();
+
+  const { data: logRow, error: logInsertError } = await supabase
+    .from("scrape_run_log")
+    .insert({ run_type: "layer2", status: "running" })
+    .select("id")
+    .single();
+
+  if (logInsertError || !logRow?.id) {
+    throw logInsertError ?? new Error("Failed to insert scrape_run_log row");
+  }
+
+  const logId = logRow.id;
+  let totalSaved = 0;
+  let queriesRun = 0;
+
+  try {
+    for (const query of queries) {
+      try {
+        const signals = await runQuery(query);
+        const saved = await saveSignals(signals);
+        totalSaved += saved;
+        queriesRun++;
+        console.log(`✓ ${query.firm} | ${query.signal_type} | ${saved} saved`);
+      } catch (err) {
+        console.error(`✗ Query failed: ${query.query}`, err);
+      }
+
+      await new Promise((r) => setTimeout(r, 500));
+    }
+
+    await supabase
+      .from("scrape_run_log")
+      .update({
+        status: "completed",
+        queries_run: queriesRun,
+        results_saved: totalSaved,
+        completed_at: new Date().toISOString(),
+      })
+      .eq("id", logId);
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    await supabase
+      .from("scrape_run_log")
+      .update({
+        status: "failed",
+        error_message: message,
+        completed_at: new Date().toISOString(),
+      })
+      .eq("id", logId);
+    throw err;
+  }
+
+  return { queriesRun, totalSaved };
+}
