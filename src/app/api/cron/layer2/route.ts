@@ -1,9 +1,5 @@
 import { NextResponse } from "next/server";
-import { runMonthlyJob } from "@/lib/layer2/scheduler";
-import { backfillSignalEnrichment } from "@/lib/layer2/scraper";
-
-/** Full scrape can take several minutes (many Exa calls + delays). */
-export const maxDuration = 300;
+import { runConsultingLayer2Job, runIBLayer2Job } from "@/lib/layer2";
 
 export async function GET(request: Request) {
   const authHeader = request.headers.get("authorization");
@@ -11,31 +7,16 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const url = new URL(request.url);
-  const forceFull =
-    url.searchParams.get("full") === "1" ||
-    url.searchParams.get("full") === "true";
-  const runEnrichmentOnly =
-    url.searchParams.get("enrich") === "1" ||
-    url.searchParams.get("enrich") === "true";
+  const industry = new URL(request.url).searchParams.get("industry") ?? "consulting";
 
   try {
-    if (runEnrichmentOnly) {
-      const updated = await backfillSignalEnrichment();
-      return NextResponse.json({
-        success: true,
-        mode: "enrichment",
-        updated,
-      });
+    if (industry === "ib") {
+      await runIBLayer2Job();
+    } else {
+      await runConsultingLayer2Job();
     }
-
-    await runMonthlyJob(forceFull ? { forceFullRun: true } : undefined);
-    return NextResponse.json({
-      success: true,
-      mode: forceFull ? "full" : "scheduled",
-    });
-  } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : String(err);
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json({ success: true, industry });
+  } catch (err: any) {
+    return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { runLayer3Job } from "@/lib/layer3/scheduler";
+import { runConsultingLayer3Job, runIBLayer3Job } from "@/lib/layer3";
 
 export async function GET(request: Request) {
   const authHeader = request.headers.get("authorization");
@@ -7,11 +7,16 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const industry = new URL(request.url).searchParams.get("industry") ?? "consulting";
+
   try {
-    await runLayer3Job();
-    return NextResponse.json({ success: true });
-  } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : String(err);
-    return NextResponse.json({ error: message }, { status: 500 });
+    if (industry === "ib") {
+      await runIBLayer3Job();
+    } else {
+      await runConsultingLayer3Job();
+    }
+    return NextResponse.json({ success: true, industry });
+  } catch (err: any) {
+    return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }

@@ -1,17 +1,17 @@
 import { fetchJDs } from "./fetcher";
 import { extractSkillsFromPendingJDs } from "./extractor";
 import { computeSkillMatrix } from "./matrix";
-import { getServiceSupabase } from "./clients";
+import { getServiceSupabase } from "../clients";
 
 export type Layer3Step = "all" | "fetch" | "extract" | "matrix";
 
 export async function runLayer3Job(): Promise<void> {
   const supabase = getServiceSupabase();
-  console.log("\n🗓 Layer 3 monthly job starting...\n");
+  console.log("\n🗓 Layer 3 IB monthly job starting...\n");
 
   const logEntry = await supabase
     .from("scrape_run_log")
-    .insert({ run_type: "layer3", status: "running" })
+    .insert({ run_type: "layer3_ib", status: "running" })
     .select("id")
     .single();
 
@@ -64,27 +64,4 @@ export async function runLayer3Job(): Promise<void> {
 
     throw err;
   }
-}
-
-export async function runLayer3FetchStep(): Promise<{ fetched: number }> {
-  console.log("\n🗓 Layer 3 step: fetch\n");
-  const fetched = await fetchJDs();
-  console.log(`✓ ${fetched} new JDs fetched`);
-  return { fetched };
-}
-
-export async function runLayer3ExtractStep(
-  batchSize: number = 5
-): Promise<{ extracted: number; batchSize: number }> {
-  console.log("\n🗓 Layer 3 step: extract\n");
-  const extracted = await extractSkillsFromPendingJDs(batchSize);
-  console.log(`✓ ${extracted} JDs extracted this pass`);
-  return { extracted, batchSize };
-}
-
-export async function runLayer3MatrixStep(): Promise<{ computed: true }> {
-  console.log("\n🗓 Layer 3 step: matrix\n");
-  await computeSkillMatrix();
-  console.log("✓ Skill frequency matrix computed");
-  return { computed: true };
 }

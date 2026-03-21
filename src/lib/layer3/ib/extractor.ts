@@ -1,22 +1,26 @@
 import Anthropic from "@anthropic-ai/sdk";
-import { getAnthropicClient, getServiceSupabase } from "./clients";
+import { getAnthropicClient, getServiceSupabase } from "../clients";
+import { JDQueryConfig } from "./queries";
 
-const EXTRACTION_SYSTEM_PROMPT = `You are a skill extractor for consulting job descriptions.
+const EXTRACTION_SYSTEM_PROMPT = `You are a skill extractor for investment banking job descriptions.
 
 Read the job description and extract ALL skills, qualifications, and competencies mentioned.
 
 Rules:
-- Be specific: "Excel" not "Microsoft Office", "Python" not "programming"
+- Be specific: "Excel" not "Microsoft Office", "DCF modelling" not "financial modelling"
 - Include hard skills, soft skills, tools, certifications, and qualifications
-- Include academic requirements if mentioned (e.g. "top university degree")
-- Include consulting-specific skills (e.g. "structured problem solving", "case interviews", "MECE thinking")
-- Normalise spelling: always use lowercase
+- Include IB-specific skills: "dcf valuation", "lbo modelling", "m&a", "pitchbook preparation", "financial modelling", "valuation", "bloomberg", "capital markets", "equity research"
+- Include certifications if mentioned: "cfa", "ca", "frm", "cma"
+- Include academic requirements if mentioned
+- Normalise all skills to lowercase
 - Output ONLY a valid JSON array of strings — no explanation, no preamble, no markdown
 
 Example output:
-["structured problem solving", "excel", "powerpoint", "data analysis", "client communication", "python", "sql", "stakeholder management", "top university degree"]`;
+["financial modelling", "dcf valuation", "excel", "powerpoint", "lbo modelling", "pitchbook preparation", "bloomberg terminal", "client communication", "ca or cfa preferred", "top tier university degree", "capital markets", "m&a advisory"]`;
 
 export async function extractSkillsFromPendingJDs(batchSize: number = 5): Promise<number> {
+  const _unused: JDQueryConfig[] = [];
+  void _unused;
   const safeBatchSize = Math.max(1, Math.min(20, batchSize));
   const anthropic = getAnthropicClient();
   const supabase = getServiceSupabase();
