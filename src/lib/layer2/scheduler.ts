@@ -1,7 +1,24 @@
 import { QUERIES } from "./queries";
 import { runScrape, fetchCareersPages } from "./scraper";
 
-export async function runMonthlyJob(): Promise<void> {
+export type MonthlyJobOptions = {
+  /** Run careers + every query regardless of calendar month (for manual testing). */
+  forceFullRun?: boolean;
+};
+
+export async function runMonthlyJob(
+  options?: MonthlyJobOptions
+): Promise<void> {
+  if (options?.forceFullRun) {
+    console.log("\n🗓 Layer 2 full run (forced) — careers + all queries\n");
+    console.log("📄 Checking careers pages...");
+    await fetchCareersPages();
+    console.log(`\n📦 All queries (${QUERIES.length})`);
+    await runScrape(QUERIES);
+    console.log("\n✅ Full job complete.");
+    return;
+  }
+
   const month = new Date().getMonth(); // 0-indexed: 0=Jan, 4=May, 10=Nov
 
   console.log(`\n🗓 Monthly Layer 2 job — month ${month + 1}\n`);
