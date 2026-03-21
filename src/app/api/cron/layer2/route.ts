@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { runMonthlyJob } from "@/lib/layer2/scheduler";
+import { backfillSignalEnrichment } from "@/lib/layer2/scraper";
 
 /** Full scrape can take several minutes (many Exa calls + delays). */
 export const maxDuration = 300;
@@ -14,8 +15,20 @@ export async function GET(request: Request) {
   const forceFull =
     url.searchParams.get("full") === "1" ||
     url.searchParams.get("full") === "true";
+  const runEnrichmentOnly =
+    url.searchParams.get("enrich") === "1" ||
+    url.searchParams.get("enrich") === "true";
 
   try {
+    if (runEnrichmentOnly) {
+      const updated = await backfillSignalEnrichment();
+      return NextResponse.json({
+        success: true,
+        mode: "enrichment",
+        updated,
+      });
+    }
+
     await runMonthlyJob(forceFull ? { forceFullRun: true } : undefined);
     return NextResponse.json({
       success: true,
