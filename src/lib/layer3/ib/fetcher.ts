@@ -16,8 +16,9 @@ export async function fetchJDs(): Promise<number> {
       const validResults = result.results.filter((r) => r.text && r.text.length > 300);
 
       for (const r of validResults) {
-        const { error } = await supabase.from("raw_jds").upsert(
+        let { error } = await supabase.from("raw_jds").upsert(
           {
+            industry: "investment_banking",
             firm: config.firm,
             firm_tier: config.firm_tier,
             source_url: r.url,
@@ -31,6 +32,25 @@ export async function fetchJDs(): Promise<number> {
             ignoreDuplicates: true,
           }
         );
+
+        if (error && (error.code === "PGRST204" || error.code === "42703")) {
+          const retry = await supabase.from("raw_jds").upsert(
+            {
+              firm: config.firm,
+              firm_tier: config.firm_tier,
+              source_url: r.url,
+              title: r.title ?? null,
+              content: r.text!.slice(0, 5000),
+              extraction_status: "pending",
+              fetched_at: new Date().toISOString(),
+            },
+            {
+              onConflict: "source_url",
+              ignoreDuplicates: true,
+            }
+          );
+          error = retry.error;
+        }
 
         if (!error) totalFetched++;
       }

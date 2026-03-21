@@ -7,15 +7,19 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const industry = new URL(request.url).searchParams.get("industry") ?? "consulting";
+  const url = new URL(request.url);
+  const industry = url.searchParams.get("industry") ?? "consulting";
+  const forceFull =
+    url.searchParams.get("full") === "1" ||
+    url.searchParams.get("full") === "true";
 
   try {
     if (industry === "ib") {
-      await runIBLayer2Job();
+      await runIBLayer2Job(forceFull ? { forceFullRun: true } : undefined);
     } else {
-      await runConsultingLayer2Job();
+      await runConsultingLayer2Job(forceFull ? { forceFullRun: true } : undefined);
     }
-    return NextResponse.json({ success: true, industry });
+    return NextResponse.json({ success: true, industry, mode: forceFull ? "full" : "scheduled" });
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });
   }

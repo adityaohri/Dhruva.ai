@@ -42,11 +42,40 @@ function hashContent(content: string): string {
 
 function isRelevant(text: string, firm: string): boolean {
   const t = text.toLowerCase();
-  const aliases = [firm.replace(/_/g, " "), firm];
+  const firmAliases: Record<string, string[]> = {
+    goldman_sachs: ["goldman sachs", "goldman"],
+    jpmorgan: ["jp morgan", "jpmorgan", "j.p. morgan"],
+    morgan_stanley: ["morgan stanley"],
+    bofa: ["bank of america", "bofa"],
+    citi: ["citi", "citibank"],
+    deutsche_bank: ["deutsche bank"],
+    jefferies: ["jefferies"],
+    hsbc: ["hsbc"],
+    lazard: ["lazard"],
+    rothschild: ["rothschild"],
+    evercore: ["evercore"],
+    houlihan_lokey: ["houlihan lokey"],
+    kotak_ib: ["kotak", "kotak investment banking"],
+    avendus: ["avendus"],
+    axis_capital: ["axis capital"],
+    icici_securities: ["icici securities", "icici"],
+    jm_financial: ["jm financial"],
+    sbicaps: ["sbi capital", "sbicaps"],
+    all_ib: [
+      "investment banking",
+      "ib",
+      "bulge bracket",
+      "m&a",
+      "valuation",
+      "financial modelling",
+    ],
+  };
+  const aliases = firmAliases[firm] ?? [firm.replace(/_/g, " "), firm];
   return aliases.some((a) => t.includes(a.toLowerCase()));
 }
 
 export type QualitativeSignalRow = {
+  industry?: string;
   firm: string;
   firm_tier: string;
   source: string;
@@ -87,6 +116,7 @@ export async function runQuery(
       const slice = r.text!.slice(0, 3000);
       const enriched = enrichSignal(config.signal_type, slice as string);
       return {
+        industry: "investment_banking",
         firm: config.firm,
         firm_tier: config.firm_tier,
         source: config.source_domain ?? new URL(r.url).hostname,
@@ -123,6 +153,7 @@ export async function saveSignals(
   if (error.code === "PGRST204" || error.code === "42703") {
     const stripped = signals.map(
       ({
+        industry,
         cleaned_summary,
         signal_strength,
         inferred_role,
@@ -176,6 +207,7 @@ export async function fetchCareersPages(): Promise<number> {
       }
 
       const upsertPayload = {
+        industry: "investment_banking",
         firm: page.firm,
         firm_tier: "careers_page",
         source: new URL(page.url).hostname,
@@ -197,6 +229,7 @@ export async function fetchCareersPages(): Promise<number> {
 
       if (upsertError && (upsertError.code === "PGRST204" || upsertError.code === "42703")) {
         const {
+          industry,
           cleaned_summary,
           signal_strength,
           inferred_role,

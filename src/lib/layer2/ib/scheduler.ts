@@ -1,7 +1,21 @@
 import { QUERIES } from "./queries";
 import { runScrape, fetchCareersPages } from "./scraper";
 
-export async function runMonthlyJob() {
+export type MonthlyJobOptions = {
+  forceFullRun?: boolean;
+};
+
+export async function runMonthlyJob(options?: MonthlyJobOptions) {
+  if (options?.forceFullRun) {
+    console.log("\n🗓 IB Layer 2 full run (forced) — careers + all queries\n");
+    console.log("📄 Checking IB careers pages...");
+    await fetchCareersPages();
+    console.log(`\n📦 All IB queries (${QUERIES.length})`);
+    await runScrape(QUERIES);
+    console.log("\n✅ IB full job complete.");
+    return;
+  }
+
   const month = new Date().getMonth();
 
   console.log(`\n🗓 IB Layer 2 job — month ${month + 1}\n`);
