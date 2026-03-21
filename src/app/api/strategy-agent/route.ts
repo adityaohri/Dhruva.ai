@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { createClient } from "@/lib/supabase/server";
+import { buildLayer2SignalIntelligence } from "@/lib/layer2/strategyContext";
 
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY ?? "";
 
@@ -67,6 +68,7 @@ Rules:
 - If task is about applying/discovery/job search, use toolCta "opportunity-discovery"
 - If task is about networking/outreach/referrals/messages, use toolCta "outreach-copilot"
 - Otherwise toolCta null
+- Use layer2SignalIntelligence context to prioritize tasks using the strongest and most role-relevant signals.
 - No markdown, no commentary, JSON only`;
 
 export async function POST(req: NextRequest) {
@@ -94,6 +96,16 @@ export async function POST(req: NextRequest) {
 
   const anthropic = new Anthropic({ apiKey: ANTHROPIC_API_KEY });
   try {
+    const { context: layer2SignalIntelligence } = await buildLayer2SignalIntelligence(
+      supabase,
+      body.audit
+    );
+
+    const modelInput = {
+      ...body,
+      layer2SignalIntelligence,
+    };
+
     const response = await anthropic.messages.create({
       model: "claude-sonnet-4-20250514",
       max_tokens: 1800,
@@ -101,7 +113,7 @@ export async function POST(req: NextRequest) {
       messages: [
         {
           role: "user",
-          content: JSON.stringify(body),
+          content: JSON.stringify(modelInput),
         },
       ],
     });

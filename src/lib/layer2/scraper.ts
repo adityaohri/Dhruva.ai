@@ -2,6 +2,7 @@ import Exa from "exa-js";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import crypto from "crypto";
 import { CAREERS_PAGES, type QueryConfig } from "./queries";
+import { enrichSignal } from "./enrichment";
 
 function readEnv(value: string | undefined): string {
   if (!value) return "";
@@ -39,6 +40,36 @@ function hashContent(content: string): string {
   return crypto.createHash("md5").update(content).digest("hex");
 }
 
+function isRelevant(text: string, firm: string): boolean {
+  const t = text.toLowerCase();
+  const firmAliases: Record<string, string[]> = {
+    mckinsey: ["mckinsey", "mckinsey & company", "mckinsey india"],
+    bcg: ["bcg", "boston consulting group", "bcg india"],
+    bain: ["bain", "bain & company", "bain india"],
+    kearney: ["kearney", "at kearney"],
+    ey_parthenon: ["ey parthenon", "parthenon", "ey-p", "ey strategy"],
+    accenture_strategy: ["accenture strategy", "accenture"],
+    roland_berger: ["roland berger"],
+    oliver_wyman: ["oliver wyman"],
+    deloitte_so: ["deloitte strategy", "deloitte s&o", "deloitte strategy operations"],
+    pwc_strategy: ["pwc strategy", "strategy&", "pwc"],
+    kpmg: ["kpmg"],
+    samagra: ["samagra governance", "samagra"],
+    dalberg: ["dalberg"],
+    idinsight: ["idinsight", "id insight"],
+    sattva: ["sattva consulting", "sattva"],
+    redseer: ["redseer", "redseer consulting"],
+    praxis: ["praxis global alliance", "praxis"],
+    zs_associates: ["zs associates", "zs"],
+    kepler_cannon: ["kepler cannon"],
+    all_mbb: ["mckinsey", "bcg", "bain"],
+    all_tiers: ["consulting", "campus hiring", "interview", "shortlist"],
+  };
+
+  const aliases = firmAliases[firm] ?? [firm.replace(/_/g, " ")];
+  return aliases.some((a) => t.includes(a.toLowerCase()));
+}
+
 export type QualitativeSignalRow = {
   firm: string;
   firm_tier: string;
@@ -47,6 +78,10 @@ export type QualitativeSignalRow = {
   content: string;
   content_hash: string;
   signal_type: string;
+  cleaned_summary?: string;
+  signal_strength?: "High" | "Medium" | "Low";
+  inferred_role?: string;
+  actionable_inference?: string;
   scraped_at: string;
   last_checked_at: string;
 };
@@ -71,8 +106,10 @@ export async function runQuery(
 
   return result.results
     .filter((r) => r.text && r.text.length > 200)
+    .filter((r) => isRelevant(r.text!, config.firm))
     .map((r) => {
       const slice = r.text!.slice(0, 3000);
+      const enriched = enrichSignal(config.signal_type, slice);
       return {
         firm: config.firm,
         firm_tier: config.firm_tier,
@@ -81,6 +118,10 @@ export async function runQuery(
         content: slice,
         content_hash: hashContent(slice),
         signal_type: config.signal_type,
+        cleaned_summary: enriched.cleaned_summary,
+        signal_strength: enriched.signal_strength,
+        inferred_role: enriched.inferred_role,
+        actionable_inference: enriched.actionable_inference,
         scraped_at: new Date().toISOString(),
         last_checked_at: new Date().toISOString(),
       };
@@ -93,16 +134,41 @@ export async function saveSignals(
   if (signals.length === 0) return 0;
 
   const supabase = getServiceSupabase();
-  const { data, error } = await supabase
+  const upsertCall = supabase
     .from("qualitative_signals")
     .upsert(signals, {
       onConflict: "source_url",
       ignoreDuplicates: false,
-    })
-    .select("id");
+    });
 
-  if (error) throw error;
-  return data?.length ?? 0;
+  let { data, error } = await upsertCall.select("id");
+  if (!error) return data?.length ?? 0;
+
+  // Backward-compatible fallback if enrichment columns are not yet present in DB.
+  if (error.code === "PGRST204" || error.code === "42703") {
+    const stripped = signals.map(
+      ({
+        cleaned_summary,
+        signal_strength,
+        inferred_role,
+        actionable_inference,
+        ...base
+      }) => base
+    );
+
+    const retry = await supabase
+      .from("qualitative_signals")
+      .upsert(stripped, {
+        onConflict: "source_url",
+        ignoreDuplicates: false,
+      })
+      .select("id");
+
+    if (retry.error) throw retry.error;
+    return retry.data?.length ?? 0;
+  }
+
+  throw error;
 }
 
 export async function fetchCareersPages(): Promise<number> {
@@ -118,6 +184,7 @@ export async function fetchCareersPages(): Promise<number> {
 
       const content = text.slice(0, 5000);
       const content_hash = hashContent(content);
+      const enriched = enrichSignal("hiring_criteria", content);
 
       const { data: existing } = await supabase
         .from("qualitative_signals")
@@ -133,22 +200,39 @@ export async function fetchCareersPages(): Promise<number> {
         continue;
       }
 
-      const { error: upsertError } = await supabase
+      const upsertPayload = {
+        firm: page.firm,
+        firm_tier: "careers_page",
+        source: new URL(page.url).hostname,
+        source_url: page.url,
+        content,
+        content_hash,
+        signal_type: "hiring_criteria",
+        cleaned_summary: enriched.cleaned_summary,
+        signal_strength: enriched.signal_strength,
+        inferred_role: enriched.inferred_role,
+        actionable_inference: enriched.actionable_inference,
+        scraped_at: new Date().toISOString(),
+        last_checked_at: new Date().toISOString(),
+      };
+
+      let { error: upsertError } = await supabase
         .from("qualitative_signals")
-        .upsert(
-          {
-            firm: page.firm,
-            firm_tier: "careers_page",
-            source: new URL(page.url).hostname,
-            source_url: page.url,
-            content,
-            content_hash,
-            signal_type: "hiring_criteria",
-            scraped_at: new Date().toISOString(),
-            last_checked_at: new Date().toISOString(),
-          },
-          { onConflict: "source_url" }
-        );
+        .upsert(upsertPayload, { onConflict: "source_url" });
+
+      if (upsertError && (upsertError.code === "PGRST204" || upsertError.code === "42703")) {
+        const {
+          cleaned_summary,
+          signal_strength,
+          inferred_role,
+          actionable_inference,
+          ...basePayload
+        } = upsertPayload;
+        const retry = await supabase
+          .from("qualitative_signals")
+          .upsert(basePayload, { onConflict: "source_url" });
+        upsertError = retry.error;
+      }
 
       if (upsertError) throw upsertError;
       saved++;
@@ -220,4 +304,61 @@ export async function runScrape(queries: QueryConfig[]): Promise<{
   }
 
   return { queriesRun, totalSaved };
+}
+
+export async function backfillSignalEnrichment(maxRows: number = 2000): Promise<number> {
+  const supabase = getServiceSupabase();
+  let offset = 0;
+  let updated = 0;
+  const pageSize = 200;
+
+  while (offset < maxRows) {
+    const { data, error } = await supabase
+      .from("qualitative_signals")
+      .select("source_url, signal_type, content")
+      .order("scraped_at", { ascending: false })
+      .range(offset, offset + pageSize - 1);
+
+    if (error) throw error;
+    const rows = (data ?? []) as Array<{
+      source_url: string;
+      signal_type: string | null;
+      content: string | null;
+    }>;
+    if (rows.length === 0) break;
+
+    for (const row of rows) {
+      const content = row.content ?? "";
+      if (!content) continue;
+
+      const signalType = (row.signal_type ??
+        "hiring_criteria") as QueryConfig["signal_type"];
+      const enriched = enrichSignal(signalType, content);
+
+      const { error: updateError } = await supabase
+        .from("qualitative_signals")
+        .update({
+          cleaned_summary: enriched.cleaned_summary,
+          signal_strength: enriched.signal_strength,
+          inferred_role: enriched.inferred_role,
+          actionable_inference: enriched.actionable_inference,
+          last_checked_at: new Date().toISOString(),
+        })
+        .eq("source_url", row.source_url);
+
+      if (updateError) {
+        if (updateError.code === "PGRST204" || updateError.code === "42703") {
+          // Enrichment columns are missing; no-op so existing pipeline still works.
+          return updated;
+        }
+        throw updateError;
+      }
+      updated++;
+    }
+
+    if (rows.length < pageSize) break;
+    offset += pageSize;
+  }
+
+  return updated;
 }
