@@ -57,18 +57,80 @@ const QUERY_PACKS: Record<QueryPack, string[]> = {
   ],
   // Role-focused queries to diversify sectors/functions.
   role: [
+    // Product & Strategy
     '"hiring a product manager" India site:linkedin.com/posts',
+    '"hiring product analyst" India site:linkedin.com/posts',
+    '"hiring strategy analyst" India site:linkedin.com/posts',
+    '"hiring business development" India site:linkedin.com/posts',
+    '"hiring chief of staff" India site:linkedin.com/posts',
+    '"hiring founder office" India site:linkedin.com/posts',
+
+    // Technology & Engineering
     '"hiring software engineer" India site:linkedin.com/posts',
+    '"hiring frontend engineer" India site:linkedin.com/posts',
+    '"hiring backend engineer" India site:linkedin.com/posts',
+    '"hiring full stack engineer" India site:linkedin.com/posts',
+    '"hiring data engineer" India site:linkedin.com/posts',
+    '"hiring ML engineer" India site:linkedin.com/posts',
+
+    // Data & Analytics
     '"hiring data analyst" India site:linkedin.com/posts',
+    '"hiring data scientist" India site:linkedin.com/posts',
     '"hiring business analyst" India site:linkedin.com/posts',
-    '"hiring sales manager" India site:linkedin.com/posts',
-    '"hiring marketing manager" India site:linkedin.com/posts',
-    '"hiring operations manager" India site:linkedin.com/posts',
-    '"hiring consultant" India site:linkedin.com/posts',
-    '"hiring recruiter" India site:linkedin.com/posts',
+    '"hiring analytics manager" India site:linkedin.com/posts',
+
+    // Finance & Investing
     '"hiring finance analyst" India site:linkedin.com/posts',
+    '"hiring investment analyst" India site:linkedin.com/posts',
+    '"hiring equity research analyst" India site:linkedin.com/posts',
+    '"hiring financial analyst" India site:linkedin.com/posts',
+    '"hiring investment banking analyst" India site:linkedin.com/posts',
+    '"hiring private equity analyst" India site:linkedin.com/posts',
+    '"hiring venture capital analyst" India site:linkedin.com/posts',
+    '"hiring credit analyst" India site:linkedin.com/posts',
+
+    // Consulting & Advisory
+    '"hiring consultant" India site:linkedin.com/posts',
+    '"hiring management consultant" India site:linkedin.com/posts',
+    '"hiring strategy consultant" India site:linkedin.com/posts',
+    '"hiring associate consultant" India site:linkedin.com/posts',
+
+    // Marketing & Growth
+    '"hiring marketing manager" India site:linkedin.com/posts',
+    '"hiring growth manager" India site:linkedin.com/posts',
+    '"hiring brand manager" India site:linkedin.com/posts',
+    '"hiring content manager" India site:linkedin.com/posts',
+    '"hiring digital marketing" India site:linkedin.com/posts',
+    '"hiring performance marketing" India site:linkedin.com/posts',
+
+    // Operations & Supply Chain
+    '"hiring operations manager" India site:linkedin.com/posts',
+    '"hiring supply chain analyst" India site:linkedin.com/posts',
+    '"hiring operations analyst" India site:linkedin.com/posts',
+    '"hiring program manager" India site:linkedin.com/posts',
+
+    // Sales
+    '"hiring sales manager" India site:linkedin.com/posts',
+    '"hiring account manager" India site:linkedin.com/posts',
+    '"hiring sales development" India site:linkedin.com/posts',
+    '"hiring inside sales" India site:linkedin.com/posts',
+
+    // Design
+    '"hiring UI UX designer" India site:linkedin.com/posts',
+    '"hiring product designer" India site:linkedin.com/posts',
+    '"hiring graphic designer" India site:linkedin.com/posts',
+
+    // HR & People
+    '"hiring recruiter" India site:linkedin.com/posts',
+    '"hiring HR manager" India site:linkedin.com/posts',
+    '"hiring talent acquisition" India site:linkedin.com/posts',
+
+    // Entry level & Campus
     '"hiring internship" India site:linkedin.com/posts',
     '"campus hiring" India site:linkedin.com/posts',
+    '"hiring freshers" India site:linkedin.com/posts',
+    '"hiring graduate trainee" India site:linkedin.com/posts',
+    '"hiring management trainee" India site:linkedin.com/posts',
   ],
   // Seniority-focused high-intent queries.
   seniority: [

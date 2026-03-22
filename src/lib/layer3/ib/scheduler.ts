@@ -65,3 +65,26 @@ export async function runLayer3Job(): Promise<void> {
     throw err;
   }
 }
+
+export async function runLayer3FetchStep(): Promise<{ fetched: number }> {
+  console.log("\n🗓 Layer 3 IB step: fetch\n");
+  const fetched = await fetchJDs();
+  console.log(`✓ ${fetched} new IB JDs fetched`);
+  return { fetched };
+}
+
+export async function runLayer3ExtractStep(
+  batchSize: number = 5
+): Promise<{ extracted: number; batchSize: number }> {
+  console.log("\n🗓 Layer 3 IB step: extract\n");
+  const extracted = await extractSkillsFromPendingJDs(batchSize);
+  console.log(`✓ ${extracted} IB JDs extracted this pass`);
+  return { extracted, batchSize };
+}
+
+export async function runLayer3MatrixStep(): Promise<{ computed: true }> {
+  console.log("\n🗓 Layer 3 IB step: matrix\n");
+  await computeSkillMatrix();
+  console.log("✓ IB skill frequency matrix computed");
+  return { computed: true };
+}
