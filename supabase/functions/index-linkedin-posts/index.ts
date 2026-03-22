@@ -146,38 +146,42 @@ async function upsertPost(result: any, industry: string | null): Promise<void> {
 
 async function processHiringPosts(opts?: {
   pack?: QueryPack;
-  maxQueries?: number;
+  queryIndex?: number;
   numResultsPerQuery?: number;
-}): Promise<{ processed: number; pack: QueryPack; queriesRun: number }> {
+}): Promise<{ processed: number; pack: QueryPack; queryIndex: number }> {
   const packOrder: QueryPack[] = ["core", "city", "role", "seniority"];
   const rotationIndex = Math.floor(Date.now() / (10 * 60 * 1000)) % packOrder.length;
   const activePack = opts?.pack && QUERY_PACKS[opts.pack] ? opts.pack : packOrder[rotationIndex];
-  const activeQueries = (QUERY_PACKS[activePack] ?? []).slice(
-    0,
-    Math.max(1, Math.min(opts?.maxQueries ?? 12, 20))
-  );
+  const packQueries = QUERY_PACKS[activePack] ?? [];
+
+  const queryIndex = opts?.queryIndex ?? 0;
+  const query = packQueries[queryIndex];
+  if (!query) {
+    console.log(
+      `[index-linkedin-posts] activePack=${activePack} queryIndex=${queryIndex} out of range (len=${packQueries.length})`
+    );
+    return { processed: 0, pack: activePack, queryIndex };
+  }
+
   const numResultsPerQuery = Math.max(5, Math.min(opts?.numResultsPerQuery ?? 20, 40));
+
+  console.log(
+    `[index-linkedin-posts] activePack=${activePack} queryIndex=${queryIndex} numResults=${numResultsPerQuery}`
+  );
 
   const seen = new Set<string>();
   let count = 0;
 
-  console.log(
-    `[index-linkedin-posts] activePack=${activePack} queries=${activeQueries.length} numResults=${numResultsPerQuery}`
-  );
-
-  for (const query of activeQueries) {
-    const results = await exaSearch(query, numResultsPerQuery);
-    for (const result of results) {
-      if (!result.url?.includes("linkedin.com")) continue;
-      if (seen.has(result.url)) continue;
-      seen.add(result.url);
-      await upsertPost(result, null);
-      count++;
-    }
-    await new Promise((r) => setTimeout(r, 400));
+  const results = await exaSearch(query, numResultsPerQuery);
+  for (const result of results) {
+    if (!result.url?.includes("linkedin.com")) continue;
+    if (seen.has(result.url)) continue;
+    seen.add(result.url);
+    await upsertPost(result, null);
+    count++;
   }
 
-  return { processed: count, pack: activePack, queriesRun: activeQueries.length };
+  return { processed: count, pack: activePack, queryIndex };
 }
 
 Deno.serve(async (req: Request) => {
@@ -190,18 +194,23 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    let payload: { pack?: QueryPack; maxQueries?: number; numResultsPerQuery?: number } = {};
+    let payload: {
+      pack?: QueryPack;
+      queryIndex?: number;
+      numResultsPerQuery?: number;
+    } = {};
     try {
       payload = (await req.json()) as {
         pack?: QueryPack;
-        maxQueries?: number;
+        queryIndex?: number;
         numResultsPerQuery?: number;
       };
     } catch {
       payload = {};
     }
 
-    const result = await processHiringPosts(payload);
+    const { pack, queryIndex, numResultsPerQuery } = payload;
+    const result = await processHiringPosts({ pack, queryIndex, numResultsPerQuery });
     return new Response(
       JSON.stringify({ ok: true, ...result }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
